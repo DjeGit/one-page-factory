@@ -1,0 +1,2 @@
+ALTER TABLE products ADD COLUMN IF NOT EXISTS template_id TEXT DEFAULT 'dark-pro';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS template_config JSONB DEFAULT '{}';
