@@ -7,54 +7,7 @@ import { TEMPLATES, getTemplate } from '@/lib/templates';
 import TemplateRenderer, { type TemplateOverrides } from '@/components/templates/TemplateRenderer';
 import TemplateThumbnail from './TemplateThumbnail';
 import EditorPanel from './EditorPanel';
-
-// ─── Produit fictif pour les miniatures ─────────────────────────────────────
-const MOCK_PRODUCT: Product = {
-  id: 'preview',
-  name: 'Votre Produit',
-  slug: 'preview',
-  description: 'La solution qui va transformer votre quotidien en quelques semaines.',
-  price: 49,
-  original_price: 97,
-  affiliate_url: '#',
-  redirect_code: 'preview',
-  image_url: null,
-  active: true,
-  hero_title: 'La solution qui change tout',
-  hero_subtitle: "Rejoignez 12 000 clients satisfaits et transformez votre quotidien dès aujourd'hui.",
-  pain_points: [
-    { emoji: '😩', title: 'Vous en avez assez', description: 'Des solutions qui ne fonctionnent pas.' },
-    { emoji: '💸', title: 'Trop cher', description: 'Les alternatives coûtent une fortune.' },
-    { emoji: '⏳', title: 'Perte de temps', description: 'Des heures perdues sans résultat.' },
-  ],
-  benefits: [
-    { icon: '⚡', title: 'Résultats rapides', description: 'Visible dès la première semaine.' },
-    { icon: '🔒', title: 'Garanti 30 jours', description: 'Satisfait ou remboursé sans conditions.' },
-    { icon: '🏆', title: 'N°1 du marché', description: 'Plébiscité par 12 000 clients.' },
-    { icon: '🎯', title: 'Simple à utiliser', description: 'Aucune compétence requise.' },
-  ],
-  faq: [
-    { question: 'Comment ça fonctionne ?', answer: 'En 3 étapes simples, vous obtenez des résultats.' },
-    { question: 'Y a-t-il une garantie ?', answer: 'Oui, 30 jours satisfait ou remboursé.' },
-  ],
-  tiktok_script: null,
-  testimonials: [
-    { name: 'Marie D.', location: 'Paris', rating: 5, text: 'Incroyable, je recommande à 100% !', date: '2026-01-15' },
-    { name: 'Thomas L.', location: 'Lyon', rating: 5, text: 'Résultats au-delà de mes espérances.', date: '2026-02-03' },
-    { name: 'Sophie R.', location: 'Bordeaux', rating: 5, text: 'Le meilleur achat de l\'année.', date: '2026-03-20' },
-  ],
-  meta_title: 'Votre Produit — La solution N°1',
-  meta_description: 'Découvrez la solution qui a déjà aidé 12 000 personnes.',
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-const MOCK_OVERRIDES: TemplateOverrides = {
-  heroTitle: 'La solution qui change tout',
-  heroSubtitle: "Rejoignez 12 000 clients satisfaits dès aujourd'hui.",
-  ctaText: 'Je commande maintenant',
-  sections: { painPoints: true, benefits: true, testimonials: true, faq: true, countdown: false, stock: false },
-};
+import { MOCK_PRODUCT, MOCK_OVERRIDES } from '@/lib/mock-product';
 
 // ─── Carousel shown when no product is selected ──────────────────────────────
 function TemplateCarousel({
@@ -196,6 +149,33 @@ function TemplateCarousel({
                   }}>
                     {template.emoji} {template.name}
                   </div>
+                  {/* Bouton HTML pleine page */}
+                  <Link
+                    href={`/preview/${template.id}`}
+                    target="_blank"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 5,
+                      width: '100%',
+                      textAlign: 'center',
+                      background: 'rgba(255,255,255,0.1)',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      color: 'rgba(255,255,255,0.9)',
+                      fontWeight: 600,
+                      fontSize: 11,
+                      padding: '7px 12px',
+                      borderRadius: 7,
+                      textDecoration: 'none',
+                      marginBottom: 6,
+                    }}
+                  >
+                    <span style={{ fontSize: 12 }}>{'</>'}</span>
+                    Voir la page HTML
+                  </Link>
+                  {/* Bouton ajouter produit */}
                   <Link
                     href="/admin/products/new"
                     onClick={(e) => e.stopPropagation()}
