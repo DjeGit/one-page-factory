@@ -146,7 +146,7 @@ export default function MarketTable({ initialData, lastRefreshed }: Props) {
           <select
             value={sortBy}
             onChange={e => setSortBy(e.target.value as typeof sortBy)}
-            className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300 bg-white"
+            className="px-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-primary-300"
           >
             <option value="trend_score">Trier : Tendance</option>
             <option value="confidence_score">Trier : Fiabilité</option>
