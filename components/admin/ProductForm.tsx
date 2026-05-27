@@ -1,21 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import GenerateButton from './GenerateButton';
 import type { Product, GeneratedContent } from '@/types';
+import { TEMPLATES } from '@/lib/templates';
 
 interface ProductFormProps {
   product?: Product;
   mode: 'create' | 'edit';
+  initialTemplateId?: string;
 }
 
-export default function ProductForm({ product, mode }: ProductFormProps) {
+function isValidJson(str: string): boolean {
+  if (!str.trim()) return true;
+  try { JSON.parse(str); return true; } catch { return false; }
+}
+
+export default function ProductForm({ product, mode, initialTemplateId }: ProductFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<'basic' | 'ai' | 'seo' | 'marketing'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'ai' | 'seo' | 'marketing' | 'design'>('basic');
 
   const [form, setForm] = useState({
     name: product?.name || '',
@@ -35,6 +42,8 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
     testimonials: product?.testimonials ? JSON.stringify(product.testimonials, null, 2) : '[]',
     meta_title: product?.meta_title || '',
     meta_description: product?.meta_description || '',
+    // Design
+    template_id: product?.template_id || initialTemplateId || 'dark-pro',
     // Marketing tab
     pixel_meta: product?.pixel_meta || '',
     pixel_tiktok: product?.pixel_tiktok || '',
@@ -115,6 +124,7 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
         email_capture_discount: form.email_capture_discount ? parseInt(form.email_capture_discount) : 10,
         exit_intent_enabled: form.exit_intent_enabled,
         social_proof_enabled: form.social_proof_enabled,
+        template_id: form.template_id || 'dark-pro',
       };
 
       const url = mode === 'edit' ? `/api/products/${product!.id}` : '/api/products';
@@ -147,11 +157,23 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
   const labelClass = 'block text-sm font-semibold text-gray-700 mb-1.5';
   const textareaClass = `${inputClass} resize-y min-h-[100px]`;
 
+  // JSON field validation
+  const jsonErrors = useMemo(() => ({
+    pain_points: !isValidJson(form.pain_points) ? 'JSON invalide' : null,
+    benefits: !isValidJson(form.benefits) ? 'JSON invalide' : null,
+    faq: !isValidJson(form.faq) ? 'JSON invalide' : null,
+    testimonials: !isValidJson(form.testimonials) ? 'JSON invalide' : null,
+  }), [form.pain_points, form.benefits, form.faq, form.testimonials]);
+
+  const jsonInputClass = (field: keyof typeof jsonErrors) =>
+    `${inputClass} font-mono text-xs resize-y min-h-[150px] ${jsonErrors[field] ? 'border-red-400 focus:ring-red-400' : ''}`;
+
   const tabs = [
     { id: 'basic', label: '📋 Informations' },
     { id: 'ai', label: '🤖 Contenu IA' },
     { id: 'seo', label: '🔍 SEO' },
     { id: 'marketing', label: '📣 Marketing' },
+    { id: 'design', label: '🎨 Design' },
   ] as const;
 
   return (
@@ -331,41 +353,53 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
           </div>
 
           <div>
-            <label className={labelClass}>Points de douleur (JSON)</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass.replace('mb-1.5', '')}>Points de douleur (JSON)</label>
+              {jsonErrors.pain_points && <span className="text-xs text-red-500 font-medium">{jsonErrors.pain_points}</span>}
+            </div>
             <textarea
               value={form.pain_points}
               onChange={(e) => handleChange('pain_points', e.target.value)}
-              className={`${inputClass} font-mono text-xs resize-y min-h-[150px]`}
+              className={jsonInputClass('pain_points')}
               placeholder='[{"emoji":"😩","title":"...","description":"..."}]'
             />
           </div>
 
           <div>
-            <label className={labelClass}>Bénéfices (JSON)</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass.replace('mb-1.5', '')}>Bénéfices (JSON)</label>
+              {jsonErrors.benefits && <span className="text-xs text-red-500 font-medium">{jsonErrors.benefits}</span>}
+            </div>
             <textarea
               value={form.benefits}
               onChange={(e) => handleChange('benefits', e.target.value)}
-              className={`${inputClass} font-mono text-xs resize-y min-h-[150px]`}
+              className={jsonInputClass('benefits')}
               placeholder='[{"icon":"✅","title":"...","description":"..."}]'
             />
           </div>
 
           <div>
-            <label className={labelClass}>FAQ (JSON)</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass.replace('mb-1.5', '')}>FAQ (JSON)</label>
+              {jsonErrors.faq && <span className="text-xs text-red-500 font-medium">{jsonErrors.faq}</span>}
+            </div>
             <textarea
               value={form.faq}
               onChange={(e) => handleChange('faq', e.target.value)}
-              className={`${inputClass} font-mono text-xs resize-y min-h-[150px]`}
+              className={jsonInputClass('faq')}
               placeholder='[{"question":"...","answer":"..."}]'
             />
           </div>
 
           <div>
-            <label className={labelClass}>Témoignages (JSON)</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelClass.replace('mb-1.5', '')}>Témoignages (JSON)</label>
+              {jsonErrors.testimonials && <span className="text-xs text-red-500 font-medium">{jsonErrors.testimonials}</span>}
+            </div>
             <textarea
               value={form.testimonials}
               onChange={(e) => handleChange('testimonials', e.target.value)}
-              className={`${inputClass} font-mono text-xs resize-y min-h-[150px]`}
+              className={jsonInputClass('testimonials')}
               placeholder='[{"name":"...","location":"...","rating":5,"text":"...","date":"..."}]'
             />
           </div>
@@ -575,6 +609,49 @@ export default function ProductForm({ product, mode }: ProductFormProps) {
                 <label className="text-sm font-medium text-gray-700">Afficher les notifications sociales</label>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Design */}
+      {activeTab === 'design' && (
+        <div className="space-y-4">
+          <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 flex items-start gap-3">
+            <span className="text-2xl">🎨</span>
+            <div className="text-sm text-primary-700">
+              <strong>Template de la page de vente.</strong> Choisissez le design qui correspond le mieux à votre produit.
+              Vous pourrez le personnaliser dans le <a href="/admin/design" className="underline">Design Studio</a>.
+            </div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {TEMPLATES.map((tpl) => (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => handleChange('template_id', tpl.id)}
+                className={`relative rounded-xl border-2 p-3 text-left transition-all hover:shadow-md ${
+                  form.template_id === tpl.id
+                    ? 'border-primary-500 bg-primary-50 shadow-sm'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {form.template_id === tpl.id && (
+                  <span className="absolute top-2 right-2 w-5 h-5 bg-primary-600 rounded-full flex items-center justify-center">
+                    <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </span>
+                )}
+                {/* Color preview */}
+                <div
+                  className="w-full h-12 rounded-lg mb-2"
+                  style={{ background: `linear-gradient(135deg, ${tpl.primaryColor}, ${tpl.accentColor})` }}
+                />
+                <div className="text-base leading-none mb-1">{tpl.emoji}</div>
+                <div className="font-semibold text-gray-900 text-xs">{tpl.name}</div>
+                <div className="text-gray-400 text-xs mt-0.5 capitalize">{tpl.style}</div>
+              </button>
+            ))}
           </div>
         </div>
       )}

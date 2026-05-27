@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { headers } from 'next/headers';
+import { headers, cookies } from 'next/headers';
 import { getProduct, getSupabaseAdmin } from '@/lib/supabase';
 import HeroSection from '@/components/landing/HeroSection';
 import PainPoints from '@/components/landing/PainPoints';
@@ -109,8 +109,10 @@ export default async function LandingPage({ params }: Props) {
   let heroCta: string | null = null;
 
   if (abTest) {
-    // Random 50/50 split — deterministic per request
-    abVariant = Math.random() < 0.5 ? 'a' : 'b';
+    // Persist variant via cookie so user always sees the same variant
+    const cookieStore = cookies();
+    const existingVariant = cookieStore.get(`ab_${abTest.id}`)?.value as 'a' | 'b' | undefined;
+    abVariant = existingVariant || (Math.random() < 0.5 ? 'a' : 'b');
     if (abVariant === 'a') {
       heroTitle = abTest.variant_a_title || null;
       heroSubtitle = abTest.variant_a_subtitle || null;
@@ -248,13 +250,19 @@ export default async function LandingPage({ params }: Props) {
             __html: `
               (function() {
                 try {
+                  var testId = ${JSON.stringify(abTest.id)};
+                  var variant = ${JSON.stringify(abVariant)};
+                  // Persist variant in cookie so user always sees the same variant
+                  if (!document.cookie.includes('ab_' + testId + '=')) {
+                    document.cookie = 'ab_' + testId + '=' + variant + '; path=/; max-age=2592000; SameSite=Lax';
+                  }
                   fetch('/api/analytics', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                       type: 'ab_view',
-                      testId: ${JSON.stringify(abTest.id)},
-                      variant: ${JSON.stringify(abVariant)},
+                      testId: testId,
+                      variant: variant,
                       productId: ${JSON.stringify(product.id)}
                     })
                   }).catch(function(){});

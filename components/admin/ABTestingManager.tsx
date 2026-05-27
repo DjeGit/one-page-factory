@@ -16,6 +16,7 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
   const [editingTest, setEditingTest] = useState<ABTest | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('active');
   const [loading, setLoading] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState('');
 
   const [form, setForm] = useState({
     product_id: '',
@@ -29,6 +30,7 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
   });
 
   const openCreate = () => {
+    setSaveError('');
     setEditingTest(null);
     setForm({
       product_id: '',
@@ -88,7 +90,7 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
       }
       setShowModal(false);
     } catch {
-      // silently fail - modal stays open
+      setSaveError('Une erreur est survenue. Vérifiez vos données et réessayez.');
     } finally {
       setLoading(null);
     }
@@ -470,6 +472,14 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
                 </div>
               </div>
 
+              {saveError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 flex items-start gap-2">
+                  <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  {saveError}
+                </div>
+              )}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                 <button
                   onClick={() => setShowModal(false)}

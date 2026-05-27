@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Product } from '@/types';
 
 interface TikTokHubProps {
@@ -43,6 +44,8 @@ export default function TikTokHub({ products }: TikTokHubProps) {
   const [selectedCategory, setSelectedCategory] = useState('tech');
   const [copied, setCopied] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
+  const router = useRouter();
   const [bioToggles, setBioToggles] = useState<Record<string, boolean>>(
     Object.fromEntries(products.map(p => [p.id, p.active]))
   );
@@ -63,18 +66,30 @@ export default function TikTokHub({ products }: TikTokHubProps) {
   const handleRegenerate = async () => {
     if (!selectedProduct) return;
     setRegenerating(true);
+    setRegenError(null);
     try {
-      await fetch('/api/generate', {
+      const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: selectedProduct.name,
           description: selectedProduct.description,
-          focus: 'tiktok',
         }),
       });
-    } catch {
-      // silently fail
+      if (!res.ok) throw new Error('Erreur lors de la génération');
+      const data = await res.json();
+      if (data.tiktok_script) {
+        // Save the regenerated script to the product
+        const saveRes = await fetch(`/api/products/${selectedProduct.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tiktok_script: data.tiktok_script }),
+        });
+        if (!saveRes.ok) throw new Error('Erreur lors de la sauvegarde');
+        router.refresh();
+      }
+    } catch (err) {
+      setRegenError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
       setRegenerating(false);
     }
@@ -104,7 +119,7 @@ export default function TikTokHub({ products }: TikTokHubProps) {
     { id: 'scripts' as TabType, label: 'Scripts TikTok' },
     { id: 'bio' as TabType, label: 'Lien en Bio' },
     { id: 'hashtags' as TabType, label: 'Hashtags & Tendances' },
-    { id: 'stats' as TabType, label: 'Statistiques TikTok' },
+    { id: 'stats' as TabType, label: 'Bonnes pratiques' },
   ];
 
   return (
@@ -223,6 +238,9 @@ export default function TikTokHub({ products }: TikTokHubProps) {
                     </>
                   ) : 'Regénérer'}
                 </button>
+                {regenError && (
+                  <p className="text-sm text-red-600">{regenError}</p>
+                )}
               </div>
             </>
           ) : selectedProduct ? (
@@ -248,9 +266,15 @@ export default function TikTokHub({ products }: TikTokHubProps) {
                 <h3 className="font-bold text-gray-900">Page Lien en Bio</h3>
                 <p className="text-sm text-gray-500 mt-0.5">Regroupez tous vos produits actifs en une seule page</p>
               </div>
-              <span className="inline-flex items-center px-3 py-1.5 rounded-xl text-sm font-semibold bg-yellow-100 text-yellow-700">
-                Bientôt disponible
-              </span>
+              <a
+                href={`${siteUrl}/bio`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                Voir la page
+              </a>
             </div>
             <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between">
               <code className="text-sm text-primary-700 font-mono">{siteUrl}/bio</code>
@@ -353,43 +377,84 @@ export default function TikTokHub({ products }: TikTokHubProps) {
         </div>
       )}
 
-      {/* Tab 4: Stats */}
+      {/* Tab 4: Bonnes pratiques */}
       {activeTab === 'stats' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-gray-200 py-16 text-center">
-            <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Statistiques TikTok</h3>
-            <p className="text-gray-500 max-w-md mx-auto mb-6">
-              Connectez votre compte TikTok Business pour voir vos statistiques ici
-            </p>
+          {/* Quick links */}
+          <div className="grid sm:grid-cols-2 gap-4">
             <a
               href="https://business.tiktok.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-xl transition-colors"
+              className="flex items-center gap-4 p-5 bg-gray-900 hover:bg-gray-800 rounded-2xl transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center text-xl flex-shrink-0">🎵</div>
+              <div>
+                <p className="font-bold text-white text-sm">TikTok Business Center</p>
+                <p className="text-gray-400 text-xs mt-0.5">Vos statistiques officielles</p>
+              </div>
+              <svg className="w-4 h-4 text-gray-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
-              TikTok Business Center
+            </a>
+            <a
+              href="https://ads.tiktok.com/business/creativecenter/inspiration/popular/hashtag/pc/en"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-4 p-5 bg-white border border-gray-200 hover:border-gray-300 rounded-2xl transition-colors"
+            >
+              <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">🔥</div>
+              <div>
+                <p className="font-bold text-gray-900 text-sm">Creative Center</p>
+                <p className="text-gray-500 text-xs mt-0.5">Tendances & inspirations</p>
+              </div>
+              <svg className="w-4 h-4 text-gray-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
             </a>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-4">
-            {[
-              { tip: 'Postez entre 18h et 21h', detail: 'Meilleur engagement en soirée' },
-              { tip: 'Durée idéale : 15-30 secondes', detail: 'Format optimal pour la portée' },
-              { tip: 'Hook dans les 3 premières secondes', detail: 'Captez l\'attention immédiatement' },
-            ].map((card) => (
-              <div key={card.tip} className="bg-white rounded-2xl border border-gray-200 p-5">
-                <div className="text-green-600 font-bold text-sm mb-1">✓ {card.tip}</div>
-                <p className="text-xs text-gray-500">{card.detail}</p>
-              </div>
-            ))}
+          {/* Best practices */}
+          <div>
+            <h3 className="font-bold text-gray-900 mb-3">✅ Checklist vidéo gagnante</h3>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[
+                { tip: 'Hook percutant en 0–3 secondes', detail: 'Commencez par une question, un chiffre choc ou une action surprenante.', emoji: '⚡' },
+                { tip: 'Durée idéale : 15–30 secondes', detail: 'Les vidéos courtes obtiennent plus de replays et un meilleur reach.', emoji: '⏱️' },
+                { tip: 'Postez entre 18h et 21h', detail: 'Meilleure fenêtre d\'engagement en France métropolitaine.', emoji: '🕐' },
+                { tip: '3 à 5 hashtags ciblés', detail: 'Préférez des hashtags de niche à des hashtags génériques saturés.', emoji: '#️⃣' },
+                { tip: 'Texte à l\'écran + sous-titres', detail: '+40% d\'engagement sur les vidéos avec texte lisible.', emoji: '💬' },
+                { tip: 'CTA oral et visuel en fin de vidéo', detail: 'Dites "lien en bio" ET montrez-le avec un doigt pointé vers le haut.', emoji: '👆' },
+                { tip: 'Utilisez une musique tendance', detail: 'Les sons viraux boostent l\'algorithme. Choisissez dans les trending sounds.', emoji: '🎵' },
+                { tip: 'Postez 1 à 3 fois par jour', detail: 'La régularité est le facteur n°1 de croissance sur TikTok.', emoji: '📅' },
+              ].map((item) => (
+                <div key={item.tip} className="bg-white rounded-xl border border-gray-200 p-4 flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0">{item.emoji}</span>
+                  <div>
+                    <p className="font-semibold text-gray-900 text-sm">{item.tip}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{item.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Content frameworks */}
+          <div>
+            <h3 className="font-bold text-gray-900 mb-3">🎬 Formats vidéo qui convertissent</h3>
+            <div className="grid sm:grid-cols-3 gap-3">
+              {[
+                { format: 'Problème → Solution', desc: 'Montrez le problème en 5s, puis votre produit comme solution.', badge: 'Très efficace' },
+                { format: 'Avant / Après', desc: 'Transformation visuelle rapide. Fonctionne pour tous les niches.', badge: 'Viral' },
+                { format: 'Unboxing réaction', desc: 'Découverte sincère du produit. Renforce la confiance.', badge: 'Authentique' },
+              ].map((f) => (
+                <div key={f.format} className="bg-white rounded-xl border border-gray-200 p-4">
+                  <span className="inline-block px-2 py-0.5 bg-primary-100 text-primary-700 text-xs font-semibold rounded-full mb-2">{f.badge}</span>
+                  <p className="font-bold text-gray-900 text-sm">{f.format}</p>
+                  <p className="text-xs text-gray-500 mt-1">{f.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

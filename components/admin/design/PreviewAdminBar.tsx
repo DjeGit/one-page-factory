@@ -143,7 +143,7 @@ export default function PreviewAdminBar({ templateName, templateEmoji, templateI
 
       {/* Bouton utiliser ce template */}
       <Link
-        href="/admin/products/new"
+        href={`/admin/products/new?template=${templateId}`}
         style={{
           display: 'flex',
           alignItems: 'center',

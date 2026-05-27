@@ -1,7 +1,13 @@
 import Link from 'next/link';
 import ProductForm from '@/components/admin/ProductForm';
 
-export default function NewProductPage() {
+interface Props {
+  searchParams: { template?: string };
+}
+
+export default function NewProductPage({ searchParams }: Props) {
+  const initialTemplateId = searchParams.template || undefined;
+
   return (
     <div className="p-8">
       {/* Header */}
@@ -23,7 +29,7 @@ export default function NewProductPage() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-8">
-        <ProductForm mode="create" />
+        <ProductForm mode="create" initialTemplateId={initialTemplateId} />
       </div>
     </div>
   );

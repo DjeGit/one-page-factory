@@ -72,6 +72,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
   }, [fetchLeads]);
 
   const handleDelete = async (id: string) => {
+    if (!confirm('Supprimer ce lead ? Cette action est irréversible.')) return;
     try {
       const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
       if (res.ok) setLeads(prev => prev.filter(l => l.id !== id));

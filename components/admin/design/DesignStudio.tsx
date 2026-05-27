@@ -177,7 +177,7 @@ function TemplateCarousel({
                   </Link>
                   {/* Bouton ajouter produit */}
                   <Link
-                    href="/admin/products/new"
+                    href={`/admin/products/new?template=${template.id}`}
                     onClick={(e) => e.stopPropagation()}
                     style={{
                       display: 'block',

@@ -129,6 +129,52 @@ export default function DashboardClient({ products }: DashboardClientProps) {
         </div>
       </div>
 
+      {/* Quick actions */}
+      <div className="grid sm:grid-cols-3 gap-4 mb-8">
+        <Link
+          href="/admin/products/new"
+          className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-primary-300 hover:shadow-sm transition-all group"
+        >
+          <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center text-primary-600 group-hover:bg-primary-200 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900 text-sm">Nouveau produit</div>
+            <div className="text-gray-400 text-xs">Créer une page de vente</div>
+          </div>
+        </Link>
+        <Link
+          href="/admin/design"
+          className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-violet-300 hover:shadow-sm transition-all group"
+        >
+          <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center text-violet-600 group-hover:bg-violet-200 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+            </svg>
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900 text-sm">Design Studio</div>
+            <div className="text-gray-400 text-xs">Personnaliser les templates</div>
+          </div>
+        </Link>
+        <Link
+          href="/admin/market"
+          className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-blue-300 hover:shadow-sm transition-all group"
+        >
+          <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600 group-hover:bg-blue-200 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+            </svg>
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900 text-sm">Étude de marché</div>
+            <div className="text-gray-400 text-xs">Trouver des produits gagnants</div>
+          </div>
+        </Link>
+      </div>
+
       {/* Recent Products */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
