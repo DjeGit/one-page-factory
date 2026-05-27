@@ -128,7 +128,7 @@ export default function EditorPanel({ overrides, onChange, template, productSlug
                 value={overrides.heroTitle || ''}
                 onChange={(e) => update({ heroTitle: e.target.value })}
                 placeholder="Titre accrocheur de votre page..."
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent placeholder-gray-400"
+                className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent placeholder-gray-400"
               />
             </div>
 
@@ -141,7 +141,7 @@ export default function EditorPanel({ overrides, onChange, template, productSlug
                 onChange={(e) => update({ heroSubtitle: e.target.value })}
                 placeholder="Description courte et convaincante..."
                 rows={3}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent placeholder-gray-400 resize-none"
+                className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent placeholder-gray-400 resize-none"
               />
             </div>
 
@@ -154,7 +154,7 @@ export default function EditorPanel({ overrides, onChange, template, productSlug
                 value={overrides.ctaText || ''}
                 onChange={(e) => update({ ctaText: e.target.value })}
                 placeholder="Acheter maintenant"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent placeholder-gray-400"
+                className="w-full px-3 py-2 text-sm text-gray-900 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent placeholder-gray-400"
               />
             </div>
 
