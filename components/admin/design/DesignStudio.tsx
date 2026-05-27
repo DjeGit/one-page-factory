@@ -1,11 +1,250 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import type { Product } from '@/types';
 import { TEMPLATES, getTemplate } from '@/lib/templates';
 import TemplateRenderer, { type TemplateOverrides } from '@/components/templates/TemplateRenderer';
 import TemplateThumbnail from './TemplateThumbnail';
 import EditorPanel from './EditorPanel';
+
+// ─── Colour map (bg gradient class → hex) ───────────────────────────────────
+const COLOR_MAP: Record<string, string> = {
+  'from-gray-950': '#030712', 'to-violet-950': '#2e1065',
+  'from-white': '#ffffff',    'to-gray-50': '#f9fafb',
+  'from-red-950': '#450a0a',  'to-orange-900': '#431407',
+  'from-emerald-950': '#022c22', 'to-green-900': '#14532d',
+  'from-blue-950': '#172554', 'to-cyan-900': '#164e63',
+  'from-stone-950': '#0c0a09', 'to-amber-950': '#451a03',
+  'from-purple-50': '#faf5ff', 'to-pink-50': '#fdf2f8',
+  'from-amber-400': '#fbbf24', 'to-orange-500': '#f97316',
+  'to-blue-50': '#eff6ff',    'to-slate-900': '#0f172a',
+};
+
+// ─── Carousel shown when no product is selected ──────────────────────────────
+function TemplateCarousel({
+  selectedTemplateId,
+  onSelect,
+}: {
+  selectedTemplateId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [current, setCurrent] = useState(0);
+  const total = TEMPLATES.length;
+
+  const prev = () => setCurrent((c) => (c - 1 + total) % total);
+  const next = () => setCurrent((c) => (c + 1) % total);
+
+  // Show 3 cards centred: index-1, index, index+1
+  const visible = [-1, 0, 1].map((offset) => {
+    const idx = (current + offset + total) % total;
+    return { template: TEMPLATES[idx], offset };
+  });
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full bg-gradient-to-br from-gray-950 via-violet-950 to-gray-900 select-none">
+      {/* Title */}
+      <div className="mb-8 text-center">
+        <h2 className="text-2xl font-extrabold text-white tracking-tight">Choisissez votre template</h2>
+        <p className="text-violet-300 text-sm mt-1">10 designs disponibles — ajoutez un produit pour prévisualiser en conditions réelles</p>
+      </div>
+
+      {/* Carousel track */}
+      <div className="relative flex items-center justify-center w-full" style={{ height: 420 }}>
+        {/* Left arrow */}
+        <button
+          onClick={prev}
+          className="absolute left-6 z-20 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur flex items-center justify-center text-white transition-all"
+        >
+          ‹
+        </button>
+
+        {/* Cards */}
+        <div className="relative flex items-center justify-center" style={{ width: '100%' }}>
+          {visible.map(({ template, offset }) => {
+            const from = COLOR_MAP[template.bgFrom] || '#111827';
+            const to   = COLOR_MAP[template.bgTo]   || '#1f2937';
+            const isCenter = offset === 0;
+            const isSelected = template.id === selectedTemplateId;
+
+            return (
+              <div
+                key={template.id}
+                onClick={() => {
+                  if (isCenter) {
+                    onSelect(template.id);
+                  } else {
+                    setCurrent((current + offset + total) % total);
+                  }
+                }}
+                style={{
+                  position: 'absolute',
+                  width: isCenter ? 280 : 210,
+                  height: isCenter ? 390 : 290,
+                  left: '50%',
+                  transform: `translateX(calc(-50% + ${offset * 260}px)) scale(${isCenter ? 1 : 0.88})`,
+                  transition: 'all 0.35s cubic-bezier(.4,0,.2,1)',
+                  zIndex: isCenter ? 10 : 5,
+                  opacity: isCenter ? 1 : 0.6,
+                  cursor: 'pointer',
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                  boxShadow: isSelected
+                    ? '0 0 0 3px #7C3AED, 0 20px 60px rgba(124,58,237,0.4)'
+                    : isCenter
+                    ? '0 20px 60px rgba(0,0,0,0.5)'
+                    : '0 8px 24px rgba(0,0,0,0.3)',
+                  flexShrink: 0,
+                }}
+              >
+                {/* Gradient background */}
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    background: `linear-gradient(160deg, ${from} 0%, ${to} 100%)`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '24px 20px 20px',
+                  }}
+                >
+                  {/* Mock UI lines */}
+                  <div style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 14 }}>
+                      <span style={{ fontSize: isCenter ? 36 : 28 }}>{template.emoji}</span>
+                    </div>
+                    <div style={{
+                      height: isCenter ? 10 : 8,
+                      borderRadius: 6,
+                      background: template.textColor === 'white' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.75)',
+                      marginBottom: 8,
+                      width: '80%',
+                      margin: '0 auto 8px',
+                    }} />
+                    <div style={{
+                      height: isCenter ? 6 : 5,
+                      borderRadius: 4,
+                      background: template.textColor === 'white' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)',
+                      width: '60%',
+                      margin: '0 auto 16px',
+                    }} />
+                    {/* Fake CTA button */}
+                    <div style={{
+                      height: isCenter ? 34 : 26,
+                      borderRadius: 8,
+                      background: template.primaryColor,
+                      width: '70%',
+                      margin: '0 auto 16px',
+                    }} />
+                    {/* Fake content lines */}
+                    {[85, 70, 75, 60].map((w, i) => (
+                      <div key={i} style={{
+                        height: isCenter ? 5 : 4,
+                        borderRadius: 3,
+                        background: template.textColor === 'white' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.12)',
+                        width: `${w}%`,
+                        margin: '0 auto',
+                        marginBottom: isCenter ? 7 : 5,
+                      }} />
+                    ))}
+                  </div>
+
+                  {/* Bottom: name + button */}
+                  {isCenter && (
+                    <div style={{ width: '100%', marginTop: 12 }}>
+                      <div style={{
+                        textAlign: 'center',
+                        color: template.textColor === 'white' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.8)',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        marginBottom: 10,
+                        letterSpacing: '0.03em',
+                      }}>
+                        {template.name}
+                      </div>
+                      <Link
+                        href="/admin/products/new"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          display: 'block',
+                          textAlign: 'center',
+                          background: '#7C3AED',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: 12,
+                          padding: '9px 16px',
+                          borderRadius: 8,
+                          textDecoration: 'none',
+                          transition: 'opacity 0.15s',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                      >
+                        + Ajouter un produit
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
+                {/* Selected badge */}
+                {isSelected && isCenter && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    background: '#7C3AED',
+                    color: '#fff',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    padding: '3px 8px',
+                    borderRadius: 20,
+                  }}>
+                    ✓ Sélectionné
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right arrow */}
+        <button
+          onClick={next}
+          className="absolute right-6 z-20 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur flex items-center justify-center text-white transition-all"
+        >
+          ›
+        </button>
+      </div>
+
+      {/* Dots */}
+      <div className="flex gap-2 mt-6">
+        {TEMPLATES.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => setCurrent(i)}
+            style={{
+              width: i === current ? 24 : 8,
+              height: 8,
+              borderRadius: 4,
+              background: i === current ? '#7C3AED' : 'rgba(255,255,255,0.25)',
+              border: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.25s',
+              padding: 0,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Template name below dots */}
+      <p className="mt-3 text-violet-200 text-xs font-semibold tracking-wide uppercase">
+        {TEMPLATES[current].emoji} {TEMPLATES[current].name}
+      </p>
+    </div>
+  );
+}
 
 interface Props {
   products: Product[];
@@ -236,15 +475,10 @@ export default function DesignStudio({ products, initialProductId }: Props) {
               />
             </div>
           ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="text-5xl mb-4">🎨</div>
-                <h3 className="text-lg font-bold text-gray-600 mb-2">Sélectionnez un produit</h3>
-                <p className="text-gray-400 text-sm">
-                  Choisissez un produit dans le menu déroulant pour prévisualiser le design
-                </p>
-              </div>
-            </div>
+            <TemplateCarousel
+              selectedTemplateId={selectedTemplateId}
+              onSelect={handleTemplateChange}
+            />
           )}
         </div>
       </div>
