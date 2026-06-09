@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateProductContent } from '@/lib/openai';
+import { generateProductContent } from '@/lib/ai';
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,9 +12,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    const hasAnyKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.ANTHROPIC_API_KEY ||
+      process.env.OPENAI_API_KEY;
+
+    if (!hasAnyKey) {
       return NextResponse.json(
-        { error: 'Clé API OpenAI non configurée' },
+        { error: 'Aucune clé API IA configurée (GEMINI_API_KEY, ANTHROPIC_API_KEY ou OPENAI_API_KEY)' },
         { status: 503 }
       );
     }

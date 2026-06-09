@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import OpenAI from 'openai';
+import { generateWeeklyReport } from '@/lib/ai';
 
 export async function POST() {
   const sb = getSupabaseAdmin();
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { data: products } = await sb.from('products').select('id, name, slug, active, price');
@@ -21,19 +20,6 @@ export async function POST() {
   const top3 = sorted.slice(0, 3);
   const flop3 = sorted.slice(-3).filter(p => p.views > 0);
 
-  const prompt = `Tu es un expert en affiliation e-commerce. Analyse ces données de la semaine et génère un rapport en JSON.
-Top produits: ${JSON.stringify(top3)}
-Flop produits: ${JSON.stringify(flop3)}
-Total produits: ${products?.length}
-
-Génère: {"summary": "phrase résumé", "top_products": ["conseil1", "conseil2", "conseil3"], "to_archive": ["produit à archiver si CTR < 1%"], "recommendations": ["action1", "action2", "action3"], "insight": "observation clé de la semaine"}`;
-
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    response_format: { type: 'json_object' },
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const report = JSON.parse(completion.choices[0].message.content || '{}');
+  const report = await generateWeeklyReport(top3, flop3, products?.length || 0);
   return NextResponse.json({ report, stats: sorted, generated_at: new Date().toISOString() });
 }
