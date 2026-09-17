@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { useMarket } from '@/components/admin/MarketContext';
+import { useMarket } from '@/lib/market-context';
 
 interface TopProduct {
   id: string;

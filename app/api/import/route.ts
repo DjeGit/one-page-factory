@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin, generateSlug } from '@/lib/supabase';
 import type { ImportRow } from '@/types';
+import { getActiveMarket } from '@/lib/get-active-market';
 
 export async function POST(req: Request) {
   const sb = getSupabaseAdmin();
   const body = await req.json();
   const rows: ImportRow[] = body.rows || [];
+  const market = body.market || getActiveMarket();
 
   if (!rows.length) return NextResponse.json({ error: 'Aucune ligne' }, { status: 400 });
   if (rows.length > 100) return NextResponse.json({ error: 'Maximum 100 lignes' }, { status: 400 });
@@ -33,6 +35,7 @@ export async function POST(req: Request) {
       description: row.description || null,
       redirect_code: redirectCode,
       active: false, // inactive until AI content generated
+      market,
     }).select().single();
 
     if (error) {

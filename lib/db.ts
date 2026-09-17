@@ -8,7 +8,7 @@
  * ⚠️  Ne jamais utiliser le "Transaction pooler" (port 6543) avec Next.js App Router.
  *     Le "Session pooler" (port 5432) est requis pour les prepared statements.
  */
-import { Pool, PoolClient, QueryResult } from 'pg';
+import { Pool, PoolClient, QueryResultRow } from 'pg';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -45,11 +45,11 @@ pool.on('error', (err) => {
 export { pool };
 
 /** Exécute une requête et retourne les lignes typées */
-export async function query<T = Record<string, unknown>>(
+export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[]
 ): Promise<T[]> {
-  const result: QueryResult<T> = await pool.query(text, params);
+  const result = await pool.query<T>(text, params);
   return result.rows;
 }
 

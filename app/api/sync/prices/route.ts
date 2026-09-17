@@ -111,7 +111,17 @@ async function syncMarketPrices(
   } catch (dbErr) {
     const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
     console.error('[Sync] DB unavailable:', msg);
-    return NextResponse.json({ error: 'Database unavailable', detail: msg }, { status: 503 });
+    // Erreur DB au démarrage : SyncResult-shaped avec l'erreur dedans (et non
+    // une NextResponse — cette fonction n'est pas un route handler, elle est
+    // agrégée par POST plus bas dans results[]).
+    return {
+      market: marketId,
+      productsChecked: 0,
+      pricesUpdated: 0,
+      priceDropAlerts: 0,
+      errors: [`Database unavailable: ${msg}`],
+      durationMs: Date.now() - start,
+    };
   }
 
   try {

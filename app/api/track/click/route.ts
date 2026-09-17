@@ -49,7 +49,7 @@ function checkRateLimit(sessionId: string, productId: string): boolean {
   // Clean up old entries every 1000 calls
   if (clickRateCache.size > 1000) {
     const cutoff = now - 60_000;
-    for (const [k, ts] of clickRateCache) {
+    for (const [k, ts] of Array.from(clickRateCache.entries())) {
       if (ts < cutoff) clickRateCache.delete(k);
     }
   }

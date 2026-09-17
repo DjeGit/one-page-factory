@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { getActiveMarket } from '@/lib/get-active-market';
+import { isValidMarket } from '@/lib/market';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const market = (searchParams.get('market') ?? 'fr') as 'fr' | 'es' | 'com';
+  const marketParam = searchParams.get('market');
+  const market = isValidMarket(marketParam) ? marketParam : getActiveMarket();
 
   const supabaseAdmin = getSupabaseAdmin();
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -11,7 +14,8 @@ export async function GET(request: NextRequest) {
   const { data: products, error } = await supabaseAdmin
     .from('products')
     .select('id, name, slug, price, active')
-    .eq('active', true);
+    .eq('active', true)
+    .eq('market', market);
 
   if (error || !products || products.length === 0) {
     return NextResponse.json([]);
@@ -25,22 +29,16 @@ export async function GET(request: NextRequest) {
         { count: totalViews },
         { count: views24h },
       ] = await Promise.all([
-        // product_clicks (new schema with market_id)
-        supabaseAdmin.from('product_clicks').select('*', { count: 'exact', head: true })
-          .eq('product_id', product.id).or(`market_id.eq.${market},market_id.is.null`),
-        supabaseAdmin.from('product_clicks').select('*', { count: 'exact', head: true })
-          .eq('product_id', product.id).or(`market_id.eq.${market},market_id.is.null`).gte('clicked_at', since24h),
-        // page_views (no market_id — global)
-        supabaseAdmin.from('page_views').select('*', { count: 'exact', head: true })
-          .eq('product_id', product.id),
-        supabaseAdmin.from('page_views').select('*', { count: 'exact', head: true })
-          .eq('product_id', product.id).gte('viewed_at', since24h),
+        supabaseAdmin.from('clicks').select('*', { count: 'exact', head: true }).eq('product_id', product.id),
+        supabaseAdmin.from('clicks').select('*', { count: 'exact', head: true }).eq('product_id', product.id).gte('clicked_at', since24h),
+        supabaseAdmin.from('page_views').select('*', { count: 'exact', head: true }).eq('product_id', product.id),
+        supabaseAdmin.from('page_views').select('*', { count: 'exact', head: true }).eq('product_id', product.id).gte('viewed_at', since24h),
       ]);
 
-      const tc = totalClicks ?? 0;
-      const c24 = clicks24h ?? 0;
-      const tv = totalViews ?? 0;
-      const v24 = views24h ?? 0;
+      const tc = totalClicks || 0;
+      const c24 = clicks24h || 0;
+      const tv = totalViews || 0;
+      const v24 = views24h || 0;
       const ctr = tv > 0 ? (tc / tv) * 100 : 0;
       const ctr24h = v24 > 0 ? (c24 / v24) * 100 : 0;
 

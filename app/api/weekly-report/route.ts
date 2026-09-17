@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { generateWeeklyReport } from '@/lib/ai';
+import { getActiveMarket } from '@/lib/get-active-market';
 
 export async function POST() {
   const sb = getSupabaseAdmin();
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: products } = await sb.from('products').select('id, name, slug, active, price');
+  const market = getActiveMarket();
+  const { data: products } = await sb.from('products').select('id, name, slug, active, price').eq('market', market);
 
   const stats = await Promise.all((products || []).map(async (p) => {
     const [{ count: clicks }, { count: views }] = await Promise.all([

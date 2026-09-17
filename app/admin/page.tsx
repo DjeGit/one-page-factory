@@ -1,38 +1,25 @@
-import { cookies } from 'next/headers';
-import { getDashboardStats, getAllProducts, getSupabaseAdmin } from '@/lib/supabase';
+import { getDashboardStats, getAllProducts } from '@/lib/supabase';
 import StatsCard from '@/components/admin/StatsCard';
 import TopProductsLive from '@/components/admin/TopProductsLive';
 import DashboardClient from '@/components/admin/DashboardClient';
+import CostVsGainSummary from '@/components/admin/CostVsGainSummary';
 import Link from 'next/link';
 import type { Product } from '@/types';
-import SyncStatus from '@/components/admin/SyncStatus';
+import { getActiveMarket } from '@/lib/get-active-market';
+import { computeMarketROI } from '@/lib/analytics/roi';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminDashboard() {
-  const market = cookies().get('opf_market')?.value ?? 'fr';
-  const [stats, products, topProductsRes] = await Promise.all([
-    getDashboardStats(),
+  const market = getActiveMarket();
+  const [stats, products, topProductsRes, roi] = await Promise.all([
+    getDashboardStats(market),
     getAllProducts(market),
-    fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/top-products?market=${market}`, { cache: 'no-store' })
+    fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/top-products`, { cache: 'no-store' })
       .then(r => r.json())
       .catch(() => []),
+    computeMarketROI(market),
   ]);
-
-  // Sync status — uniquement market_products (table existante) + n8n healthz
-  const supabaseAdmin = getSupabaseAdmin();
-  const [frCountRes, esCountRes, comCountRes, lastSyncRes, n8nOk] = await Promise.all([
-    supabaseAdmin.from('market_products').select('id', { count: 'exact', head: true }).eq('market_id', 'fr'),
-    supabaseAdmin.from('market_products').select('id', { count: 'exact', head: true }).eq('market_id', 'es'),
-    supabaseAdmin.from('market_products').select('id', { count: 'exact', head: true }).eq('market_id', 'com'),
-    supabaseAdmin.from('market_products').select('last_refreshed').order('last_refreshed', { ascending: false }).limit(1),
-    fetch('https://one-page-factory.com/n8n/healthz').then(r => r.ok).catch(() => false),
-  ]);
-  const syncStatus = {
-    lastRefreshed: lastSyncRes.data?.[0]?.last_refreshed ?? null,
-    productsByMarket: { fr: frCountRes.count ?? 0, es: esCountRes.count ?? 0, com: comCountRes.count ?? 0 },
-    n8nActive: n8nOk as boolean,
-  };
 
   const recentProducts: Product[] = products.slice(0, 5);
 
@@ -40,9 +27,6 @@ export default async function AdminDashboard() {
     <div className="p-8">
       {/* DashboardClient handles header with report button + recent products */}
       <DashboardClient products={recentProducts} />
-
-      {/* Sync Status */}
-      <SyncStatus lastRefreshed={syncStatus.lastRefreshed} productsByMarket={syncStatus.productsByMarket} n8nActive={syncStatus.n8nActive} />
 
       {/* Stats Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10 mt-8">
@@ -97,8 +81,13 @@ export default async function AdminDashboard() {
         />
       </div>
 
+      {/* Coût vs Gain (Sprint 5) */}
+      <div className="mb-10">
+        <CostVsGainSummary roi={roi} />
+      </div>
+
       {/* Top 10 Live */}
-      <TopProductsLive initialData={topProductsRes} market={market} />
+      <TopProductsLive initialData={topProductsRes} />
 
       {/* Quick actions */}
       <div className="mt-6 flex gap-4">

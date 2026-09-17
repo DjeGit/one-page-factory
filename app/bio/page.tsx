@@ -1,5 +1,6 @@
 import { getAllProducts } from '@/lib/supabase';
 import { cookies, headers } from 'next/headers';
+import { DEFAULT_MARKET, isValidMarket } from '@/lib/market';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,8 @@ export const metadata: Metadata = {
 
 export default async function BioPage() {
   const cookieStore = cookies();
-  const market = cookieStore.get('opf_market')?.value ?? 'fr';
+  const publicMarketCookie = cookieStore.get('opf_market')?.value;
+  const market = isValidMarket(publicMarketCookie) ? publicMarketCookie : DEFAULT_MARKET;
   const allProducts = await getAllProducts(market);
   const active = allProducts.filter((p) => p.active);
 

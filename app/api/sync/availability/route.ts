@@ -81,7 +81,18 @@ async function checkMarketAvailability(
   } catch (dbErr) {
     const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
     console.error('[Sync] DB unavailable:', msg);
-    return NextResponse.json({ error: 'Database unavailable', detail: msg }, { status: 503 });
+    // Erreur DB au démarrage : on retourne un AvailabilityResult-shaped avec
+    // l'erreur dedans (et non une NextResponse — cette fonction n'est pas un
+    // route handler, elle est agrégée par POST plus bas dans results[]).
+    return {
+      market: marketId,
+      checked: 0,
+      nowAvailable: 0,
+      nowUnavailable: 0,
+      unchanged: 0,
+      durationMs: Date.now() - start,
+      errors: [`Database unavailable: ${msg}`],
+    };
   }
 
   try {

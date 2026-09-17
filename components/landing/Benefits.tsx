@@ -56,21 +56,10 @@ export default function Benefits({ benefits, productName }: BenefitsProps) {
           ))}
         </div>
 
-        {/* Stats bar */}
-        <div className="mt-16 grid grid-cols-3 gap-8 max-w-2xl mx-auto text-center">
-          {[
-            { value: '97%', label: 'Clients satisfaits' },
-            { value: '24h', label: 'Résultats visibles' },
-            { value: '5★', label: 'Note moyenne' },
-          ].map((stat, i) => (
-            <div key={i}>
-              <div className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-accent-400">
-                {stat.value}
-              </div>
-              <div className="text-gray-500 text-sm mt-1">{stat.label}</div>
-            </div>
-          ))}
-        </div>
+        {/* Amazon note */}
+        <p className="text-center text-gray-600 text-xs mt-12">
+          Produit sélectionné parmi les meilleures ventes Amazon France
+        </p>
       </div>
     </section>
   );

@@ -1,3 +1,5 @@
+import type { Market } from '@/lib/market';
+
 export interface PainPoint {
   emoji: string;
   title: string;
@@ -35,7 +37,6 @@ export interface Product {
   redirect_code: string;
   image_url: string | null;
   active: boolean;
-  market?: string;
 
   // AI-generated content
   hero_title: string | null;
@@ -72,6 +73,16 @@ export interface Product {
   exit_intent_enabled?: boolean;
   social_proof_enabled?: boolean;
 
+  // Multi-marché (Sprint 1) — un produit = un marché strict.
+  market: Market;
+  source_product_ref?: string | null; // lien optionnel vers le même produit physique sur un autre marché
+  product_source?: 'auto_discovered' | 'manual_affiliate' | 'own_product' | null;
+
+  // Coût vs gain par produit (Sprint 5, colonnes préparées en Sprint 1)
+  cost_price?: number | null;
+  ad_spend_allocated?: number | null;
+  commission_rate?: number | null; // fraction 0-1, ex. 0.08 = 8%
+
   created_at: string;
   updated_at: string;
 }
@@ -86,7 +97,7 @@ export interface ProductFormData {
   affiliate_url: string;
   image_url: string;
   active: boolean;
-  market?: string;
+  market?: Market;
   hero_title: string;
   hero_subtitle: string;
   pain_points: PainPoint[];
@@ -164,7 +175,7 @@ export interface ABTest {
   variant_b_clicks: number;
   winner: 'a' | 'b' | null;
   active: boolean;
-  market?: string;
+  market?: Market;
   created_at: string;
 }
 

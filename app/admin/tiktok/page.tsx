@@ -1,11 +1,10 @@
-import TikTokHub from "@/components/admin/TikTokHub";
-import { getAllProducts } from "@/lib/supabase";
-import { cookies } from "next/headers";
+import TikTokHub from '@/components/admin/TikTokHub';
+import { getAllProducts } from '@/lib/supabase';
+import { getActiveMarket } from '@/lib/get-active-market';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export default async function TikTokPage() {
-  const market = cookies().get("opf_market")?.value ?? "fr";
-  const products = await getAllProducts(market);
+  const products = await getAllProducts(getActiveMarket());
   return <TikTokHub products={products} />;
 }

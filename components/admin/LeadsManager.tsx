@@ -163,7 +163,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
           <option value="">🌍 Tous les marchés</option>
           <option value="fr">🇫🇷 France</option>
           <option value="es">🇪🇸 Espagne</option>
-          <option value="com">🌐 International</option>
+          <option value="uk">🇬🇧 Anglophone</option>
         </select>
         <select
           value={filterProductId}
@@ -214,7 +214,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
                       </td>
                       <td className="px-4 py-4">
                         <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700 whitespace-nowrap">
-                          {lead.market === 'fr' ? '🇫🇷 FR' : lead.market === 'es' ? '🇪🇸 ES' : lead.market === 'com' ? '🌐 COM' : '—'}
+                          {lead.market === 'fr' ? '🇫🇷 FR' : lead.market === 'es' ? '🇪🇸 ES' : lead.market === 'uk' ? '🇬🇧 UK' : '—'}
                         </span>
                       </td>
                       <td className="px-4 py-4">

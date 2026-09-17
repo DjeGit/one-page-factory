@@ -17,7 +17,7 @@ const PLATFORMS = [
   { id: 'youtube',   label: 'YouTube',    emoji: '\u25B6\uFE0F' },
 ];
 
-const MKT_DOMAINS: Record<string,string> = { fr:'tendpick.fr', es:'tendpick.es', com:'tendpick.com' };
+const MKT_DOMAINS: Record<string,string> = { fr:'tendpick.fr', es:'tendpick.es', uk:'tendpick.com' };
 
 const CATS = [
   { id:'tech',      label:'Tech',      tags:['#gadget','#techfr','#bonplan','#techtok','#amazon','#musthave','#techlife','#innovation','#smartphone','#unboxing','#review','#testproduit'] },
@@ -287,7 +287,7 @@ export default function TikTokHub({ products }: Props) {
                   <div key={mkt} className="bg-gray-50 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-bold text-gray-900">
-                        {mkt==='fr'?'🇫🇷 France':mkt==='es'?'🇪🇸 Espagne':'🌍 International'}{' — '}{domain}
+                        {mkt==='fr'?'🇫🇷 France':mkt==='es'?'🇪🇸 Espagne':'🇬🇧 Anglophone'}{' — '}{domain}
                       </span>
                       <div className="flex items-center gap-3">
                         <a href={path} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-blue-600 hover:text-blue-700">Voir →</a>

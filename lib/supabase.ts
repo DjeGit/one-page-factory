@@ -1,272 +1,328 @@
-/**
- * OPF — Supabase client + data helpers
- *
- * Public client  : lecture seule, cle anon
- * Admin client   : service role, toutes permissions (SERVEUR UNIQUEMENT)
- */
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import type { Product, AnalyticsData, DashboardStats } from '@/types';
+import type { Market } from '@/lib/market';
+import { NextRequest } from 'next/server';
+import { createHash } from 'crypto';
 
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+// Lazy singleton clients — created on first use so env vars are available
+let _supabase: SupabaseClient | null = null;
+let _supabaseAdmin: SupabaseClient | null = null;
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-/** Client public — safe cote client */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-/** Client admin — NE PAS exposer cote client */
-export const supabaseAdmin: SupabaseClient = createClient(
-  supabaseUrl,
-  supabaseServiceKey,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
-
-/** Retourne le client admin (compat legacy) */
-export function getSupabaseAdmin(): SupabaseClient {
-  return supabaseAdmin;
+function getSupabaseUrl(): string {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 }
 
-// ─── Slug helper ─────────────────────────────────────────────────────────────
+function getSupabaseAnonKey(): string {
+  return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+}
 
+// Public client (for client-side operations)
+export function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    _supabase = createClient(getSupabaseUrl(), getSupabaseAnonKey());
+  }
+  return _supabase;
+}
+
+// Admin client (for server-side operations with elevated privileges)
+export function getSupabaseAdmin(): SupabaseClient {
+  if (!_supabaseAdmin) {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || getSupabaseAnonKey();
+    _supabaseAdmin = createClient(getSupabaseUrl(), serviceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+  }
+  return _supabaseAdmin;
+}
+
+// Backwards-compat named exports (lazy proxies)
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_t, prop) {
+    return (getSupabase() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
+
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
+  get(_t, prop) {
+    return (getSupabaseAdmin() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
+
+// Helper to generate slug from name
 export function generateSlug(name: string): string {
   return name
     .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 }
 
-// ─── Product type ─────────────────────────────────────────────────────────────
-
-export interface Product {
-  id: string;
-  name: string;
-  slug: string;
-  description?: string | null;
-  price?: number | null;
-  original_price?: number | null;
-  affiliate_url?: string | null;
-  redirect_code?: string | null;
-  image_url?: string | null;
-  active?: boolean;
-  hero_title?: string | null;
-  created_at?: string;
-  updated_at?: string;
-  // Multi-market
-  affiliate_url_fr?: string | null;
-  affiliate_url_es?: string | null;
-  affiliate_url_com?: string | null;
-  price_fr?: number | null;
-  price_es?: number | null;
-  price_com?: number | null;
-  available_fr?: boolean;
-  available_es?: boolean;
-  available_com?: boolean;
-  trending_score?: number | null;
-  // Keepa / scores
-  amazon_asin?: string | null;
-  keepa_score?: number | null;
+// Hash IP for privacy
+function hashIp(ip: string): string {
+  return createHash('sha256').update(ip + process.env.ADMIN_SECRET || 'salt').digest('hex').slice(0, 16);
 }
 
-// ─── Product CRUD ─────────────────────────────────────────────────────────────
-
-export async function getAllProducts(market?: string): Promise<Product[]> {
-  let query = supabaseAdmin
-    .from("products")
-    .select("*");
-  if (market) {
-    query = query.eq("market", market);
-  }
-  const { data, error } = await query
-    .order("created_at", { ascending: false });
-  if (error) {
-    // Fallback: si la colonne market n'existe pas encore, retourner tous les produits
-    if (error.message?.includes("column") && error.message?.includes("market")) {
-      console.warn("[supabase] Colonne market absente — fallback sans filtre");
-      const { data: fallback } = await supabaseAdmin
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false });
-      return fallback ?? [];
-    }
-    console.error("[supabase] getAllProducts:", error.message);
-    return [];
-  }
-  return data ?? [];
+// Get IP from request
+function getIp(req: NextRequest): string {
+  const forwarded = req.headers.get('x-forwarded-for');
+  const ip = forwarded ? forwarded.split(',')[0].trim() : 'unknown';
+  return ip;
 }
+
+// =====================
+// Product operations
+//
+// Sprint 1 (multi-marché) : getProduct/getProductById/getProductByCode
+// restent SANS filtre marché — ce sont les fonctions utilisées par les
+// routes PUBLIQUES (page produit, redirect /go/[code]), où le marché est
+// déterminé par la ligne elle-même (product.market), pas par une
+// préférence admin. Les fonctions de LISTE/ADMIN (getAllProducts,
+// createProduct, getAnalytics, getDashboardStats) prennent un paramètre
+// `market` explicite — elles sont appelées depuis app/admin/** et
+// app/api/** routes internes, filtrées via getActiveMarket().
+// =====================
 
 export async function getProduct(slug: string): Promise<Product | null> {
   const { data, error } = await supabaseAdmin
-    .from("products")
-    .select("*")
-    .eq("slug", slug)
-    .eq("active", true)
-    .maybeSingle();
-  if (error) {
-    console.error("[supabase] getProduct:", error.message);
-    return null;
-  }
-  return data;
+    .from('products')
+    .select('*')
+    .eq('slug', slug)
+    .eq('active', true)
+    .single();
+
+  if (error || !data) return null;
+  return data as Product;
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
   const { data, error } = await supabaseAdmin
-    .from("products")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) {
-    console.error("[supabase] getProductById:", error.message);
-    return null;
-  }
-  return data;
+    .from('products')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) return null;
+  return data as Product;
 }
 
 export async function getProductByCode(code: string): Promise<Product | null> {
   const { data, error } = await supabaseAdmin
-    .from("products")
-    .select("*")
-    .eq("redirect_code", code)
-    .eq("active", true)
+    .from('products')
+    .select('*')
+    .eq('redirect_code', code)
+    .eq('active', true)
     .maybeSingle();
+
+  if (error || !data) return null;
+  return data as Product;
+}
+
+// market omis = tous marchés confondus (utilisé par les pages PUBLIQUES,
+// ex. app/bio/page.tsx, qui n'ont pas de notion de marché admin actif).
+// Les pages/routes ADMIN doivent toujours passer explicitement
+// getActiveMarket().
+export async function getAllProducts(market?: Market): Promise<Product[]> {
+  let query = supabaseAdmin.from('products').select('*').order('created_at', { ascending: false });
+  if (market) query = query.eq('market', market);
+  const { data, error } = await query;
+
+  if (error || !data) return [];
+  return data as Product[];
+}
+
+export async function createProduct(productData: Partial<Product> & { market: Market }): Promise<Product | null> {
+  // Ensure slug is unique
+  let slug = productData.slug || generateSlug(productData.name || '');
+  const { data: existing } = await supabaseAdmin
+    .from('products')
+    .select('slug')
+    .eq('slug', slug)
+    .single();
+
+  if (existing) {
+    slug = `${slug}-${Date.now()}`;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('products')
+    .insert({
+      ...productData,
+      slug,
+      pain_points: productData.pain_points || [],
+      benefits: productData.benefits || [],
+      faq: productData.faq || [],
+      testimonials: productData.testimonials || [],
+    })
+    .select()
+    .single();
+
   if (error) {
-    console.error("[supabase] getProductByCode:", error.message);
+    console.error('Error creating product:', error);
     return null;
   }
-  return data;
+  return data as Product;
 }
 
-export async function createProduct(
-  values: Omit<Product, "id" | "created_at" | "updated_at">
-): Promise<Product> {
-  if (!values.slug && values.name) {
-    (values as Record<string, unknown>).slug = generateSlug(values.name);
-  }
+export async function updateProduct(id: string, productData: Partial<Product>): Promise<Product | null> {
   const { data, error } = await supabaseAdmin
-    .from("products")
-    .insert(values)
+    .from('products')
+    .update(productData)
+    .eq('id', id)
     .select()
     .single();
-  if (error) throw error;
-  return data;
-}
 
-export async function updateProduct(
-  id: string,
-  updates: Partial<Product>
-): Promise<Product> {
-  const { data, error } = await supabaseAdmin
-    .from("products")
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-export async function deleteProduct(id: string): Promise<void> {
-  const { error } = await supabaseAdmin.from("products").delete().eq("id", id);
-  if (error) throw error;
-}
-
-// ─── Analytics ────────────────────────────────────────────────────────────────
-
-export async function trackClick(productId: string, marketId?: string): Promise<void> {
-  try {
-    const record: Record<string, string> = { product_id: productId };
-    if (marketId) record.market_id = marketId;
-    const { error } = await supabaseAdmin
-      .from("product_clicks")
-      .insert(record);
-    if (error) {
-      // Fallback to old clicks table
-      await supabaseAdmin.from("clicks").insert({ product_id: productId });
-    }
-  } catch {
-    // Fire-and-forget: silently ignore errors
+  if (error) {
+    console.error('Error updating product:', error);
+    return null;
   }
+  return data as Product;
 }
 
-export async function trackPageView(productId: string): Promise<void> {
-  try {
-    await supabaseAdmin.from("page_views").insert({ product_id: productId });
-  } catch {
-    // Fire-and-forget
+export async function deleteProduct(id: string): Promise<boolean> {
+  const { error } = await supabaseAdmin
+    .from('products')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting product:', error);
+    return false;
   }
+  return true;
 }
 
-export interface AnalyticsStats {
-  totalClicks: number;
-  totalViews: number;
-  topProducts: Array<{ id: string; name: string; clicks: number; views: number }>;
+// =====================
+// Analytics operations
+// =====================
+
+export async function trackClick(productId: string, req: NextRequest): Promise<void> {
+  const ip = getIp(req);
+  const ipHash = hashIp(ip);
+  const userAgent = req.headers.get('user-agent') || null;
+  const referer = req.headers.get('referer') || null;
+
+  await supabaseAdmin.from('clicks').insert({
+    product_id: productId,
+    ip_hash: ipHash,
+    user_agent: userAgent,
+    referer: referer,
+  });
 }
 
-export async function getAnalytics(days = 30): Promise<AnalyticsStats> {
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  try {
-    const [{ count: clicks }, { count: views }] = await Promise.all([
-      supabaseAdmin
-        .from("product_clicks")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", since),
-      supabaseAdmin
-        .from("page_views")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", since),
-    ]);
-    return { totalClicks: clicks ?? 0, totalViews: views ?? 0, topProducts: [] };
-  } catch {
-    return { totalClicks: 0, totalViews: 0, topProducts: [] };
+export async function trackPageView(productId: string, req: NextRequest): Promise<void> {
+  const ip = getIp(req);
+  const ipHash = hashIp(ip);
+  const userAgent = req.headers.get('user-agent') || null;
+  const referer = req.headers.get('referer') || null;
+
+  await supabaseAdmin.from('page_views').insert({
+    product_id: productId,
+    ip_hash: ipHash,
+    user_agent: userAgent,
+    referer: referer,
+  });
+}
+
+// market omis = agrégat tous marchés (compat pages publiques / anciens
+// appels). Les vues admin doivent passer explicitement getActiveMarket().
+export async function getAnalytics(market?: Market, productId?: string): Promise<AnalyticsData[]> {
+  let productsQuery = supabaseAdmin.from('products').select('id, name, slug, price');
+  if (market) productsQuery = productsQuery.eq('market', market);
+  if (productId) {
+    productsQuery = productsQuery.eq('id', productId);
   }
+  const { data: products } = await productsQuery;
+  if (!products) return [];
+
+  const results: AnalyticsData[] = [];
+
+  for (const product of products) {
+    // Get click count
+    const { count: clickCount } = await supabaseAdmin
+      .from('clicks')
+      .select('*', { count: 'exact', head: true })
+      .eq('product_id', product.id);
+
+    // Get view count
+    const { count: viewCount } = await supabaseAdmin
+      .from('page_views')
+      .select('*', { count: 'exact', head: true })
+      .eq('product_id', product.id);
+
+    const clicks = clickCount || 0;
+    const views = viewCount || 0;
+    const ctr = views > 0 ? (clicks / views) * 100 : 0;
+    const price = (product as any).price || 0;
+    // Estimate EPC: assume 2% conversion et 30% commission
+    // (remplacé par lib/analytics/roi.ts au Sprint 5 — conservé ici pour compat le temps de la transition)
+    const epc = clicks > 0 ? (clicks * 0.02 * price * 0.3) / clicks : 0;
+    const revenueEstimate = clicks * 0.02 * price * 0.3;
+
+    results.push({
+      product_id: product.id,
+      product_name: product.name,
+      slug: product.slug,
+      clicks,
+      views,
+      ctr: Math.round(ctr * 100) / 100,
+      epc: Math.round(epc * 100) / 100,
+      revenue_estimate: Math.round(revenueEstimate * 100) / 100,
+    });
+  }
+
+  return results;
 }
 
-export interface DashboardStats {
-  totalProducts: number;
-  activeProducts: number;
-  totalClicks: number;
-  totalViews: number;
-  recentProducts: Product[];
-}
+export async function getDashboardStats(market: Market): Promise<DashboardStats> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayIso = today.toISOString();
 
-export async function getDashboardStats(): Promise<DashboardStats> {
-  try {
-    const [
-      { count: total },
-      { count: active },
-      { count: clicks },
-      { count: views },
-      { data: recent },
-    ] = await Promise.all([
-      supabaseAdmin.from("products").select("*", { count: "exact", head: true }),
-      supabaseAdmin
-        .from("products")
-        .select("*", { count: "exact", head: true })
-        .eq("active", true),
-      supabaseAdmin.from("product_clicks").select("*", { count: "exact", head: true }),
-      supabaseAdmin.from("page_views").select("*", { count: "exact", head: true }),
-      supabaseAdmin
-        .from("products")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(5),
-    ]);
+  // Le champ market ne vit que sur products : on récupère d'abord les ids
+  // de produits du marché actif, puis on filtre clicks/page_views dessus.
+  const { data: marketProducts } = await supabaseAdmin
+    .from('products')
+    .select('id, active')
+    .eq('market', market);
+
+  const productIds = (marketProducts || []).map((p) => p.id);
+  const activeIds = (marketProducts || []).filter((p) => p.active).map((p) => p.id);
+
+  if (productIds.length === 0) {
     return {
-      totalProducts: total ?? 0,
-      activeProducts: active ?? 0,
-      totalClicks: clicks ?? 0,
-      totalViews: views ?? 0,
-      recentProducts: recent ?? [],
-    };
-  } catch {
-    return {
-      totalProducts: 0,
-      activeProducts: 0,
-      totalClicks: 0,
-      totalViews: 0,
-      recentProducts: [],
+      total_products: 0,
+      active_products: 0,
+      clicks_today: 0,
+      views_today: 0,
+      total_clicks: 0,
+      total_views: 0,
     };
   }
+
+  const [
+    { count: clicksToday },
+    { count: viewsToday },
+    { count: totalClicks },
+    { count: totalViews },
+  ] = await Promise.all([
+    supabaseAdmin.from('clicks').select('*', { count: 'exact', head: true }).in('product_id', productIds).gte('clicked_at', todayIso),
+    supabaseAdmin.from('page_views').select('*', { count: 'exact', head: true }).in('product_id', productIds).gte('viewed_at', todayIso),
+    supabaseAdmin.from('clicks').select('*', { count: 'exact', head: true }).in('product_id', productIds),
+    supabaseAdmin.from('page_views').select('*', { count: 'exact', head: true }).in('product_id', productIds),
+  ]);
+
+  return {
+    total_products: productIds.length,
+    active_products: activeIds.length,
+    clicks_today: clicksToday || 0,
+    views_today: viewsToday || 0,
+    total_clicks: totalClicks || 0,
+    total_views: totalViews || 0,
+  };
 }

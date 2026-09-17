@@ -2,154 +2,259 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
-import { useMarket, MARKETS } from './MarketContext';
+import { clsx } from 'clsx';
 
-const navItems = [
-  { href: '/admin', label: 'Dashboard', icon: '📊', exact: true },
-  { href: '/admin/products', label: 'Produits', icon: '🛍️' },
-  { href: '/admin/market', label: 'Étude de marché', icon: '🔍' },
-  { href: '/admin/analytics', label: 'Analytics', icon: '📈' },
-  { href: '/admin/abtesting', label: 'A/B Testing', icon: '🧪' },
-  { href: '/admin/leads', label: 'Leads', icon: '👥' },
-  { href: '/admin/design', label: 'Design', icon: '🎨' },
-  { href: '/admin/tiktok', label: 'Diffusion', icon: '📡' },
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  exact: boolean;
+}
+
+interface NavSection {
+  label: string | null;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
+  {
+    label: null,
+    items: [
+      {
+        href: '/admin',
+        label: 'Tableau de bord',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
+          </svg>
+        ),
+        exact: true,
+      },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      {
+        href: '/admin/market',
+        label: 'Étude de marché',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+          </svg>
+        ),
+        exact: true,
+      },
+    ],
+  },
+  {
+    label: 'Création',
+    items: [
+      {
+        href: '/admin/products',
+        label: 'Produits',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+        ),
+        exact: false,
+      },
+      {
+        href: '/admin/design',
+        label: 'Design',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+          </svg>
+        ),
+        exact: true,
+      },
+    ],
+  },
+  {
+    label: 'Performance',
+    items: [
+      {
+        href: '/admin/analytics',
+        label: 'Analytics',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        ),
+        exact: true,
+      },
+      {
+        href: '/admin/statistics',
+        label: 'Statistiques',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+          </svg>
+        ),
+        exact: true,
+      },
+      {
+        href: '/admin/abtesting',
+        label: 'A/B Testing',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h8M8 12h8M8 17h8M4 7h.01M4 12h.01M4 17h.01" />
+          </svg>
+        ),
+        exact: true,
+      },
+      {
+        href: '/admin/leads',
+        label: 'Leads & Emails',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+        ),
+        exact: true,
+      },
+    ],
+  },
+  {
+    label: 'Marketing & Social',
+    items: [
+      {
+        href: '/admin/social',
+        label: 'Réseaux sociaux',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342a3 3 0 100-2.684m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+          </svg>
+        ),
+        exact: true,
+      },
+      {
+        href: '/admin/marketing',
+        label: 'Marketing',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+          </svg>
+        ),
+        exact: true,
+      },
+      {
+        href: '/admin/tiktok',
+        label: 'TikTok Hub',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        ),
+        exact: true,
+      },
+    ],
+  },
+  {
+    label: 'Paramètres',
+    items: [
+      {
+        href: '/admin/settings/integrations',
+        label: 'Intégrations',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+        ),
+        exact: false,
+      },
+    ],
+  },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { market, setMarket, currentMarket } = useMarket();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Ferme le dropdown si clic extérieur
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const isActive = (href: string, exact?: boolean) => {
+  const isActive = (href: string, exact: boolean) => {
     if (exact) return pathname === href;
     return pathname.startsWith(href);
   };
 
   return (
-    <div className="w-64 bg-gray-900 text-white flex flex-col min-h-screen flex-shrink-0">
+    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-gray-700">
-        <h1 className="text-lg font-bold text-white tracking-tight">
-          One Page Factory
-        </h1>
-        <p className="text-xs text-gray-400 mt-0.5">Back Office Admin</p>
-      </div>
-
-      {/* ─── Sélecteur PAYS ─── */}
-      <div className="px-4 py-4 border-b border-gray-700 bg-gray-800/50">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-          PAYS
-        </p>
-        <div className="relative" ref={dropdownRef}>
-          {/* Bouton trigger */}
-          <button
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="w-full flex items-center justify-between bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-xl px-3 py-2.5 border border-gray-600 focus:outline-none focus:border-blue-500 transition-colors"
-          >
-            <span className="flex items-center gap-2.5">
-              <span className="text-lg leading-none">{currentMarket.flag}</span>
-              <span>{currentMarket.name}</span>
-            </span>
-            <svg
-              className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      <div className="p-6 border-b border-gray-200">
+        <Link href="/admin" className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-gradient-to-br from-primary-600 to-primary-700 rounded-xl flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-          </button>
-
-          {/* Dropdown */}
-          {dropdownOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 bg-gray-800 border border-gray-600 rounded-xl shadow-2xl z-50 overflow-hidden">
-              {MARKETS.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => { setMarket(m.id); setDropdownOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors text-left ${
-                    market === m.id
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                  }`}
-                >
-                  <span className="text-lg leading-none">{m.flag}</span>
-                  <div>
-                    <div className="font-medium leading-tight">{m.name}</div>
-                    <div className="text-xs opacity-60 leading-tight">{m.amazon}</div>
-                  </div>
-                  {market === m.id && (
-                    <svg className="ml-auto w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-              {/* Séparateur + futur "Ajouter un pays" */}
-              <div className="border-t border-gray-700 px-3 py-2">
-                <p className="text-xs text-gray-500 text-center">
-                  Italie, Allemagne... bientôt disponibles
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Infos marché actif */}
-        <p className="text-xs text-gray-400 mt-2 text-center leading-tight">
-          {currentMarket.amazon} · {currentMarket.currency}
-        </p>
+          </div>
+          <div>
+            <div className="font-black text-gray-900 text-sm leading-tight">One Page</div>
+            <div className="font-black text-primary-600 text-sm leading-tight">Factory</div>
+          </div>
+        </Link>
       </div>
 
-      {/* ─── Navigation ─── */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {navItems.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-              isActive(item.href, item.exact)
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-gray-300 hover:bg-gray-700/80 hover:text-white'
-            }`}
-          >
-            <span className="text-base w-5 text-center flex-shrink-0">
-              {item.icon}
-            </span>
-            <span>{item.label}</span>
-            {isActive(item.href, item.exact) && item.href !== '/admin' && (
-              <span className="ml-auto text-xs bg-white/20 px-1.5 py-0.5 rounded-full">
-                {currentMarket.flag}
-              </span>
+      {/* Navigation */}
+      <nav className="flex-1 p-4 space-y-0.5">
+        {navSections.map((section, sectionIndex) => (
+          <div key={sectionIndex}>
+            {section.label && (
+              <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-3">
+                {section.label}
+              </div>
             )}
-          </Link>
+            {section.items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={clsx(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-150',
+                  isActive(item.href, item.exact)
+                    ? 'bg-primary-50 text-primary-700 shadow-sm'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                )}
+              >
+                <span
+                  className={clsx(
+                    isActive(item.href, item.exact) ? 'text-primary-600' : 'text-gray-400'
+                  )}
+                >
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            ))}
+          </div>
         ))}
       </nav>
 
-      {/* ─── Footer ─── */}
-      <div className="px-4 py-4 border-t border-gray-700">
-        <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
-          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-          <span>Admin connecté</span>
-        </div>
+      {/* Footer links */}
+      <div className="p-4 border-t border-gray-200 space-y-1">
         <Link
-          href="/api/auth/logout"
-          className="block w-full text-center py-1.5 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+          href="/"
+          target="_blank"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all"
         >
-          Déconnexion
+          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Voir les pages
         </Link>
+
+        <form action="/api/admin/logout" method="POST">
+          <button
+            type="submit"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all"
+          >
+            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Déconnexion
+          </button>
+        </form>
       </div>
-    </div>
+    </aside>
   );
 }

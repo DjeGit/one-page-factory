@@ -1,20 +1,21 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { cookies } from 'next/headers';
+import { DEFAULT_MARKET, isValidMarket } from '@/lib/market';
 
-// --- Brevo transactional welcome email ---
+// --- Email de bienvenue transactionnel (Brevo) ---
 const WELCOME_CONTENT = {
   fr: {
-    subject: "Bienvenue sur Tendpick â votre sÃ©lection vous attend !",
-    html: '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px"><h1 style="font-size:22px;font-weight:900;color:#111">Merci de nous avoir rejoint !</h1><p style="color:#555;line-height:1.6">Vous faites maintenant partie des premiers Ã  dÃ©couvrir nos produits tendance.</p><a href="https://tendpick.fr" style="display:inline-block;background:#7C3AED;color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none">DÃ©couvrir les produits â</a></div>',
+    subject: 'Bienvenue sur Tendpick — votre sélection vous attend !',
+    html: '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px"><h1 style="font-size:22px;font-weight:900;color:#111">Merci de nous avoir rejoint !</h1><p style="color:#555;line-height:1.6">Vous faites maintenant partie des premiers à découvrir nos produits tendance.</p><a href="https://tendpick.fr" style="display:inline-block;background:#7C3AED;color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none">Découvrir les produits →</a></div>',
   },
   es: {
-    subject: "Bienvenido a Tendpick â Â¡tu selecciÃ³n te espera!",
-    html: '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px"><h1 style="font-size:22px;font-weight:900;color:#111">Â¡Gracias por unirte!</h1><p style="color:#555;line-height:1.6">Ahora formas parte de los primeros en descubrir nuestros productos tendencia.</p><a href="https://tendpick.es" style="display:inline-block;background:#7C3AED;color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none">Descubrir productos â</a></div>',
+    subject: 'Bienvenido a Tendpick — ¡tu selección te espera!',
+    html: '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px"><h1 style="font-size:22px;font-weight:900;color:#111">¡Gracias por unirte!</h1><p style="color:#555;line-height:1.6">Ahora formas parte de los primeros en descubrir nuestros productos tendencia.</p><a href="https://tendpick.es" style="display:inline-block;background:#7C3AED;color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none">Descubrir productos →</a></div>',
   },
-  com: {
-    subject: "Welcome to Tendpick â your selection is waiting!",
-    html: '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px"><h1 style="font-size:22px;font-weight:900;color:#111">Thanks for joining us!</h1><p style="color:#555;line-height:1.6">You are now among the first to discover our curated trending products.</p><a href="https://tendpick.com" style="display:inline-block;background:#7C3AED;color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none">Discover products â</a></div>',
+  uk: {
+    subject: 'Welcome to Tendpick — your selection is waiting!',
+    html: '<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px"><h1 style="font-size:22px;font-weight:900;color:#111">Thanks for joining us!</h1><p style="color:#555;line-height:1.6">You are now among the first to discover our curated trending products.</p><a href="https://tendpick.com" style="display:inline-block;background:#7C3AED;color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none">Discover products →</a></div>',
   },
 } as const;
 
@@ -22,20 +23,20 @@ async function sendWelcomeEmail(email: string, market: string): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY;
   if (!apiKey) return;
   const m = (market as keyof typeof WELCOME_CONTENT) in WELCOME_CONTENT
-    ? (market as keyof typeof WELCOME_CONTENT) : "fr";
+    ? (market as keyof typeof WELCOME_CONTENT) : 'fr';
   const { subject, html } = WELCOME_CONTENT[m];
   try {
-    await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: { "api-key": apiKey, "Content-Type": "application/json" },
+    await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: [{ email }],
-        sender: { name: "Tendpick", email: "hello@tendpick.fr" },
+        sender: { name: 'Tendpick', email: 'hello@tendpick.fr' },
         subject,
         htmlContent: html,
       }),
     });
-  } catch { /* silent */ }
+  } catch { /* silencieux — ne bloque jamais la capture du lead */ }
 }
 
 async function syncToBrevo(email: string, market: string, productName?: string) {
@@ -58,9 +59,11 @@ async function syncToBrevo(email: string, market: string, productName?: string) 
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-  } catch { /* silent */ }
+  } catch { /* silencieux */ }
 }
 
+// GET /api/leads?market=fr&product_id=... — filtres optionnels utilisés par
+// l'écran Admin > Leads (sélecteur "Tous les marchés" ou marché précis).
 export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
   const url = new URL(req.url);
@@ -83,16 +86,28 @@ export async function POST(req: NextRequest) {
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'Email invalide' }, { status: 400 });
   }
-  const cookieStore = cookies();
-  const market = cookieStore.get('opf_market')?.value ?? 'fr';
 
-  // Try upsert with market (needs market column in email_leads — run SQL migration first)
+  // Marché du lead : dérivé du PRODUIT concerné (source la plus fiable —
+  // Sprint 1), jamais de la préférence admin (route publique, cf. doc de
+  // lib/get-active-market.ts). Fallback sur le cookie public 'opf_market'
+  // (posé par le middleware selon le domaine visité) puis sur le défaut.
+  let market: string = DEFAULT_MARKET;
+  if (product_id) {
+    const { data: product } = await sb.from('products').select('market').eq('id', product_id).single();
+    if (product?.market && isValidMarket(product.market)) market = product.market;
+  }
+  if (market === DEFAULT_MARKET) {
+    const publicMarketCookie = cookies().get('opf_market')?.value;
+    if (publicMarketCookie && isValidMarket(publicMarketCookie)) market = publicMarketCookie;
+  }
+
+  // Upsert avec market ; filet de sécurité si jamais la colonne n'existe pas
+  // encore sur cet environnement (code Postgres 42703 = colonne manquante).
   let upsertResult = await sb
     .from('email_leads')
     .upsert({ email, product_id, source_slug, market }, { onConflict: 'email,product_id', ignoreDuplicates: true })
     .select().single();
-  // Fallback: if market column missing (code 42703), retry without it
-  if (upsertResult.error && (upsertResult.error as {code?: string}).code === '42703') {
+  if (upsertResult.error && (upsertResult.error as { code?: string }).code === '42703') {
     upsertResult = await sb
       .from('email_leads')
       .upsert({ email, product_id, source_slug }, { onConflict: 'email,product_id', ignoreDuplicates: true })
@@ -102,7 +117,11 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // Sync to Brevo (non-blocking, silent fail)
+  // Sync CRM (non bloquant, échec silencieux). Note : sendWelcomeEmail()
+  // existe mais n'est délibérément pas appelée ici, comme sur le serveur —
+  // l'e-mail de bienvenue est probablement déjà géré par une automatisation
+  // Brevo déclenchée à l'ajout en liste. Ne pas l'activer sans vérifier
+  // d'abord avec Jerome qu'il n'y a pas de double envoi.
   syncToBrevo(email, market, body.productName).catch(() => {});
 
   return NextResponse.json({ success: true, data });

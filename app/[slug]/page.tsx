@@ -9,8 +9,6 @@ import ProductShowcase from '@/components/landing/ProductShowcase';
 import Testimonials from '@/components/landing/Testimonials';
 import FAQ from '@/components/landing/FAQ';
 import CTAButton from '@/components/landing/CTAButton';
-import CountdownTimer from '@/components/landing/CountdownTimer';
-import StockCounter from '@/components/landing/StockCounter';
 import StickyBuy from '@/components/landing/StickyBuy';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SocialProofNotification from '@/components/landing/SocialProofNotification';
@@ -42,7 +40,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: product.meta_title || product.name,
       description: product.meta_description || product.description || undefined,
       images: product.image_url ? [product.image_url] : [],
-      type: 'website',
+      // og:type=product est un type OpenGraph standard (namespace produit
+      // Facebook/e-commerce) mais absent de l'union TypeScript de Next.js —
+      // cast local nécessaire, la valeur réelle envoyée reste bien 'product'.
+      type: 'product' as unknown as 'website',
       url: `${siteUrl}/${product.slug}`,
     },
     twitter: {
@@ -107,12 +108,12 @@ export default async function LandingPage({ params }: Props) {
   // Track page view (non-blocking)
   trackServerPageView(product.id);
 
-  // Market i18n for static CTA copy
-  const cookieMarket = (cookies().get('opf_market')?.value ?? 'fr') as 'fr' | 'es' | 'com';
+  // Market i18n for static CTA copy (marché = langue, cf. lib/market.ts — 'uk' == anglophone)
+  const cookieMarket = (cookies().get('opf_market')?.value ?? 'fr') as 'fr' | 'es' | 'uk';
   const CTA_I18N = {
-    fr: { ctaTitle: '{i18n.ctaTitle}', ctaDesc: '{i18n.ctaDesc}', ctaBtn: 'Je commande maintenant', trust: ['🔒 Paiement sécurisé', '🚚 Livraison rapide', '✅ Satisfait ou remboursé'] },
-    es: { ctaTitle: '¿Listo para cambiar tu vida?', ctaDesc: 'Miles de clientes ya han tomado la decisión. No te lo pierdas.', ctaBtn: 'Pedir ahora', trust: ['🔒 Pago seguro', '🚚 Entrega rápida', '✅ Satisfecho o reembolsado'] },
-    com: { ctaTitle: 'Ready to change your life?', ctaDesc: 'Thousands of customers have already made the choice. Do not miss out.', ctaBtn: 'Order now', trust: ['🔒 Secure payment', '🚚 Fast delivery', '✅ Satisfaction guaranteed'] },
+    fr: { ctaTitle: 'Prêt à changer votre quotidien ?', ctaDesc: 'Des milliers de clients ont déjà fait le choix. Ne passez pas à côté.', ctaBtn: 'Je commande maintenant', trust: ['🔒 Paiement sécurisé Amazon', '🚚 Livraison Amazon Prime', '✅ Retours Amazon 30j'] },
+    es: { ctaTitle: '¿Listo para cambiar tu vida?', ctaDesc: 'Miles de clientes ya han tomado la decisión. No te lo pierdas.', ctaBtn: 'Pedir ahora', trust: ['🔒 Pago seguro Amazon', '🚚 Envío Amazon Prime', '✅ Devoluciones Amazon 30 días'] },
+    uk: { ctaTitle: 'Ready to change your life?', ctaDesc: 'Thousands of customers have already made the choice. Do not miss out.', ctaBtn: 'Order now', trust: ['🔒 Secure Amazon payment', '🚚 Amazon Prime delivery', '✅ Amazon 30-day returns'] },
   } as const;
   const i18n = CTA_I18N[cookieMarket];
 
@@ -196,15 +197,9 @@ export default async function LandingPage({ params }: Props) {
           heroCta={heroCta}
         />
 
-        {/* 2. Urgency section */}
-        {(product.price || product.original_price) && (
-          <section className="py-8 bg-gray-950">
-            <div className="container mx-auto px-4 max-w-2xl space-y-4">
-              <CountdownTimer storageKey={product.slug} />
-              <StockCounter storageKey={product.slug} />
-            </div>
-          </section>
-        )}
+        {/* 2. Urgency section — retiré : countdown/stock factices sans donnée réelle
+             derrière (risque pratique commerciale trompeuse). À réactiver seulement
+             une fois branché sur une vraie source de stock/deadline. */}
 
         {/* 3. Pain Points */}
         <PainPoints painPoints={product.pain_points || []} />
@@ -227,10 +222,6 @@ export default async function LandingPage({ params }: Props) {
             <p className="text-gray-400 mb-8 text-lg">
               {i18n.ctaDesc}
             </p>
-
-            <div className="space-y-4 mb-8">
-              <StockCounter storageKey={`${product.slug}-cta`} />
-            </div>
 
             <CTAButton
               redirectCode={product.redirect_code}

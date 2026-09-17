@@ -2,23 +2,19 @@ import Link from 'next/link';
 import { getAllProducts, getAnalytics } from '@/lib/supabase';
 import ProductsTable from './ProductsTable';
 import CSVImportButton from '@/components/admin/CSVImportButton';
-
-import { cookies } from 'next/headers';
+import { getActiveMarket } from '@/lib/get-active-market';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ProductsPage() {
-  const market = cookies().get('opf_market')?.value ?? 'fr';
+  const market = getActiveMarket();
   const [products, analytics] = await Promise.all([
     getAllProducts(market),
-    getAnalytics(),
+    getAnalytics(market),
   ]);
 
-  // Merge analytics into products (getAnalytics() returns AnalyticsStats object, not array)
-  const analyticsItems: any[] = Array.isArray(analytics)
-    ? analytics
-    : ((analytics as any)?.topProducts ?? []);
-  const analyticsMap = new Map(analyticsItems.map((a: any) => [a.product_id, a]));
+  // Merge analytics into products
+  const analyticsMap = new Map(analytics.map((a) => [a.product_id, a]));
 
   return (
     <div className="p-8">

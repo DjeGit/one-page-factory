@@ -55,15 +55,17 @@ export async function GET(
     }
 
     // Track the click asynchronously (don't await to keep response fast)
-    // Read market from cookie (set by middleware or user preference)
-    const marketId = (req.cookies.get('opf_market')?.value ?? 'fr') as 'fr' | 'es' | 'com';
-    trackClick(product.id, marketId).catch(console.error);
+    trackClick(product.id, req).catch(console.error);
 
-    // Clean 302 redirect to market-specific affiliate URL
+    // Clean 302 redirect to the product's affiliate URL. Les colonnes
+    // affiliate_url_fr/es/com existent dans le schéma (chantier multi-marché
+    // antérieur) mais ne sont pas encore renseignées — on reste sur
+    // affiliate_url tant qu'elles ne le sont pas, avec fallback naturel.
+    const marketId = req.cookies.get('opf_market')?.value;
     const affiliateUrl =
-      (marketId === 'es' ? product.affiliate_url_es : null) ??
-      (marketId === 'com' ? product.affiliate_url_com : null) ??
-      product.affiliate_url_fr ??
+      (marketId === 'es' ? (product as any).affiliate_url_es : null) ??
+      (marketId === 'com' ? (product as any).affiliate_url_com : null) ??
+      (product as any).affiliate_url_fr ??
       product.affiliate_url ??
       '/';
     return NextResponse.redirect(affiliateUrl, {

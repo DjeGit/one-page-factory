@@ -8,6 +8,7 @@
  *   if (authError) return authError;
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeStringEqual } from './admin-auth';
 
 export function requireInternalAuth(request: NextRequest): NextResponse | null {
   const apiKey = process.env.INTERNAL_API_KEY;
@@ -28,7 +29,7 @@ export function requireInternalAuth(request: NextRequest): NextResponse | null {
   const authHeader = request.headers.get('authorization') ?? '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
-  if (token !== apiKey) {
+  if (!timingSafeStringEqual(token, apiKey)) {
     return NextResponse.json(
       { error: 'Unauthorized — invalid API key' },
       { status: 401 }

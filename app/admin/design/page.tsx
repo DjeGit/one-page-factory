@@ -1,11 +1,11 @@
 import { getAllProducts } from '@/lib/supabase';
 import DesignStudio from '@/components/admin/design/DesignStudio';
-import { cookies } from 'next/headers';
+import { getActiveMarket } from '@/lib/get-active-market';
 
 export const dynamic = 'force-dynamic';
 
 export default async function DesignPage() {
-  const market = cookies().get('opf_market')?.value ?? 'fr';
+  const market = getActiveMarket();
   const products = await getAllProducts(market);
 
   return (
