@@ -1,0 +1,97 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "retry": "Retry",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "seeAll": "See all",
+    "noResults": "No results found"
+  },
+  "market": {
+    "label": "Market",
+    "switch": "Switch market",
+    "current": "Active market",
+    "france": "France",
+    "espagne": "Spain",
+    "international": "International"
+  },
+  "nav": {
+    "home": "Home",
+    "discover": "Discover",
+    "products": "Products",
+    "categories": "Categories",
+    "dashboard": "Dashboard",
+    "about": "About"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome",
+    "stats": {
+      "products": "Products",
+      "categories": "Categories",
+      "clicks": "Affiliate clicks",
+      "revenue": "Estimated revenue"
+    },
+    "recentProducts": "Recent products",
+    "topCategories": "Top categories",
+    "syncStatus": "Sync status",
+    "lastSync": "Last sync"
+  },
+  "products": {
+    "title": "Products",
+    "price": "Price",
+    "available": "Available",
+    "unavailable": "Unavailable",
+    "buyOn": "Buy on {marketplace}",
+    "seeProduct": "See product",
+    "addProduct": "Add product",
+    "noProducts": "No products on this market",
+    "syncProducts": "Sync products",
+    "marketsAvailable": "Available markets",
+    "priceUpdated": "Price updated on {date}"
+  },
+  "discover": {
+    "title": "Discover",
+    "subtitle": "The best selections for you",
+    "filters": {
+      "allCategories": "All categories",
+      "priceRange": "Price range",
+      "sortBy": "Sort by",
+      "popularity": "Popularity",
+      "priceLow": "Price: low to high",
+      "priceHigh": "Price: high to low",
+      "newest": "Newest"
+    }
+  },
+  "sync": {
+    "running": "Sync in progress...",
+    "success": "Sync successful",
+    "error": "Sync error",
+    "lastRun": "Last run: {date}",
+    "syncPrices": "Sync prices",
+    "syncProducts": "Sync products",
+    "syncTranslations": "Sync translations"
+  },
+  "errors": {
+    "notFound": "Page not found",
+    "serverError": "Server error",
+    "unauthorized": "Unauthorized",
+    "marketUnavailable": "This market is not yet available"
+  },
+  "seo": {
+    "defaultTitle": "Tendpick — Product selections",
+    "defaultDescription": "Discover the best product selections on Tendpick International.",
+    "productsTitle": "Products | Tendpick International",
+    "discoverTitle": "Discover | Tendpick International"
+  }
+}

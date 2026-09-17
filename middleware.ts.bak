@@ -1,0 +1,27 @@
+/**
+ * OPF — Middleware minimal
+ * Détecte le marché depuis le hostname, injecte x-market header.
+ * Pas de dépendance next-intl pour simplifier le build.
+ */
+import { NextRequest, NextResponse } from 'next/server';
+
+function getMarket(host: string): string {
+  const h = (host ?? '').split(':')[0].toLowerCase();
+  if (h.includes('tendpick.es')) return 'es';
+  if (h.includes('tendpick.com') && !h.includes('tendpick.fr')) return 'com';
+  return 'fr';
+}
+
+export function middleware(request: NextRequest) {
+  const market = getMarket(request.headers.get('host') ?? '');
+  const response = NextResponse.next();
+  response.headers.set('x-market', market);
+  response.headers.set('x-market-locale', market === 'fr' ? 'fr-FR' : market === 'es' ? 'es-ES' : 'en-US');
+  return response;
+}
+
+export const config = {
+  matcher: [
+    '/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)',
+  ],
+};

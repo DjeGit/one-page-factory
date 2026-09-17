@@ -17,6 +17,12 @@ import SocialProofNotification from '@/components/landing/SocialProofNotificatio
 import ExitIntentPopup from '@/components/landing/ExitIntentPopup';
 import EmailCapturePopup from '@/components/landing/EmailCapturePopup';
 import ProductStructuredData from '@/components/landing/ProductStructuredData';
+import LandingHeader from '@/components/layout/LandingHeader';
+import LandingFooter from '@/components/layout/LandingFooter';
+import CookieConsent from '@/components/layout/CookieConsent';
+import TemplateRenderer from '@/components/templates/TemplateRenderer';
+import type { TemplateOverrides } from '@/components/templates/TemplateRenderer';
+import { getTemplate } from '@/lib/templates';
 import type { ABTest } from '@/types';
 
 interface Props {
@@ -101,6 +107,45 @@ export default async function LandingPage({ params }: Props) {
   // Track page view (non-blocking)
   trackServerPageView(product.id);
 
+  // Market i18n for static CTA copy
+  const cookieMarket = (cookies().get('opf_market')?.value ?? 'fr') as 'fr' | 'es' | 'com';
+  const CTA_I18N = {
+    fr: { ctaTitle: '{i18n.ctaTitle}', ctaDesc: '{i18n.ctaDesc}', ctaBtn: 'Je commande maintenant', trust: ['🔒 Paiement sécurisé', '🚚 Livraison rapide', '✅ Satisfait ou remboursé'] },
+    es: { ctaTitle: '¿Listo para cambiar tu vida?', ctaDesc: 'Miles de clientes ya han tomado la decisión. No te lo pierdas.', ctaBtn: 'Pedir ahora', trust: ['🔒 Pago seguro', '🚚 Entrega rápida', '✅ Satisfecho o reembolsado'] },
+    com: { ctaTitle: 'Ready to change your life?', ctaDesc: 'Thousands of customers have already made the choice. Do not miss out.', ctaBtn: 'Order now', trust: ['🔒 Secure payment', '🚚 Fast delivery', '✅ Satisfaction guaranteed'] },
+  } as const;
+  const i18n = CTA_I18N[cookieMarket];
+
+  // Design Studio: TemplateRenderer when template_id is set
+  if (product.template_id) {
+    const tpl = getTemplate(product.template_id);
+    const tplOverrides = product.template_config
+      ? (product.template_config as unknown as TemplateOverrides)
+      : undefined;
+    const ctaHref = product.affiliate_url ?? undefined;
+    return (
+      <>
+        <PixelInjector pixelMeta={product.pixel_meta} pixelTiktok={product.pixel_tiktok} pixelGtm={product.pixel_gtm} />
+        <ProductStructuredData product={product} />
+        <LandingHeader productName={product.name} />
+        <TemplateRenderer
+          product={product}
+          template={tpl}
+          overrides={tplOverrides}
+          ctaHref={ctaHref}
+        />
+        <LandingFooter />
+        <StickyBuy
+          redirectCode={product.redirect_code}
+          productId={product.id}
+          price={product.price}
+          productName={product.name}
+        />
+        <CookieConsent />
+      </>
+    );
+  }
+
   // A/B test: fetch active test and randomly pick variant server-side
   const abTest = await getActiveABTest(product.id);
   let abVariant: 'a' | 'b' | null = null;
@@ -136,7 +181,11 @@ export default async function LandingPage({ params }: Props) {
       {/* Structured data */}
       <ProductStructuredData product={product} />
 
-      {/* No navigation — distraction-free landing page */}
+      {/* Navigation Tendpick */}
+      <LandingHeader
+        productName={product.name}
+        affiliateUrl={product.affiliate_url}
+      />
 
       <main>
         {/* 1. Hero */}
@@ -173,10 +222,10 @@ export default async function LandingPage({ params }: Props) {
         <section className="py-20 bg-gradient-to-br from-primary-950 via-gray-950 to-gray-950">
           <div className="container mx-auto px-4 text-center max-w-xl">
             <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">
-              Prêt à changer votre quotidien ?
+              {i18n.ctaTitle}
             </h2>
             <p className="text-gray-400 mb-8 text-lg">
-              Des milliers de clients ont déjà fait le choix. Ne passez pas à côté.
+              {i18n.ctaDesc}
             </p>
 
             <div className="space-y-4 mb-8">
@@ -186,15 +235,13 @@ export default async function LandingPage({ params }: Props) {
             <CTAButton
               redirectCode={product.redirect_code}
               productId={product.id}
-              label="Je commande maintenant"
+              label={i18n.ctaBtn}
               size="xl"
               className="w-full justify-center"
             />
 
             <div className="mt-6 flex items-center justify-center gap-6 text-sm text-gray-500">
-              <span>🔒 Paiement sécurisé</span>
-              <span>🚚 Livraison rapide</span>
-              <span>✅ Satisfait ou remboursé</span>
+              {i18n.trust.map((t, k) => <span key={k}>{t}</span>)}
             </div>
           </div>
         </section>
@@ -203,13 +250,8 @@ export default async function LandingPage({ params }: Props) {
         <FAQ items={product.faq || []} />
       </main>
 
-      {/* Footer */}
-      <footer className="py-8 bg-gray-950 border-t border-gray-900 text-center">
-        <p className="text-gray-600 text-sm">
-          © {new Date().getFullYear()} — Tous droits réservés.
-          {' '}Ce site contient des liens d&apos;affiliation.
-        </p>
-      </footer>
+      {/* Footer Tendpick */}
+      <LandingFooter />
 
       {/* Sticky mobile buy bar */}
       <StickyBuy
@@ -272,6 +314,9 @@ export default async function LandingPage({ params }: Props) {
           }}
         />
       )}
+
+      {/* GDPR Cookie Consent */}
+      <CookieConsent />
     </>
   );
 }

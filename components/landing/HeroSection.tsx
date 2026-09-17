@@ -110,7 +110,7 @@ export default function HeroSection({ product, heroTitle, heroSubtitle, heroCta 
                   height={600}
                   className="w-full h-auto rounded-2xl object-cover"
                   priority
-                  unoptimized={imageUrl.includes('placehold.co')}
+                  unoptimized={imageUrl.includes('placehold.co') || imageUrl.includes('/fetch/')}
                 />
 
                 {/* Floating badge */}

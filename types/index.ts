@@ -35,6 +35,7 @@ export interface Product {
   redirect_code: string;
   image_url: string | null;
   active: boolean;
+  market?: string;
 
   // AI-generated content
   hero_title: string | null;
@@ -85,6 +86,7 @@ export interface ProductFormData {
   affiliate_url: string;
   image_url: string;
   active: boolean;
+  market?: string;
   hero_title: string;
   hero_subtitle: string;
   pain_points: PainPoint[];
@@ -162,6 +164,7 @@ export interface ABTest {
   variant_b_clicks: number;
   winner: 'a' | 'b' | null;
   active: boolean;
+  market?: string;
   created_at: string;
 }
 

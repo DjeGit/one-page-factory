@@ -1,0 +1,97 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "error": "Se ha producido un error",
+    "retry": "Reintentar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "sort": "Ordenar",
+    "seeAll": "Ver todo",
+    "noResults": "Sin resultados"
+  },
+  "market": {
+    "label": "Mercado",
+    "switch": "Cambiar de mercado",
+    "current": "Mercado activo",
+    "france": "Francia",
+    "espagne": "España",
+    "international": "Internacional"
+  },
+  "nav": {
+    "home": "Inicio",
+    "discover": "Descubrir",
+    "products": "Productos",
+    "categories": "Categorías",
+    "dashboard": "Panel",
+    "about": "Sobre nosotros"
+  },
+  "dashboard": {
+    "title": "Panel de control",
+    "welcome": "Bienvenido",
+    "stats": {
+      "products": "Productos",
+      "categories": "Categorías",
+      "clicks": "Clics afiliados",
+      "revenue": "Ingresos estimados"
+    },
+    "recentProducts": "Productos recientes",
+    "topCategories": "Top categorías",
+    "syncStatus": "Estado de sincronizaciones",
+    "lastSync": "Última sincronización"
+  },
+  "products": {
+    "title": "Productos",
+    "price": "Precio",
+    "available": "Disponible",
+    "unavailable": "No disponible",
+    "buyOn": "Comprar en {marketplace}",
+    "seeProduct": "Ver el producto",
+    "addProduct": "Añadir producto",
+    "noProducts": "No hay productos en este mercado",
+    "syncProducts": "Sincronizar productos",
+    "marketsAvailable": "Mercados disponibles",
+    "priceUpdated": "Precio actualizado el {date}"
+  },
+  "discover": {
+    "title": "Descubrir",
+    "subtitle": "Las mejores selecciones para ti",
+    "filters": {
+      "allCategories": "Todas las categorías",
+      "priceRange": "Rango de precio",
+      "sortBy": "Ordenar por",
+      "popularity": "Popularidad",
+      "priceLow": "Precio ascendente",
+      "priceHigh": "Precio descendente",
+      "newest": "Novedades"
+    }
+  },
+  "sync": {
+    "running": "Sincronización en curso...",
+    "success": "Sincronización correcta",
+    "error": "Error de sincronización",
+    "lastRun": "Última ejecución: {date}",
+    "syncPrices": "Sincronizar precios",
+    "syncProducts": "Sincronizar productos",
+    "syncTranslations": "Sincronizar traducciones"
+  },
+  "errors": {
+    "notFound": "Página no encontrada",
+    "serverError": "Error del servidor",
+    "unauthorized": "No autorizado",
+    "marketUnavailable": "Este mercado aún no está disponible"
+  },
+  "seo": {
+    "defaultTitle": "Tendpick — Selecciones de productos",
+    "defaultDescription": "Descubre las mejores selecciones de productos en Tendpick España.",
+    "productsTitle": "Productos | Tendpick España",
+    "discoverTitle": "Descubrir | Tendpick España"
+  }
+}

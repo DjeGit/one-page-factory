@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useMarket } from '@/components/admin/MarketContext';
 
 interface TopProduct {
   id: string;
@@ -18,6 +19,7 @@ interface TopProduct {
 
 interface Props {
   initialData: TopProduct[];
+  market?: string;
 }
 
 const REFRESH_INTERVAL = 30_000;
@@ -28,19 +30,25 @@ const RANK_STYLES = [
   'bg-orange-300 text-orange-900',
 ];
 
-export default function TopProductsLive({ initialData }: Props) {
+export default function TopProductsLive({ initialData, market: marketProp = 'fr' }: Props) {
+  // Lire le marché depuis le contexte (mis à jour instantanément côté client)
+  // Fall back sur la prop serveur si le contexte n'est pas dispo
+  const { market: contextMarket } = useMarket();
+  const market = contextMarket || marketProp;
+
   const [data, setData] = useState<TopProduct[]>(initialData);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [secondsAgo, setSecondsAgo] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [flash, setFlash] = useState(false);
+  const prevMarket = useRef(market);
 
   const maxClicks = data.length > 0 ? Math.max(...data.map(p => p.clicks_24h), 1) : 1;
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (m: string) => {
     setIsRefreshing(true);
     try {
-      const res = await fetch('/api/top-products', { cache: 'no-store' });
+      const res = await fetch(`/api/top-products?market=${m}`, { cache: 'no-store' });
       if (res.ok) {
         const fresh = await res.json();
         setData(fresh);
@@ -54,13 +62,26 @@ export default function TopProductsLive({ initialData }: Props) {
     }
   }, []);
 
-  // Auto-refresh every 30s
+  // Re-fetch instantanément quand le marché change (via contexte)
   useEffect(() => {
-    const interval = setInterval(refresh, REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [refresh]);
+    if (prevMarket.current !== market) {
+      prevMarket.current = market;
+      refresh(market);
+    }
+  }, [market, refresh]);
 
-  // Seconds-ago counter
+  // Sync server-provided initialData (e.g. après router.refresh())
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
+
+  // Auto-refresh toutes les 30s
+  useEffect(() => {
+    const interval = setInterval(() => refresh(market), REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [market, refresh]);
+
+  // Compteur "il y a Xs"
   useEffect(() => {
     const tick = setInterval(() => {
       setSecondsAgo(Math.round((Date.now() - lastUpdated.getTime()) / 1000));
@@ -69,7 +90,7 @@ export default function TopProductsLive({ initialData }: Props) {
   }, [lastUpdated]);
 
   const formatSecondsAgo = () => {
-    if (secondsAgo < 5) return 'à l\'instant';
+    if (secondsAgo < 5) return "à l'instant";
     if (secondsAgo < 60) return `il y a ${secondsAgo}s`;
     return `il y a ${Math.floor(secondsAgo / 60)}min`;
   };
@@ -86,13 +107,13 @@ export default function TopProductsLive({ initialData }: Props) {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
             </span>
-            LIVE
+            LIVE · {market.toUpperCase()}
           </span>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-400">Mis à jour {formatSecondsAgo()}</span>
           <button
-            onClick={refresh}
+            onClick={() => refresh(market)}
             disabled={isRefreshing}
             className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
             title="Rafraîchir"
@@ -204,7 +225,7 @@ export default function TopProductsLive({ initialData }: Props) {
           {/* Footer */}
           <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
             <p className="text-xs text-gray-400">
-              Classement par clics sur les dernières 24h · Rafraîchissement auto toutes les 30s
+              Classement par clics 24h · marché {market.toUpperCase()} · Rafraîchissement auto 30s
             </p>
             <Link
               href="/admin/analytics"

@@ -21,6 +21,7 @@ interface Props {
   template: TemplateConfig;
   overrides?: TemplateOverrides;
   scale?: number;
+  ctaHref?: string;
 }
 
 // Helper to build gradient style from template
@@ -66,7 +67,7 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
-export default function TemplateRenderer({ product, template, overrides, scale }: Props) {
+export default function TemplateRenderer({ product, template, overrides, scale, ctaHref }: Props) {
   const isDark = template.textColor === 'white';
   const textBase = isDark ? '#ffffff' : '#111827';
   const textMuted = isDark ? 'rgba(255,255,255,0.7)' : '#6b7280';
@@ -107,6 +108,12 @@ export default function TemplateRenderer({ product, template, overrides, scale }
     textDecoration: 'none',
     letterSpacing: '0.025em',
   };
+  const CtaBtn = ({ extraStyle }: { extraStyle?: React.CSSProperties }) => {
+    const s: React.CSSProperties = extraStyle ? { ...ctaButtonStyle, ...extraStyle } : ctaButtonStyle;
+    if (ctaHref) return <a href={ctaHref} style={s} target="_blank" rel="noopener noreferrer">{ctaText} →</a>;
+    return <span style={s}>{ctaText} →</span>;
+  };
+
 
   // Hero section content
   const HeroContent = () => (
@@ -162,7 +169,7 @@ export default function TemplateRenderer({ product, template, overrides, scale }
 
       {/* CTA */}
       <div style={{ marginBottom: '24px' }}>
-        <span style={ctaButtonStyle}>{ctaText} →</span>
+        <CtaBtn />
       </div>
 
       {/* Trust badges */}
@@ -272,7 +279,7 @@ export default function TemplateRenderer({ product, template, overrides, scale }
                 </div>
               )}
               <div style={{ marginBottom: '20px' }}>
-                <span style={ctaButtonStyle}>{ctaText} →</span>
+                <CtaBtn />
               </div>
               <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
                 {['✓ Livraison rapide', '✓ Satisfait ou remboursé', '✓ Paiement sécurisé'].map((badge) => (
@@ -478,7 +485,7 @@ export default function TemplateRenderer({ product, template, overrides, scale }
         <p style={{ color: textMuted, marginBottom: '24px', fontSize: '16px' }}>
           Rejoignez des milliers de clients satisfaits
         </p>
-        <span style={{ ...ctaButtonStyle, padding: '16px 48px', fontSize: '18px' }}>{ctaText} →</span>
+        <CtaBtn extraStyle={{ padding: '16px 48px', fontSize: '18px' }} />
       </section>
     </div>
   );

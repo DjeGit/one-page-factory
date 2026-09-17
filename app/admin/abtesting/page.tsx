@@ -1,17 +1,20 @@
 import ABTestingManager from '@/components/admin/ABTestingManager';
-import { getAllProducts } from '@/lib/supabase';
+import { getAllProducts, getSupabaseAdmin } from '@/lib/supabase';
 import type { ABTest } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
+// Requête directe Supabase au lieu de l'API HTTP
+// (évite le bug NEXT_PUBLIC_SITE_URL=tendpick.com qui faisait partir la requête vers le mauvais serveur)
 async function getABTests(): Promise<ABTest[]> {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SITE_URL}/api/ab-test`,
-      { cache: 'no-store' }
-    );
-    if (!res.ok) return [];
-    return res.json();
+    const supabase = getSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('ab_tests')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error || !data) return [];
+    return data as ABTest[];
   } catch {
     return [];
   }

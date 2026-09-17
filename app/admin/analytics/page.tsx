@@ -5,14 +5,16 @@ import StatsCard from '@/components/admin/StatsCard';
 export const dynamic = 'force-dynamic';
 
 export default async function AnalyticsPage() {
-  const [analytics, stats] = await Promise.all([
+  const [analyticsStats, stats] = await Promise.all([
     getAnalytics(),
     getDashboardStats(),
   ]);
 
-  const totalRevenue = analytics.reduce((sum, a) => sum + a.revenue_estimate, 0);
+  // getAnalytics() returns AnalyticsStats object, extract topProducts array
+  const analytics: any[] = analyticsStats?.topProducts ?? [];
+  const totalRevenue = analytics.reduce((sum: number, a: any) => sum + (a.revenue_estimate ?? 0), 0);
   const avgCtr = analytics.length > 0
-    ? analytics.reduce((sum, a) => sum + a.ctr, 0) / analytics.length
+    ? analytics.reduce((sum: number, a: any) => sum + (a.ctr ?? 0), 0) / analytics.length
     : 0;
 
   return (
@@ -27,7 +29,7 @@ export default async function AnalyticsPage() {
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
         <StatsCard
           title="Total clics"
-          value={stats.total_clicks.toLocaleString('fr-FR')}
+          value={(stats?.total_clicks ?? 0).toLocaleString('fr-FR')}
           subtitle="Tous produits"
           color="orange"
           icon={
@@ -38,7 +40,7 @@ export default async function AnalyticsPage() {
         />
         <StatsCard
           title="Total vues"
-          value={stats.total_views.toLocaleString('fr-FR')}
+          value={(stats?.total_views ?? 0).toLocaleString('fr-FR')}
           subtitle="Pages visitées"
           color="blue"
           icon={

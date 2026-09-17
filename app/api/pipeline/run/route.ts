@@ -89,7 +89,7 @@ async function stepGenerate(maxProducts: number) {
     }
 
     // Small delay to avoid rate limits
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 12000));
   }
 
   return { generated, errors };

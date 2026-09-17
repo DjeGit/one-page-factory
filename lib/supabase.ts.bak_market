@@ -1,0 +1,257 @@
+/**
+ * OPF — Supabase client + data helpers
+ *
+ * Public client  : lecture seule, cle anon
+ * Admin client   : service role, toutes permissions (SERVEUR UNIQUEMENT)
+ */
+
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+/** Client public — safe cote client */
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+/** Client admin — NE PAS exposer cote client */
+export const supabaseAdmin: SupabaseClient = createClient(
+  supabaseUrl,
+  supabaseServiceKey,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
+/** Retourne le client admin (compat legacy) */
+export function getSupabaseAdmin(): SupabaseClient {
+  return supabaseAdmin;
+}
+
+// ─── Slug helper ─────────────────────────────────────────────────────────────
+
+export function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+// ─── Product type ─────────────────────────────────────────────────────────────
+
+export interface Product {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  price?: number | null;
+  original_price?: number | null;
+  affiliate_url?: string | null;
+  redirect_code?: string | null;
+  image_url?: string | null;
+  active?: boolean;
+  hero_title?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  // Multi-market
+  affiliate_url_fr?: string | null;
+  affiliate_url_es?: string | null;
+  affiliate_url_com?: string | null;
+  price_fr?: number | null;
+  price_es?: number | null;
+  price_com?: number | null;
+  available_fr?: boolean;
+  available_es?: boolean;
+  available_com?: boolean;
+  trending_score?: number | null;
+  // Keepa / scores
+  amazon_asin?: string | null;
+  keepa_score?: number | null;
+}
+
+// ─── Product CRUD ─────────────────────────────────────────────────────────────
+
+export async function getAllProducts(): Promise<Product[]> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[supabase] getAllProducts:", error.message);
+    return [];
+  }
+  return data ?? [];
+}
+
+export async function getProduct(slug: string): Promise<Product | null> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("*")
+    .eq("slug", slug)
+    .eq("active", true)
+    .maybeSingle();
+  if (error) {
+    console.error("[supabase] getProduct:", error.message);
+    return null;
+  }
+  return data;
+}
+
+export async function getProductById(id: string): Promise<Product | null> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    console.error("[supabase] getProductById:", error.message);
+    return null;
+  }
+  return data;
+}
+
+export async function getProductByCode(code: string): Promise<Product | null> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .select("*")
+    .eq("redirect_code", code)
+    .eq("active", true)
+    .maybeSingle();
+  if (error) {
+    console.error("[supabase] getProductByCode:", error.message);
+    return null;
+  }
+  return data;
+}
+
+export async function createProduct(
+  values: Omit<Product, "id" | "created_at" | "updated_at">
+): Promise<Product> {
+  if (!values.slug && values.name) {
+    (values as Record<string, unknown>).slug = generateSlug(values.name);
+  }
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .insert(values)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateProduct(
+  id: string,
+  updates: Partial<Product>
+): Promise<Product> {
+  const { data, error } = await supabaseAdmin
+    .from("products")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteProduct(id: string): Promise<void> {
+  const { error } = await supabaseAdmin.from("products").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+export async function trackClick(productId: string): Promise<void> {
+  try {
+    // Try product_clicks first (new schema), fall back to clicks
+    const { error } = await supabaseAdmin
+      .from("product_clicks")
+      .insert({ product_id: productId });
+    if (error) {
+      await supabaseAdmin.from("clicks").insert({ product_id: productId });
+    }
+  } catch {
+    // Fire-and-forget: silently ignore errors
+  }
+}
+
+export async function trackPageView(productId: string): Promise<void> {
+  try {
+    await supabaseAdmin.from("page_views").insert({ product_id: productId });
+  } catch {
+    // Fire-and-forget
+  }
+}
+
+export interface AnalyticsStats {
+  totalClicks: number;
+  totalViews: number;
+  topProducts: Array<{ id: string; name: string; clicks: number; views: number }>;
+}
+
+export async function getAnalytics(days = 30): Promise<AnalyticsStats> {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  try {
+    const [{ count: clicks }, { count: views }] = await Promise.all([
+      supabaseAdmin
+        .from("product_clicks")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", since),
+      supabaseAdmin
+        .from("page_views")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", since),
+    ]);
+    return { totalClicks: clicks ?? 0, totalViews: views ?? 0, topProducts: [] };
+  } catch {
+    return { totalClicks: 0, totalViews: 0, topProducts: [] };
+  }
+}
+
+export interface DashboardStats {
+  totalProducts: number;
+  activeProducts: number;
+  totalClicks: number;
+  totalViews: number;
+  recentProducts: Product[];
+}
+
+export async function getDashboardStats(): Promise<DashboardStats> {
+  try {
+    const [
+      { count: total },
+      { count: active },
+      { count: clicks },
+      { count: views },
+      { data: recent },
+    ] = await Promise.all([
+      supabaseAdmin.from("products").select("*", { count: "exact", head: true }),
+      supabaseAdmin
+        .from("products")
+        .select("*", { count: "exact", head: true })
+        .eq("active", true),
+      supabaseAdmin.from("product_clicks").select("*", { count: "exact", head: true }),
+      supabaseAdmin.from("page_views").select("*", { count: "exact", head: true }),
+      supabaseAdmin
+        .from("products")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+    return {
+      totalProducts: total ?? 0,
+      activeProducts: active ?? 0,
+      totalClicks: clicks ?? 0,
+      totalViews: views ?? 0,
+      recentProducts: recent ?? [],
+    };
+  } catch {
+    return {
+      totalProducts: 0,
+      activeProducts: 0,
+      totalClicks: 0,
+      totalViews: 0,
+      recentProducts: [],
+    };
+  }
+}

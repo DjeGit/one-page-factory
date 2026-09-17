@@ -1,4 +1,5 @@
 import { getAllProducts } from '@/lib/supabase';
+import { cookies, headers } from 'next/headers';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -10,10 +11,13 @@ export const metadata: Metadata = {
 };
 
 export default async function BioPage() {
-  const allProducts = await getAllProducts();
+  const cookieStore = cookies();
+  const market = cookieStore.get('opf_market')?.value ?? 'fr';
+  const allProducts = await getAllProducts(market);
   const active = allProducts.filter((p) => p.active);
 
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').replace(/\/$/, '');
+  const host = headers().get('host') ?? '';
+  const siteUrl = host ? 'https://' + host : (process.env.NEXT_PUBLIC_SITE_URL || 'https://tendpick.fr').replace(/\/$/, '');
 
   return (
     <main

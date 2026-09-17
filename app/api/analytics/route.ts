@@ -13,7 +13,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.type === 'click') {
-      await trackClick(body.productId, req);
+      const marketId = (req.cookies?.get?.('opf_market')?.value ?? body.market ?? 'fr') as string;
+      await trackClick(body.productId, marketId);
     } else if (body.type === 'view') {
       await trackPageView(body.productId, req);
     } else {

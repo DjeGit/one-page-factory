@@ -9,6 +9,7 @@ interface Lead {
   product_id: string;
   source_slug: string;
   created_at: string;
+  market?: string;
 }
 
 interface LeadsStats {
@@ -28,6 +29,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [stats, setStats] = useState<LeadsStats>({ total: 0, this_week: 0, today: 0, top_product: '—' });
   const [filterProductId, setFilterProductId] = useState('');
+  const [filterMarket, setFilterMarket] = useState('');
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -37,6 +39,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
     try {
       const params = new URLSearchParams();
       if (filterProductId) params.set('product_id', filterProductId);
+      if (filterMarket) params.set('market', filterMarket);
       const res = await fetch(`/api/leads?${params}`);
       if (!res.ok) return;
       const data = await res.json();
@@ -65,7 +68,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
     } finally {
       setLoading(false);
     }
-  }, [filterProductId, products]);
+  }, [filterProductId, filterMarket, products]);
 
   useEffect(() => {
     fetchLeads();
@@ -150,12 +153,21 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
         ))}
       </div>
 
-      {/* Filter */}
-      <div className="mb-5 flex items-center gap-3">
-        <label className="text-sm font-semibold text-gray-700">Filtrer par produit :</label>
+      {/* Filters */}
+      <div className="mb-5 flex items-center gap-3 flex-wrap">
+        <select
+          value={filterMarket}
+          onChange={(e) => { setFilterMarket(e.target.value); setPage(0); }}
+          className="px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 text-sm"
+        >
+          <option value="">🌍 Tous les marchés</option>
+          <option value="fr">🇫🇷 France</option>
+          <option value="es">🇪🇸 Espagne</option>
+          <option value="com">🌐 International</option>
+        </select>
         <select
           value={filterProductId}
-          onChange={(e) => setFilterProductId(e.target.value)}
+          onChange={(e) => { setFilterProductId(e.target.value); setPage(0); }}
           className="px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 text-sm"
         >
           <option value="">Tous les produits</option>
@@ -188,6 +200,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
                     <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Marché</th>
                     <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Produit source</th>
                     <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date de capture</th>
                     <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -198,6 +211,11 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
                     <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <span className="font-medium text-gray-900">{lead.email}</span>
+                      </td>
+                      <td className="px-4 py-4">
+                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700 whitespace-nowrap">
+                          {lead.market === 'fr' ? '🇫🇷 FR' : lead.market === 'es' ? '🇪🇸 ES' : lead.market === 'com' ? '🌐 COM' : '—'}
+                        </span>
                       </td>
                       <td className="px-4 py-4">
                         <span className="text-gray-700">{productName(lead.product_id)}</span>

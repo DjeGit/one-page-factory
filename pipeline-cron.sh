@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-SITE_URL="${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}"
+SITE_URL="http://localhost:3000"
 SECRET="${PIPELINE_SECRET:-${ADMIN_SECRET:-}}"
 ACTION="${1:-run}"
 LOG_DATE=$(date '+%Y-%m-%d %H:%M:%S')

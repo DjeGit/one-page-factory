@@ -55,10 +55,18 @@ export async function GET(
     }
 
     // Track the click asynchronously (don't await to keep response fast)
-    trackClick(product.id, req).catch(console.error);
+    // Read market from cookie (set by middleware or user preference)
+    const marketId = (req.cookies.get('opf_market')?.value ?? 'fr') as 'fr' | 'es' | 'com';
+    trackClick(product.id, marketId).catch(console.error);
 
-    // Clean 302 redirect to affiliate URL
-    return NextResponse.redirect(product.affiliate_url, {
+    // Clean 302 redirect to market-specific affiliate URL
+    const affiliateUrl =
+      (marketId === 'es' ? product.affiliate_url_es : null) ??
+      (marketId === 'com' ? product.affiliate_url_com : null) ??
+      product.affiliate_url_fr ??
+      product.affiliate_url ??
+      '/';
+    return NextResponse.redirect(affiliateUrl, {
       status: 302,
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate',

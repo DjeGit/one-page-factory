@@ -1,32 +1,36 @@
-import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { NextRequest } from 'next/server';
 
-export async function GET(_req: Request, { params }: { params: { productId: string } }) {
-  const sb = getSupabaseAdmin();
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { productId: string } }
+) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: product, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', params.productId)
+      .single();
 
-  const [{ data: product }, { count: clicks }, { count: views }, { data: abTest }] = await Promise.all([
-    sb.from('products').select('*').eq('id', params.productId).single(),
-    sb.from('clicks').select('*', { count: 'exact', head: true }).eq('product_id', params.productId),
-    sb.from('page_views').select('*', { count: 'exact', head: true }).eq('product_id', params.productId),
-    sb.from('ab_tests').select('id').eq('product_id', params.productId).eq('active', true).single(),
-  ]);
+    if (error || !product) {
+      return Response.json({ score: null }, { status: 404 });
+    }
 
-  if (!product) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    let score = 0;
+    if (product.hero_title)  score += 15;
+    if (product.hero_subtitle) score += 10;
+    if (Array.isArray(product.pain_points) && product.pain_points.length > 0) score += 10;
+    if (Array.isArray(product.benefits) && product.benefits.length > 0) score += 10;
+    if (product.tiktok_script) score += 5;
+    if (product.amazon_url) score += 20;
+    if (product.price && product.price > 0) score += 10;
+    if (product.active) score += 10;
+    if (product.template_id) score += 5;
+    if (product.meta_title) score += 5;
 
-  const ctr = views && views > 0 ? (clicks || 0) / views : 0;
-
-  const details = {
-    has_image: !!product.image_url,
-    has_ai_content: !!(product.hero_title && product.pain_points?.length > 0),
-    has_price: !!product.price,
-    has_affiliate_url: !!product.affiliate_url,
-    has_pixel: !!(product.pixel_meta || product.pixel_tiktok || product.pixel_gtm),
-    ctr_ok: views ? ctr >= 0.02 : false,
-    has_ab_test: !!abTest,
-    is_active: product.active,
-  };
-
-  const score = Object.values(details).filter(Boolean).length * 12 + (details.ctr_ok ? 4 : 0);
-
-  return NextResponse.json({ score: Math.min(100, score), details });
+    return Response.json({ score: Math.min(score, 100) });
+  } catch (err) {
+    return Response.json({ error: String(err) }, { status: 500 });
+  }
 }

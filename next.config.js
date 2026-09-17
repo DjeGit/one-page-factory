@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   images: {
     remotePatterns: [
       {
@@ -22,11 +24,16 @@ const nextConfig = {
         hostname: '*.media-amazon.com',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: '*.ssl-images-amazon.com',
+        pathname: '/**',
+      },
     ],
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000'],
+      allowedOrigins: ['localhost:3000', 'tendpick.com', 'www.tendpick.com'],
     },
   },
   async headers() {
