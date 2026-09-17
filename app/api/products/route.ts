@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllProducts, createProduct, generateSlug } from '@/lib/supabase';
+import { getActiveMarket } from '@/lib/get-active-market';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
-    const products = await getAllProducts();
+    const products = await getAllProducts(getActiveMarket());
     return NextResponse.json(products);
   } catch (error) {
     console.error('GET /api/products error:', error);
@@ -12,6 +17,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const body = await req.json();
 
@@ -27,7 +35,7 @@ export async function POST(req: NextRequest) {
       body.slug = generateSlug(body.name);
     }
 
-    const product = await createProduct(body);
+    const product = await createProduct({ ...body, market: body.market || getActiveMarket() });
 
     if (!product) {
       return NextResponse.json({ error: 'Erreur lors de la création du produit' }, { status: 500 });

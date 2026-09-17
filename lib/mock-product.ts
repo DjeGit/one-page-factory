@@ -12,6 +12,7 @@ export const MOCK_PRODUCT: Product = {
   redirect_code: 'preview',
   image_url: null,
   active: true,
+  market: 'fr',
   hero_title: 'La solution qui change tout',
   hero_subtitle: "Rejoignez 12 000 clients satisfaits et transformez votre quotidien dès aujourd'hui.",
   pain_points: [

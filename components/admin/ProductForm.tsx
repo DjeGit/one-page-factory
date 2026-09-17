@@ -29,6 +29,9 @@ export default function ProductForm({ product, mode, initialTemplateId }: Produc
     description: product?.description || '',
     price: product?.price?.toString() || '',
     original_price: product?.original_price?.toString() || '',
+    cost_price: product?.cost_price?.toString() || '',
+    ad_spend_allocated: product?.ad_spend_allocated?.toString() || '',
+    commission_rate: product?.commission_rate != null ? String(Math.round(product.commission_rate * 1000) / 10) : '',
     affiliate_url: product?.affiliate_url || '',
     image_url: product?.image_url || '',
     active: product?.active ?? true,
@@ -102,6 +105,9 @@ export default function ProductForm({ product, mode, initialTemplateId }: Produc
         description: form.description || null,
         price: form.price ? parseFloat(form.price) : null,
         original_price: form.original_price ? parseFloat(form.original_price) : null,
+        cost_price: form.cost_price ? parseFloat(form.cost_price) : null,
+        ad_spend_allocated: form.ad_spend_allocated ? parseFloat(form.ad_spend_allocated) : null,
+        commission_rate: form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
         affiliate_url: form.affiliate_url,
         image_url: form.image_url || null,
         active: form.active,
@@ -258,6 +264,55 @@ export default function ProductForm({ product, mode, initialTemplateId }: Produc
                 className={inputClass}
                 placeholder="59.99"
               />
+            </div>
+          </div>
+
+          {/* Coût vs Gain (Sprint 5) */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50/60 p-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+              Coût vs Gain <span className="normal-case font-normal text-gray-400">— alimente le calcul ROI du dashboard/Analytics</span>
+            </p>
+            <div className="grid sm:grid-cols-3 gap-5">
+              <div>
+                <label className={labelClass}>Coût d&apos;achat</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.cost_price}
+                  onChange={(e) => handleChange('cost_price', e.target.value)}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-gray-400 mt-1">Prix de revient par vente (surtout pour un produit vendu en propre)</p>
+              </div>
+              <div>
+                <label className={labelClass}>Budget pub alloué</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.ad_spend_allocated}
+                  onChange={(e) => handleChange('ad_spend_allocated', e.target.value)}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+                <p className="text-xs text-gray-400 mt-1">Dépense pub totale imputée à ce produit</p>
+              </div>
+              <div>
+                <label className={labelClass}>Commission (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={form.commission_rate}
+                  onChange={(e) => handleChange('commission_rate', e.target.value)}
+                  className={inputClass}
+                  placeholder="30"
+                />
+                <p className="text-xs text-gray-400 mt-1">Taux réel si connu (AWIN/Rakuten/CJ...), sinon 30% par défaut</p>
+              </div>
             </div>
           </div>
 

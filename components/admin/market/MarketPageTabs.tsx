@@ -1,46 +1,32 @@
 'use client';
 
 import { useState } from 'react';
-import MarketTable from '@/components/admin/MarketTable';
-import TrendsDashboard from './TrendsDashboard';
-import ToolsPanel from './ToolsPanel';
+import MesRecherches from './MesRecherches';
+import AmazonBestSellers from './AmazonBestSellers';
+import GoogleTrendsWidget from './GoogleTrendsWidget';
+import ApiSettingsTab from './ApiSettingsTab';
 
-interface MarketProduct {
-  id: string;
-  category: string;
-  name: string;
-  description: string;
-  price_min: number | null;
-  price_max: number | null;
-  price_avg: number | null;
-  best_offer: string;
-  best_offer_price: number | null;
-  platforms: string[];
-  confidence_score: number;
-  trend_score: number;
-  source_notes: string;
-  last_refreshed: string;
-}
-
-interface MarketPageTabsProps {
-  products: MarketProduct[];
-  lastRefreshed: string | null;
-}
-
-type Tab = 'veille' | 'tendances' | 'outils';
+/**
+ * Sprint 4 — réécriture en onglets alignée sur le plan approuvé :
+ * Bestsellers Amazon / Google Shopping (Trends aujourd'hui, Shopping réel
+ * dès DataForSEO activé — cf. note dans l'onglet) / Mes recherches /
+ * Paramètres API. Remplace l'ancien trio Veille IA (GPT sans source) /
+ * Tendances Live / Boîte à outils.
+ */
+type Tab = 'recherches' | 'amazon' | 'trends' | 'api';
 
 const TABS: { id: Tab; label: string; emoji: string }[] = [
-  { id: 'veille', label: 'Veille IA', emoji: '🤖' },
-  { id: 'tendances', label: 'Tendances Live', emoji: '📈' },
-  { id: 'outils', label: 'Boîte à outils', emoji: '🧰' },
+  { id: 'recherches', label: 'Mes recherches', emoji: '🔎' },
+  { id: 'amazon', label: 'Bestsellers Amazon', emoji: '📦' },
+  { id: 'trends', label: 'Google Trends', emoji: '📊' },
+  { id: 'api', label: 'Paramètres API', emoji: '⚙️' },
 ];
 
-export default function MarketPageTabs({ products, lastRefreshed }: MarketPageTabsProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('veille');
+export default function MarketPageTabs() {
+  const [activeTab, setActiveTab] = useState<Tab>('recherches');
 
   return (
     <div>
-      {/* Sticky tab bar */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 -mx-8 px-8 mb-6">
         <div className="flex gap-1 pt-1">
           {TABS.map((tab) => (
@@ -60,12 +46,22 @@ export default function MarketPageTabs({ products, lastRefreshed }: MarketPageTa
         </div>
       </div>
 
-      {/* Tab content */}
-      {activeTab === 'veille' && (
-        <MarketTable initialData={products} lastRefreshed={lastRefreshed} />
+      {activeTab === 'recherches' && <MesRecherches />}
+      {activeTab === 'amazon' && <AmazonBestSellers />}
+      {activeTab === 'trends' && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+            <span>ℹ️</span>
+            <span>
+              Tendances de recherche (gratuit, informatif). Pour de vraies données Google Shopping (prix, marchands),
+              activez DataForSEO dans <a href="/admin/settings/integrations" className="underline font-semibold">Paramètres &gt; Intégrations</a> —
+              les résultats apparaîtront dans l&apos;onglet « Mes recherches ».
+            </span>
+          </div>
+          <GoogleTrendsWidget />
+        </div>
       )}
-      {activeTab === 'tendances' && <TrendsDashboard />}
-      {activeTab === 'outils' && <ToolsPanel />}
+      {activeTab === 'api' && <ApiSettingsTab />}
     </div>
   );
 }

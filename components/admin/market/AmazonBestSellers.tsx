@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useMarket } from '@/lib/market-context';
 
 interface AmazonProduct {
   rank: number;
@@ -48,6 +49,7 @@ function SkeletonCard() {
 }
 
 export default function AmazonBestSellers() {
+  const { market } = useMarket();
   const [data, setData] = useState<AmazonResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(CATEGORIES[0]);
@@ -57,7 +59,7 @@ export default function AmazonBestSellers() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/market/amazon');
+      const res = await fetch(`/api/market/amazon?market=${market}`);
       if (!res.ok) throw new Error(`Erreur HTTP ${res.status}`);
       const json: AmazonResponse = await res.json();
       setData(json);
@@ -66,7 +68,7 @@ export default function AmazonBestSellers() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [market]);
 
   useEffect(() => {
     fetchData();

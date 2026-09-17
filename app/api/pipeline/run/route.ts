@@ -7,8 +7,9 @@
  *   3. Activate   → active les produits dont le contenu est complet
  *   4. Optimize   → pause les produits sous-performants
  *
- * POST body: { steps?: string[], dry_run?: boolean, max_products?: number }
+ * POST body: { steps?: string[], dry_run?: boolean, max_products?: number, market?: 'fr'|'es'|'uk' }
  *   steps: ["discover", "generate", "activate", "optimize"] (all by default)
+ *   market: marché ciblé par l'étape discover (défaut 'fr' — le cron déclenche un run par marché, cf. pipeline-cron.sh)
  *
  * Auth: Bearer PIPELINE_SECRET (ou ADMIN_SECRET)
  * Idempotent — peut être appelé plusieurs fois sans effet de bord.
@@ -32,11 +33,11 @@ const AUTH_HEADER = {
 
 // ─── Step 1: Discover ──────────────────────────────────────────────────────
 
-async function stepDiscover(dryRun: boolean, maxImport: number) {
+async function stepDiscover(dryRun: boolean, maxImport: number, market?: string) {
   const res = await fetch(`${BASE_URL}/api/pipeline/discover`, {
     method: 'POST',
     headers: AUTH_HEADER,
-    body: JSON.stringify({ threshold: 60, dry_run: dryRun, max_import: maxImport }),
+    body: JSON.stringify({ threshold: 60, dry_run: dryRun, max_import: maxImport, market }),
   });
   return res.json();
 }
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest) {
   const results: Record<string, unknown> = {};
 
   if (steps.includes('discover')) {
-    results.discover = await stepDiscover(dryRun, maxProducts);
+    results.discover = await stepDiscover(dryRun, maxProducts, body.market);
   }
 
   if (steps.includes('generate')) {

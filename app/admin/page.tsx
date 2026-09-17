@@ -2,18 +2,23 @@ import { getDashboardStats, getAllProducts } from '@/lib/supabase';
 import StatsCard from '@/components/admin/StatsCard';
 import TopProductsLive from '@/components/admin/TopProductsLive';
 import DashboardClient from '@/components/admin/DashboardClient';
+import CostVsGainSummary from '@/components/admin/CostVsGainSummary';
 import Link from 'next/link';
 import type { Product } from '@/types';
+import { getActiveMarket } from '@/lib/get-active-market';
+import { computeMarketROI } from '@/lib/analytics/roi';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminDashboard() {
-  const [stats, products, topProductsRes] = await Promise.all([
-    getDashboardStats(),
-    getAllProducts(),
+  const market = getActiveMarket();
+  const [stats, products, topProductsRes, roi] = await Promise.all([
+    getDashboardStats(market),
+    getAllProducts(market),
     fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/top-products`, { cache: 'no-store' })
       .then(r => r.json())
       .catch(() => []),
+    computeMarketROI(market),
   ]);
 
   const recentProducts: Product[] = products.slice(0, 5);
@@ -74,6 +79,11 @@ export default async function AdminDashboard() {
             </svg>
           }
         />
+      </div>
+
+      {/* Coût vs Gain (Sprint 5) */}
+      <div className="mb-10">
+        <CostVsGainSummary roi={roi} />
       </div>
 
       {/* Top 10 Live */}

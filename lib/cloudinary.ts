@@ -12,12 +12,8 @@ export function getCloudinaryUrl(
 ): string {
   if (!CLOUD_NAME) return publicId;
 
-  // If it's already a full URL (not a Cloudinary public ID), return as-is
-  if (publicId.startsWith('http://') || publicId.startsWith('https://')) {
-    // Check if it's already a Cloudinary URL
-    if (publicId.includes('res.cloudinary.com')) {
-      return publicId;
-    }
+  // Already a Cloudinary URL — return as-is
+  if (publicId.includes('res.cloudinary.com')) {
     return publicId;
   }
 
@@ -47,6 +43,12 @@ export function getCloudinaryUrl(
 
   const transformString = transformations.join('/');
 
+  // External URL → Cloudinary fetch (proxy + CDN cache, contourne le hotlink blocking)
+  if (publicId.startsWith('http://') || publicId.startsWith('https://')) {
+    return `https://res.cloudinary.com/${CLOUD_NAME}/image/fetch/${transformString}/${encodeURIComponent(publicId)}`;
+  }
+
+  // Cloudinary public ID
   return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${transformString}/${publicId}`;
 }
 

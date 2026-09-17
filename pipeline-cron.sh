@@ -2,21 +2,36 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # One Page Factory — Pipeline Cron
 #
-# Appelle l'orchestrateur complet toutes les nuits à 3h00
-# et l'auto-optimize tous les jours à 9h00.
+# Appelle l'orchestrateur complet toutes les nuits à 3h00,
+# l'auto-optimize tous les jours à 9h00, et rafraîchit l'étude de marché
+# (Sprint 4) toutes les 6h, PAR MARCHÉ, décalées de quelques minutes pour
+# ne pas cogner toutes les sources en même temps.
 #
 # Installation (sur le serveur Hetzner, en root) :
 #   chmod +x /var/www/one-page-factory/pipeline-cron.sh
 #   crontab -e
-#   # Coller les deux lignes ci-dessous :
-#   0 3 * * * /var/www/one-page-factory/pipeline-cron.sh run >> /var/log/opf-pipeline.log 2>&1
-#   0 9 * * * /var/www/one-page-factory/pipeline-cron.sh optimize >> /var/log/opf-pipeline.log 2>&1
+#   # Coller les lignes ci-dessous :
+#   0 3 * * *      /var/www/one-page-factory/pipeline-cron.sh run >> /var/log/opf-pipeline.log 2>&1
+#   0 9 * * *      /var/www/one-page-factory/pipeline-cron.sh optimize >> /var/log/opf-pipeline.log 2>&1
+#   0 */6 * * *    MARKET=fr /var/www/one-page-factory/pipeline-cron.sh market-refresh >> /var/log/opf-market.log 2>&1
+#   5 */6 * * *    MARKET=es /var/www/one-page-factory/pipeline-cron.sh market-refresh >> /var/log/opf-market.log 2>&1
+#   10 */6 * * *   MARKET=uk /var/www/one-page-factory/pipeline-cron.sh market-refresh >> /var/log/opf-market.log 2>&1
+#   30 4 * * *     /var/www/one-page-factory/pipeline-cron.sh exchange-rates >> /var/log/opf-market.log 2>&1
+#
+# market-refresh et exchange-rates utilisent INTERNAL_CRON_SECRET (ou, à
+# défaut, PIPELINE_SECRET puis ADMIN_SECRET) — cf. .env.example.
+# market-refresh n'écrit rien si aucune source de données n'est activée
+# pour ce marché dans Admin > Paramètres > Intégrations. exchange-rates
+# alimente exchange_rates (Sprint 5, coût/gain UK en GBP) via
+# frankfurter.app, gratuit, sans clé.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
 SITE_URL="${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}"
 SECRET="${PIPELINE_SECRET:-${ADMIN_SECRET:-}}"
+CRON_SECRET="${INTERNAL_CRON_SECRET:-${PIPELINE_SECRET:-${ADMIN_SECRET:-}}}"
+MARKET="${MARKET:-fr}"
 ACTION="${1:-run}"
 LOG_DATE=$(date '+%Y-%m-%d %H:%M:%S')
 
@@ -27,7 +42,7 @@ case "$ACTION" in
     curl -s -X POST "$SITE_URL/api/pipeline/run" \
       -H "Authorization: Bearer $SECRET" \
       -H "Content-Type: application/json" \
-      -d '{"dry_run": false, "max_products": 5}' \
+      -d "{\"dry_run\": false, \"max_products\": 5, \"market\": \"$MARKET\"}" \
       | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -64,7 +79,7 @@ print('Paused:', data.get('paused'), '| Scale flagged:', data.get('scale_flagged
     curl -s -X POST "$SITE_URL/api/pipeline/discover" \
       -H "Authorization: Bearer $SECRET" \
       -H "Content-Type: application/json" \
-      -d '{"threshold": 60, "dry_run": false, "max_import": 10}' \
+      -d "{\"threshold\": 60, \"dry_run\": false, \"max_import\": 10, \"market\": \"$MARKET\"}" \
       | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -76,12 +91,44 @@ print('Scraped:', data.get('total_scraped'), '| Candidates:', data.get('candidat
     curl -s -X POST "$SITE_URL/api/pipeline/run" \
       -H "Authorization: Bearer $SECRET" \
       -H "Content-Type: application/json" \
-      -d '{"dry_run": true, "max_products": 5}' \
+      -d "{\"dry_run\": true, \"max_products\": 5, \"market\": \"$MARKET\"}" \
       | python3 -m json.tool
     ;;
 
+  market-refresh)
+    echo "Refreshing market data for: $MARKET"
+    curl -s -X POST "$SITE_URL/api/market/refresh" \
+      -H "Authorization: Bearer $CRON_SECRET" \
+      -H "Content-Type: application/json" \
+      -d "{\"market\": \"$MARKET\"}" \
+      | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+if data.get('success'):
+    print('Market:', data.get('market'), '| Products:', data.get('count'), '| Sources used:', ', '.join(data.get('sourcesUsed', [])))
+else:
+    print('Refresh skipped:', data.get('error'))
+"
+    ;;
+
+  exchange-rates)
+    echo "Refreshing exchange rates"
+    curl -s -X POST "$SITE_URL/api/cron/exchange-rates" \
+      -H "Authorization: Bearer $CRON_SECRET" \
+      -H "Content-Type: application/json" \
+      | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for r in data.get('results', []):
+    if 'rate' in r:
+        print('EUR ->', r['currency'], ':', r['rate'])
+    else:
+        print('Error for', r['currency'], ':', r.get('error'))
+"
+    ;;
+
   *)
-    echo "Usage: $0 {run|optimize|discover|dry-run}"
+    echo "Usage: $0 {run|optimize|discover|dry-run|market-refresh|exchange-rates}"
     exit 1
     ;;
 esac

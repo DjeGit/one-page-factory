@@ -1,13 +1,15 @@
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { isValidAdminCookie } from '@/lib/admin-auth';
+import { getActiveMarket } from '@/lib/get-active-market';
+import { MarketProvider } from '@/lib/market-context';
 import Sidebar from '@/components/admin/Sidebar';
+import AdminHeader from '@/components/admin/AdminHeader';
 import LoginForm from './LoginForm';
 
 function isAuthenticated(): boolean {
   const cookieStore = cookies();
   const authCookie = cookieStore.get('admin_auth');
-  const secret = process.env.ADMIN_SECRET || 'changeme';
-  return authCookie?.value === secret;
+  return isValidAdminCookie(authCookie?.value);
 }
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -15,12 +17,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <LoginForm />;
   }
 
+  const activeMarket = getActiveMarket();
+
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <Sidebar />
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
-    </div>
+    <MarketProvider initialMarket={activeMarket}>
+      <div className="flex min-h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <AdminHeader />
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+    </MarketProvider>
   );
 }

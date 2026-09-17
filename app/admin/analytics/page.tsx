@@ -1,16 +1,22 @@
 import Link from 'next/link';
 import { getAnalytics, getDashboardStats } from '@/lib/supabase';
 import StatsCard from '@/components/admin/StatsCard';
+import CostVsGainSummary from '@/components/admin/CostVsGainSummary';
+import { getActiveMarket } from '@/lib/get-active-market';
+import { computeMarketROI } from '@/lib/analytics/roi';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AnalyticsPage() {
-  const [analytics, stats] = await Promise.all([
-    getAnalytics(),
-    getDashboardStats(),
+  const market = getActiveMarket();
+  const [analytics, stats, roi] = await Promise.all([
+    getAnalytics(market),
+    getDashboardStats(market),
+    computeMarketROI(market),
   ]);
+  const roiByProduct = new Map(roi.products.map((r) => [r.productId, r]));
 
-  const totalRevenue = analytics.reduce((sum, a) => sum + a.revenue_estimate, 0);
+  const totalRevenue = roi.totalRevenueEur ?? 0;
   const avgCtr = analytics.length > 0
     ? analytics.reduce((sum, a) => sum + a.ctr, 0) / analytics.length
     : 0;
@@ -60,9 +66,9 @@ export default async function AnalyticsPage() {
           }
         />
         <StatsCard
-          title="Revenus estimés"
+          title="Revenus (EUR)"
           value={`${totalRevenue.toFixed(2)}€`}
-          subtitle="Basé sur 2% conv. x 30% comm."
+          subtitle="Marge réelle si renseignée, sinon estimation 2% conv."
           color="primary"
           icon={
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,6 +76,11 @@ export default async function AnalyticsPage() {
             </svg>
           }
         />
+      </div>
+
+      {/* Coût vs Gain (Sprint 5) */}
+      <div className="mb-10">
+        <CostVsGainSummary roi={roi} />
       </div>
 
       {/* Per-product analytics */}
@@ -98,8 +109,7 @@ export default async function AnalyticsPage() {
                   <th className="text-right px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Vues</th>
                   <th className="text-right px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Clics</th>
                   <th className="text-right px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CTR</th>
-                  <th className="text-right px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">EPC est.</th>
-                  <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Revenu est.</th>
+                  <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Marge (EUR)</th>
                   <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -133,17 +143,16 @@ export default async function AnalyticsPage() {
                           {item.ctr > 0 ? `${item.ctr.toFixed(1)}%` : '—'}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-right hidden lg:table-cell">
-                        <span className="text-gray-700 font-medium">
-                          {item.epc > 0 ? `${item.epc.toFixed(2)}€` : '—'}
-                        </span>
-                      </td>
                       <td className="px-6 py-4 text-right hidden lg:table-cell">
-                        <span className="text-gray-900 font-semibold">
-                          {item.revenue_estimate > 0
-                            ? `${item.revenue_estimate.toFixed(2)}€`
-                            : '—'}
-                        </span>
+                        {(() => {
+                          const productRoi = roiByProduct.get(item.product_id);
+                          if (!productRoi || productRoi.marginEur == null) return <span className="text-gray-300">—</span>;
+                          return (
+                            <span className={`font-semibold ${productRoi.marginEur >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {productRoi.marginEur.toFixed(2)}€
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -170,13 +179,13 @@ export default async function AnalyticsPage() {
         )}
       </div>
 
-      {/* EPC explanation */}
+      {/* Marge explanation */}
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 flex gap-3">
         <svg className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <div className="text-sm text-blue-700">
-          <strong>Note :</strong> Les revenus estimés sont calculés sur la base d&apos;un taux de conversion de 2% et d&apos;une commission de 30% sur le prix. Ces estimations sont indicatives.
+          <strong>Note :</strong> La colonne « Marge (EUR) » part d&apos;un taux de conversion de 2% par défaut (tant qu&apos;aucune conversion réelle ne remonte des pixels de suivi), et utilise le coût d&apos;achat, le budget pub alloué et la commission réelle si vous les avez renseignés sur la fiche produit (onglet Informations) — sinon 30% par défaut. Ces chiffres restent indicatifs jusqu&apos;à ce que de vraies conversions soient disponibles.
         </div>
       </div>
     </div>

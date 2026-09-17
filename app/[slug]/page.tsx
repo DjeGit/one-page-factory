@@ -9,14 +9,15 @@ import ProductShowcase from '@/components/landing/ProductShowcase';
 import Testimonials from '@/components/landing/Testimonials';
 import FAQ from '@/components/landing/FAQ';
 import CTAButton from '@/components/landing/CTAButton';
-import CountdownTimer from '@/components/landing/CountdownTimer';
-import StockCounter from '@/components/landing/StockCounter';
 import StickyBuy from '@/components/landing/StickyBuy';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SocialProofNotification from '@/components/landing/SocialProofNotification';
 import ExitIntentPopup from '@/components/landing/ExitIntentPopup';
 import EmailCapturePopup from '@/components/landing/EmailCapturePopup';
 import ProductStructuredData from '@/components/landing/ProductStructuredData';
+import LandingHeader from '@/components/layout/LandingHeader';
+import LandingFooter from '@/components/layout/LandingFooter';
+import CookieConsent from '@/components/layout/CookieConsent';
 import type { ABTest } from '@/types';
 
 interface Props {
@@ -36,7 +37,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: product.meta_title || product.name,
       description: product.meta_description || product.description || undefined,
       images: product.image_url ? [product.image_url] : [],
-      type: 'website',
+      // og:type=product est un type OpenGraph standard (namespace produit
+      // Facebook/e-commerce) mais absent de l'union TypeScript de Next.js —
+      // cast local nécessaire, la valeur réelle envoyée reste bien 'product'.
+      type: 'product' as unknown as 'website',
       url: `${siteUrl}/${product.slug}`,
     },
     twitter: {
@@ -136,7 +140,11 @@ export default async function LandingPage({ params }: Props) {
       {/* Structured data */}
       <ProductStructuredData product={product} />
 
-      {/* No navigation — distraction-free landing page */}
+      {/* Navigation Tendpick */}
+      <LandingHeader
+        productName={product.name}
+        affiliateUrl={product.affiliate_url}
+      />
 
       <main>
         {/* 1. Hero */}
@@ -147,15 +155,9 @@ export default async function LandingPage({ params }: Props) {
           heroCta={heroCta}
         />
 
-        {/* 2. Urgency section */}
-        {(product.price || product.original_price) && (
-          <section className="py-8 bg-gray-950">
-            <div className="container mx-auto px-4 max-w-2xl space-y-4">
-              <CountdownTimer storageKey={product.slug} />
-              <StockCounter storageKey={product.slug} />
-            </div>
-          </section>
-        )}
+        {/* 2. Urgency section — retiré : countdown/stock factices sans donnée réelle
+             derrière (risque pratique commerciale trompeuse). À réactiver seulement
+             une fois branché sur une vraie source de stock/deadline. */}
 
         {/* 3. Pain Points */}
         <PainPoints painPoints={product.pain_points || []} />
@@ -179,10 +181,6 @@ export default async function LandingPage({ params }: Props) {
               Des milliers de clients ont déjà fait le choix. Ne passez pas à côté.
             </p>
 
-            <div className="space-y-4 mb-8">
-              <StockCounter storageKey={`${product.slug}-cta`} />
-            </div>
-
             <CTAButton
               redirectCode={product.redirect_code}
               productId={product.id}
@@ -192,9 +190,9 @@ export default async function LandingPage({ params }: Props) {
             />
 
             <div className="mt-6 flex items-center justify-center gap-6 text-sm text-gray-500">
-              <span>🔒 Paiement sécurisé</span>
-              <span>🚚 Livraison rapide</span>
-              <span>✅ Satisfait ou remboursé</span>
+              <span>🔒 Paiement sécurisé Amazon</span>
+              <span>🚚 Livraison Amazon Prime</span>
+              <span>✅ Retours Amazon 30j</span>
             </div>
           </div>
         </section>
@@ -203,13 +201,8 @@ export default async function LandingPage({ params }: Props) {
         <FAQ items={product.faq || []} />
       </main>
 
-      {/* Footer */}
-      <footer className="py-8 bg-gray-950 border-t border-gray-900 text-center">
-        <p className="text-gray-600 text-sm">
-          © {new Date().getFullYear()} — Tous droits réservés.
-          {' '}Ce site contient des liens d&apos;affiliation.
-        </p>
-      </footer>
+      {/* Footer Tendpick */}
+      <LandingFooter />
 
       {/* Sticky mobile buy bar */}
       <StickyBuy
@@ -272,6 +265,9 @@ export default async function LandingPage({ params }: Props) {
           }}
         />
       )}
+
+      {/* GDPR Cookie Consent */}
+      <CookieConsent />
     </>
   );
 }

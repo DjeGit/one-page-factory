@@ -83,15 +83,15 @@ export default function HeroSection({ product, heroTitle, heroSubtitle, heroCta 
             <div className="flex flex-wrap gap-4 justify-center lg:justify-start text-sm text-gray-400">
               <div className="flex items-center gap-1.5">
                 <span className="text-green-400">✓</span>
-                <span>Livraison rapide</span>
+                <span>Livraison Amazon Prime</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-green-400">✓</span>
-                <span>Garantie satisfait</span>
+                <span>Retours Amazon 30j</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-green-400">✓</span>
-                <span>Paiement sécurisé 🔒</span>
+                <span>Paiement sécurisé Amazon 🔒</span>
               </div>
             </div>
           </div>
@@ -110,7 +110,7 @@ export default function HeroSection({ product, heroTitle, heroSubtitle, heroCta 
                   height={600}
                   className="w-full h-auto rounded-2xl object-cover"
                   priority
-                  unoptimized={imageUrl.includes('placehold.co')}
+                  unoptimized={imageUrl.includes('placehold.co') || imageUrl.includes('/fetch/')}
                 />
 
                 {/* Floating badge */}
@@ -135,8 +135,8 @@ export default function HeroSection({ product, heroTitle, heroSubtitle, heroCta 
                   ))}
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-gray-900">+1 247 clients</div>
-                  <div className="flex text-yellow-400 text-xs">★★★★★</div>
+                  <div className="text-xs font-bold text-gray-900">Très bien noté</div>
+                  <div className="flex text-yellow-400 text-xs">★★★★★ Amazon</div>
                 </div>
               </div>
             </div>

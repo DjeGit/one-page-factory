@@ -1,3 +1,5 @@
+import type { Market } from '@/lib/market';
+
 export interface PainPoint {
   emoji: string;
   title: string;
@@ -70,6 +72,16 @@ export interface Product {
   email_capture_discount?: number;
   exit_intent_enabled?: boolean;
   social_proof_enabled?: boolean;
+
+  // Multi-marché (Sprint 1) — un produit = un marché strict.
+  market: Market;
+  source_product_ref?: string | null; // lien optionnel vers le même produit physique sur un autre marché
+  product_source?: 'auto_discovered' | 'manual_affiliate' | 'own_product' | null;
+
+  // Coût vs gain par produit (Sprint 5, colonnes préparées en Sprint 1)
+  cost_price?: number | null;
+  ad_spend_allocated?: number | null;
+  commission_rate?: number | null; // fraction 0-1, ex. 0.08 = 8%
 
   created_at: string;
   updated_at: string;

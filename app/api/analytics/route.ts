@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { trackClick, trackPageView, getAnalytics } from '@/lib/supabase';
+import { getActiveMarket } from '@/lib/get-active-market';
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const productId = searchParams.get('productId') || undefined;
 
-    const analytics = await getAnalytics(productId);
+    const analytics = await getAnalytics(getActiveMarket(), productId);
     return NextResponse.json(analytics);
   } catch (error) {
     console.error('GET /api/analytics error:', error);

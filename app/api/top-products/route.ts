@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { getActiveMarket } from '@/lib/get-active-market';
 
 export async function GET() {
   const supabaseAdmin = getSupabaseAdmin();
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
+  const market = getActiveMarket();
   const { data: products, error } = await supabaseAdmin
     .from('products')
     .select('id, name, slug, price, active')
-    .eq('active', true);
+    .eq('active', true)
+    .eq('market', market);
 
   if (error || !products || products.length === 0) {
     return NextResponse.json([]);

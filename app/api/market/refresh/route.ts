@@ -1,108 +1,120 @@
-import { NextResponse } from 'next/server';
+/**
+ * /api/market/refresh (Sprint 4 — réécriture complète)
+ *
+ * AVANT : demandait à GPT-4o-mini d'halluciner "les 20 produits qui se
+ * vendent le mieux" sans aucune vraie source — jeté, pas patché (cf. plan).
+ *
+ * MAINTENANT : agrège les signaux de TOUTES les sources de données
+ * activées pour le marché actif (lib/integrations/data-source-chain.ts,
+ * Sprint 3), les score (lib/market/scoring.ts) et remplace les données de
+ * CE marché dans market_products — chaque ligne reste traçable à une
+ * vraie source (`source` = id d'intégration d'origine).
+ */
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import OpenAI from 'openai';
+import { getActiveMarket } from '@/lib/get-active-market';
+import { hashAdminToken } from '@/lib/admin-auth';
+import { isValidMarket, type Market } from '@/lib/market';
+import { getActiveDataSources, refreshMarketFromActiveSources } from '@/lib/integrations/data-source-chain';
+import { scoreSignal, trendScoreFromScore, confidenceScoreFromSignal } from '@/lib/market/scoring';
 
-const CATEGORIES = [
-  'Tech & Gadgets',
-  'Mode & Beauté',
-  'Lifestyle & Maison',
-  'Sport & Bien-être',
-  'Art & Créativité',
-];
+// ─── Auth guard ────────────────────────────────────────────────────────────
+// Double entrée : session admin (cookie, appel depuis le back-office) OU
+// secret serveur-à-serveur (Bearer, appel cron 6h). Même pattern que
+// app/api/pipeline/discover/route.ts pour le mode cron.
+function isAuthorized(req: NextRequest): boolean {
+  const authCookie = cookies().get('admin_auth');
+  const adminSecret = process.env.ADMIN_SECRET || 'changeme';
+  if (authCookie?.value === hashAdminToken(adminSecret)) return true;
 
-const SYSTEM_PROMPT = `Tu es un expert en e-commerce, dropshipping et marketing d'affiliation.
-Tu analyses les tendances de vente sur TikTok, Instagram, Amazon, AliExpress, Etsy, Temu et les plateformes sociales.
-Tu retournes uniquement du JSON valide, sans commentaires ni markdown.`;
-
-const buildUserPrompt = (category: string) => `
-Identifie les 20 produits qui se vendent le mieux actuellement dans la catégorie "${category}".
-Sources à prendre en compte : TikTok Shop, TikTok Creative Center, Amazon Best Sellers, AliExpress Hot Products,
-Instagram Shopping, Pinterest Trending, Temu Best Sellers, Etsy Trending.
-
-Pour chaque produit retourne un objet JSON avec ces champs EXACTEMENT :
-{
-  "name": "Nom précis du produit en français",
-  "description": "Description marketing courte (2 phrases max)",
-  "price_min": prix_minimum_en_euros (nombre),
-  "price_max": prix_maximum_en_euros (nombre),
-  "price_avg": prix_moyen_en_euros (nombre),
-  "best_offer": "Nom de la plateforme avec le meilleur prix",
-  "best_offer_price": meilleur_prix_en_euros (nombre),
-  "platforms": ["liste", "des", "plateformes", "où", "il", "est", "vendu"],
-  "confidence_score": score_de_confiance_entre_1_et_10,
-  "trend_score": score_de_tendance_entre_1_et_10,
-  "source_notes": "Explication courte : pourquoi ce produit est tendance maintenant"
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace('Bearer ', '');
+  const cronSecret = process.env.INTERNAL_CRON_SECRET || process.env.PIPELINE_SECRET || process.env.ADMIN_SECRET || '';
+  return Boolean(token) && Boolean(cronSecret) && token === cronSecret;
 }
 
-Le confidence_score reflète la fiabilité des données (10 = très populaire sur plusieurs sources).
-Le trend_score reflète l'élan actuel (10 = viral en ce moment).
+// GET = pré-check pour l'UI : quelles sources seraient interrogées si on
+// lance un refresh maintenant (évite de lancer un refresh "à l'aveugle").
+export async function GET() {
+  const activeSources = await getActiveDataSources();
+  return NextResponse.json({ activeSources });
+}
 
-Retourne un tableau JSON de 20 objets, sans aucun texte autour.
-`;
-
-export async function POST() {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const supabaseAdmin = getSupabaseAdmin();
-
-  try {
-    // Delete old data
-    await supabaseAdmin.from('market_products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-    const allProducts: object[] = [];
-
-    for (const category of CATEGORIES) {
-      try {
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            {
-              role: 'user',
-              content: buildUserPrompt(category) + '\n\nRetourne : {"products": [...les 20 objets...]}',
-            },
-          ],
-          temperature: 0.7,
-        });
-
-        const raw = completion.choices[0].message.content || '{"products":[]}';
-        const parsed = JSON.parse(raw);
-        const products = Array.isArray(parsed.products) ? parsed.products : [];
-
-        const rows = products.slice(0, 20).map((p: Record<string, unknown>) => ({
-          category,
-          name: String(p.name || ''),
-          description: String(p.description || ''),
-          price_min: Number(p.price_min) || null,
-          price_max: Number(p.price_max) || null,
-          price_avg: Number(p.price_avg) || null,
-          best_offer: String(p.best_offer || ''),
-          best_offer_price: Number(p.best_offer_price) || null,
-          platforms: Array.isArray(p.platforms) ? p.platforms : [],
-          confidence_score: Math.min(10, Math.max(1, Number(p.confidence_score) || 5)),
-          trend_score: Math.min(10, Math.max(1, Number(p.trend_score) || 5)),
-          source_notes: String(p.source_notes || ''),
-          last_refreshed: new Date().toISOString(),
-        }));
-
-        allProducts.push(...rows);
-      } catch (err) {
-        console.error(`Error fetching category ${category}:`, err);
-      }
-    }
-
-    if (allProducts.length > 0) {
-      const { error } = await supabaseAdmin.from('market_products').insert(allProducts);
-      if (error) throw error;
-    }
-
-    return NextResponse.json({
-      success: true,
-      count: allProducts.length,
-      refreshed_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('Market refresh error:', err);
-    return NextResponse.json({ error: 'Erreur lors du rafraîchissement' }, { status: 500 });
+export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const body = await req.json().catch(() => ({}));
+  const market: Market = isValidMarket(body.market) ? body.market : getActiveMarket();
+  const category: string | undefined = typeof body.category === 'string' ? body.category : undefined;
+
+  const { signals, sourcesUsed, sourcesSkipped } = await refreshMarketFromActiveSources(market, category);
+
+  if (sourcesUsed.length === 0) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Aucune source de données active pour ce marché. Activez-en une dans Paramètres > Intégrations (chaque source reste désactivée tant que vous ne l'activez pas explicitement).",
+        sourcesSkipped,
+      },
+      { status: 409 }
+    );
+  }
+
+  const sb = getSupabaseAdmin();
+
+  // Cohérence de niche (proxy grossier, cf. lib/market/scoring.ts) : nombre
+  // de produits déjà actifs sur CE marché.
+  const { count: existingCategoryCount } = await sb
+    .from('products')
+    .select('id', { count: 'exact', head: true })
+    .eq('market', market)
+    .eq('active', true);
+
+  const rows = signals.map((signal) => {
+    const { score, breakdown } = scoreSignal(signal, { existingCategoryCount: existingCategoryCount ?? 0 });
+    return {
+      market,
+      source: signal.source,
+      category: signal.category || 'Non classé',
+      name: signal.name.slice(0, 200),
+      description: signal.description || '',
+      price_min: signal.price ?? null,
+      price_max: signal.price ?? null,
+      price_avg: signal.price ?? null,
+      best_offer: signal.source,
+      best_offer_price: signal.price ?? null,
+      platforms: [signal.source],
+      confidence_score: confidenceScoreFromSignal(signal),
+      trend_score: trendScoreFromScore(score),
+      source_notes: `Score ${score}/100 — ${Object.entries(breakdown)
+        .map(([k, v]) => `${k}:${v}`)
+        .join(', ')} · lien : ${signal.url}`,
+      last_refreshed: new Date().toISOString(),
+    };
+  });
+
+  // On ne supprime QUE les anciennes données de CE marché — bug corrigé
+  // par rapport à l'ancien code qui effaçait market_products en entier,
+  // tous marchés confondus, à chaque refresh.
+  await sb.from('market_products').delete().eq('market', market);
+
+  if (rows.length > 0) {
+    const { error } = await sb.from('market_products').insert(rows);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({
+    success: true,
+    market,
+    count: rows.length,
+    sourcesUsed,
+    sourcesSkipped,
+    refreshed_at: new Date().toISOString(),
+  });
 }

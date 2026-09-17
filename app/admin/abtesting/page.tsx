@@ -1,6 +1,7 @@
 import ABTestingManager from '@/components/admin/ABTestingManager';
 import { getAllProducts } from '@/lib/supabase';
 import type { ABTest } from '@/types';
+import { getActiveMarket } from '@/lib/get-active-market';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,7 @@ async function getABTests(): Promise<ABTest[]> {
 export default async function ABTestingPage() {
   const [tests, products] = await Promise.all([
     getABTests(),
-    getAllProducts(),
+    getAllProducts(getActiveMarket()),
   ]);
 
   return <ABTestingManager initialTests={tests} products={products} />;

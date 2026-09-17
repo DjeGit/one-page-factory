@@ -2,13 +2,15 @@ import Link from 'next/link';
 import { getAllProducts, getAnalytics } from '@/lib/supabase';
 import ProductsTable from './ProductsTable';
 import CSVImportButton from '@/components/admin/CSVImportButton';
+import { getActiveMarket } from '@/lib/get-active-market';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ProductsPage() {
+  const market = getActiveMarket();
   const [products, analytics] = await Promise.all([
-    getAllProducts(),
-    getAnalytics(),
+    getAllProducts(market),
+    getAnalytics(market),
   ]);
 
   // Merge analytics into products

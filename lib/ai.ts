@@ -92,8 +92,11 @@ function getOpenAIClient(): OpenAI {
 type Provider = 'gemini' | 'claude' | 'openai';
 
 function getActiveProvider(): Provider {
+  // Gemini free tier en priorité (pas de quota billing)
+  // OpenAI désactivé : quota dépassé (recharger sur platform.openai.com/billing)
   if (process.env.GEMINI_API_KEY) return 'gemini';
   if (process.env.ANTHROPIC_API_KEY) return 'claude';
+  if (process.env.OPENAI_API_KEY) return 'openai';
   return 'openai';
 }
 
@@ -107,7 +110,8 @@ const PROVIDER_MODELS: Record<Provider, string> = {
 
 async function generateWithProvider(
   prompt: string,
-  provider: Provider
+  provider: Provider,
+  retries = 2
 ): Promise<string> {
   let client: OpenAI;
   const model = PROVIDER_MODELS[provider];
@@ -126,29 +130,65 @@ async function generateWithProvider(
   // Claude doesn't support response_format: json_object — wrap in system prompt instead
   const isJsonMode = provider !== 'claude';
 
-  const response = await client.chat.completions.create({
-    model,
-    messages: [
-      {
-        role: 'system',
-        content: 'Tu es un expert en copywriting de marketing direct. Tu génères uniquement du JSON valide, sans aucun formatage markdown.',
-      },
-      { role: 'user', content: prompt },
-    ],
-    ...(isJsonMode ? { response_format: { type: 'json_object' } } : {}),
-    temperature: 0.8,
-    max_tokens: 3000,
-  });
-
-  return response.choices[0]?.message?.content || '';
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await client.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content: 'Tu es un expert en copywriting de marketing direct. Tu génères uniquement du JSON valide, sans aucun formatage markdown.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        ...(isJsonMode ? { response_format: { type: 'json_object' } } : {}),
+        temperature: 0.8,
+        max_tokens: 3000,
+      });
+      return response.choices[0]?.message?.content || '';
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      // Retry on 503/429/500 with exponential backoff
+      if (attempt < retries && status && [429, 500, 503].includes(status)) {
+        await new Promise(r => setTimeout(r, (attempt + 1) * 2000));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Max retries exceeded');
 }
 
 // ─── Main exported function ───────────────────────────────────────────────────
 
 function parseAndValidate(content: string, productName: string, productDescription: string): GeneratedContent {
-  // Strip markdown fences if Claude returned them
-  const cleaned = content.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
-  const parsed = JSON.parse(cleaned) as GeneratedContent;
+  // Step 1: strip markdown fences
+  let cleaned = content
+    .replace(/^```(?:json)?\n?/m, '')
+    .replace(/\n?```$/m, '')
+    .trim();
+
+  // Step 2: extract the outermost JSON object (handles extra text before/after)
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (jsonMatch) cleaned = jsonMatch[0];
+
+  let parsed: Partial<GeneratedContent> = {};
+
+  // Strategy 1: direct parse
+  try {
+    parsed = JSON.parse(cleaned) as GeneratedContent;
+  } catch {
+    // Strategy 2: fix single-quoted property names and trailing commas
+    try {
+      const fixed = cleaned
+        .replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3') // 'key': → "key":
+        .replace(/,(\s*[}\]])/g, '$1');                    // trailing commas
+      parsed = JSON.parse(fixed) as GeneratedContent;
+    } catch {
+      // Strategy 3: return safe defaults (never throw — don't block the pipeline)
+      parsed = {};
+    }
+  }
 
   return {
     hero_title: parsed.hero_title || `Découvrez ${productName}`,
