@@ -1,10 +1,8 @@
-import { getDashboardStats, getAllProducts } from '@/lib/supabase';
+import { getDashboardStats } from '@/lib/supabase';
 import StatsCard from '@/components/admin/StatsCard';
-import TopProductsLive from '@/components/admin/TopProductsLive';
 import DashboardClient from '@/components/admin/DashboardClient';
 import CostVsGainSummary from '@/components/admin/CostVsGainSummary';
 import Link from 'next/link';
-import type { Product } from '@/types';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { computeMarketROI } from '@/lib/analytics/roi';
 
@@ -12,21 +10,15 @@ export const dynamic = 'force-dynamic';
 
 export default async function AdminDashboard() {
   const market = getActiveMarket();
-  const [stats, products, topProductsRes, roi] = await Promise.all([
+  const [stats, roi] = await Promise.all([
     getDashboardStats(market),
-    getAllProducts(market),
-    fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/top-products`, { cache: 'no-store' })
-      .then(r => r.json())
-      .catch(() => []),
     computeMarketROI(market),
   ]);
 
-  const recentProducts: Product[] = products.slice(0, 5);
-
   return (
     <div className="p-8">
-      {/* DashboardClient handles header with report button + recent products */}
-      <DashboardClient products={recentProducts} />
+      {/* DashboardClient handles header with report button + quick actions */}
+      <DashboardClient />
 
       {/* Stats Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10 mt-8">
@@ -85,9 +77,6 @@ export default async function AdminDashboard() {
       <div className="mb-10">
         <CostVsGainSummary roi={roi} />
       </div>
-
-      {/* Top 10 Live */}
-      <TopProductsLive initialData={topProductsRes} />
 
       {/* Quick actions */}
       <div className="mt-6 flex gap-4">

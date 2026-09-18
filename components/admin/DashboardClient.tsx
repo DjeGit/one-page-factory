@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import type { Product } from '@/types';
 
 interface WeeklyReport {
   resume?: string;
@@ -12,40 +11,11 @@ interface WeeklyReport {
   insight_cle?: string;
 }
 
-interface HealthScores {
-  [productId: string]: number | null;
-}
-
-interface DashboardClientProps {
-  products: Product[];
-}
-
-export default function DashboardClient({ products }: DashboardClientProps) {
-  const [healthScores, setHealthScores] = useState<HealthScores>({});
+export default function DashboardClient() {
   const [reportLoading, setReportLoading] = useState(false);
   const [report, setReport] = useState<WeeklyReport | null>(null);
   const [reportModal, setReportModal] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (products.length === 0) return;
-    const fetchScores = async () => {
-      const entries = await Promise.all(
-        products.map(async (p) => {
-          try {
-            const res = await fetch(`/api/health-score/${p.id}`);
-            if (!res.ok) return [p.id, null];
-            const data = await res.json();
-            return [p.id, typeof data.score === 'number' ? data.score : null];
-          } catch {
-            return [p.id, null];
-          }
-        })
-      );
-      setHealthScores(Object.fromEntries(entries));
-    };
-    fetchScores();
-  }, [products]);
 
   const handleWeeklyReport = async () => {
     setReportLoading(true);
@@ -61,35 +31,6 @@ export default function DashboardClient({ products }: DashboardClientProps) {
     } finally {
       setReportLoading(false);
     }
-  };
-
-  const getScoreBadge = (score: number | null | undefined) => {
-    if (score === null || score === undefined) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-400">
-          —
-        </span>
-      );
-    }
-    if (score >= 80) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-          ✓ {score}
-        </span>
-      );
-    }
-    if (score >= 50) {
-      return (
-        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
-          {score}
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
-        ⚠ {score}
-      </span>
-    );
   };
 
   return (
@@ -173,86 +114,6 @@ export default function DashboardClient({ products }: DashboardClientProps) {
             <div className="text-gray-400 text-xs">Trouver des produits gagnants</div>
           </div>
         </Link>
-      </div>
-
-      {/* Recent Products */}
-      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Produits récents</h2>
-          <Link
-            href="/admin/products"
-            className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-          >
-            Voir tout →
-          </Link>
-        </div>
-
-        {products.length === 0 ? (
-          <div className="py-16 text-center">
-            <div className="text-4xl mb-3">📦</div>
-            <p className="text-gray-500 mb-4">Aucun produit créé pour l&apos;instant</p>
-            <Link
-              href="/admin/products/new"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-xl hover:bg-primary-700 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Créer mon premier produit
-            </Link>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {products.map((product: Product) => (
-              <div key={product.id} className="px-6 py-4 flex items-center gap-4 hover:bg-gray-50 transition-colors">
-                {/* Status dot */}
-                <div
-                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                    product.active ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                />
-
-                {/* Name and slug */}
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-gray-900 truncate">{product.name}</div>
-                  <div className="text-sm text-gray-400 truncate">/{product.slug}</div>
-                </div>
-
-                {/* Health score */}
-                <div className="flex-shrink-0">
-                  {getScoreBadge(healthScores[product.id])}
-                </div>
-
-                {/* Price */}
-                {product.price && (
-                  <div className="text-gray-700 font-medium">{product.price.toFixed(2)}€</div>
-                )}
-
-                {/* Created at */}
-                <div className="text-sm text-gray-400 hidden sm:block">
-                  {new Date(product.created_at).toLocaleDateString('fr-FR')}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <Link
-                    href={`/admin/products/${product.id}`}
-                    className="text-sm text-primary-600 hover:text-primary-700 font-medium px-3 py-1.5 rounded-lg hover:bg-primary-50 transition-colors"
-                  >
-                    Modifier
-                  </Link>
-                  <a
-                    href={`/${product.slug}`}
-                    target="_blank"
-                    className="text-sm text-gray-500 hover:text-gray-700 font-medium px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    Voir
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Weekly Report Modal */}

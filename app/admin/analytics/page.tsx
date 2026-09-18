@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getAnalytics, getDashboardStats } from '@/lib/supabase';
 import StatsCard from '@/components/admin/StatsCard';
 import CostVsGainSummary from '@/components/admin/CostVsGainSummary';
+import TopProductsLive from '@/components/admin/TopProductsLive';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { computeMarketROI } from '@/lib/analytics/roi';
 
@@ -9,10 +10,13 @@ export const dynamic = 'force-dynamic';
 
 export default async function AnalyticsPage() {
   const market = getActiveMarket();
-  const [analytics, stats, roi] = await Promise.all([
+  const [analytics, stats, roi, topProductsRes] = await Promise.all([
     getAnalytics(market),
     getDashboardStats(market),
     computeMarketROI(market),
+    fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/top-products?market=${market}`, { cache: 'no-store' })
+      .then(r => r.json())
+      .catch(() => []),
   ]);
   const roiByProduct = new Map(roi.products.map((r) => [r.productId, r]));
 
@@ -82,6 +86,9 @@ export default async function AnalyticsPage() {
       <div className="mb-10">
         <CostVsGainSummary roi={roi} />
       </div>
+
+      {/* Top 10 Live */}
+      <TopProductsLive initialData={topProductsRes} market={market} />
 
       {/* Per-product analytics */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
