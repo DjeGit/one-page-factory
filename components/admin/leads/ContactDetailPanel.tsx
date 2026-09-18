@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { MARKETS } from '@/lib/market';
 import type { Contact } from '@/types';
 
@@ -152,6 +153,12 @@ export default function ContactDetailPanel({ contact, onClose, onEdit, onDelete 
                 Modifier
               </button>
             )}
+            <Link
+              href={`/admin/invoices?contact_id=${contact.id}`}
+              className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              Voir les factures
+            </Link>
             <button
               onClick={onDelete}
               className="inline-flex items-center gap-2 px-5 py-2.5 text-red-500 hover:text-red-700 hover:bg-red-50 font-semibold rounded-xl transition-colors ml-auto"

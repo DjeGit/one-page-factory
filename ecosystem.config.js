@@ -16,6 +16,10 @@ const ENV_ALLOWLIST = [
   // ─── Site & media ───────────────────────────────────────────────────────
   'NEXT_PUBLIC_SITE_URL', 'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME',
 
+  // ─── Sprint 2 : facturation — coordonnées légales de l'émetteur ────────
+  'INVOICE_ISSUER_NAME', 'INVOICE_ISSUER_ADDRESS', 'INVOICE_ISSUER_REG_NUMBER',
+  'INVOICE_ISSUER_VAT_NUMBER', 'INVOICE_ISSUER_EMAIL',
+
   // ─── Sprint 3 : registre d'intégrations — sources de données marché ────
   'KEEPA_API_KEY', 'DATAFORSEO_LOGIN', 'DATAFORSEO_PASSWORD',
   'AMAZON_CREATORS_CREDENTIAL_ID', 'AMAZON_CREATORS_CREDENTIAL_SECRET', 'AMAZON_AFFILIATE_TAG',

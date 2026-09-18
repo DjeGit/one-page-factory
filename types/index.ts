@@ -187,6 +187,43 @@ export interface Contact {
   products?: { name: string; slug: string } | null;
 }
 
+export type InvoiceType = 'invoice' | 'credit_note';
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'cancelled';
+
+export interface InvoiceLineItem {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_rate: number;
+}
+
+/**
+ * Facture ou avoir, rattaché à un contact du Répertoire (email_leads).
+ * `invoice_number` reste null tant que le document est en brouillon — il
+ * n'est attribué qu'à la finalisation, voir lib/invoice-numbering.ts.
+ */
+export interface Invoice {
+  id: string;
+  invoice_number: string | null;
+  type: InvoiceType;
+  contact_id: string;
+  market: Market;
+  currency: string;
+  status: InvoiceStatus;
+  line_items: InvoiceLineItem[];
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  total: number;
+  issued_at: string | null;
+  due_at: string | null;
+  notes: string | null;
+  credit_note_of: string | null;
+  created_at: string;
+  updated_at: string;
+  contact?: Pick<Contact, 'id' | 'first_name' | 'last_name' | 'company' | 'email' | 'contact_type'> | null;
+}
+
 export interface ABTest {
   id: string;
   product_id: string;
