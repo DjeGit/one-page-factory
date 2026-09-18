@@ -1,6 +1,8 @@
 'use client';
 
 import Script from 'next/script';
+import { useEffect, useState } from 'react';
+import { CONSENT_CHANGED_EVENT, type ConsentValue } from '@/lib/consent-copy';
 
 interface PixelInjectorProps {
   pixelMeta?: string | null;
@@ -8,7 +10,35 @@ interface PixelInjectorProps {
   pixelGtm?: string | null;
 }
 
+function readConsent(): ConsentValue | null {
+  try {
+    const v = localStorage.getItem('tendpick_cookie_consent');
+    return v === 'accepted' || v === 'declined' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function PixelInjector({ pixelMeta, pixelTiktok, pixelGtm }: PixelInjectorProps) {
+  // Avant ce correctif, les pixels Meta/TikTok/GTM se déclenchaient au
+  // chargement de la page quelle que soit la réponse au bandeau cookies —
+  // désormais rien ne se charge tant que le visiteur n'a pas accepté.
+  const [consented, setConsented] = useState(false);
+
+  useEffect(() => {
+    setConsented(readConsent() === 'accepted');
+
+    function onConsentChange(e: Event) {
+      const detail = (e as CustomEvent<ConsentValue>).detail;
+      setConsented(detail === 'accepted');
+    }
+
+    window.addEventListener(CONSENT_CHANGED_EVENT, onConsentChange);
+    return () => window.removeEventListener(CONSENT_CHANGED_EVENT, onConsentChange);
+  }, []);
+
+  if (!consented) return null;
+
   return (
     <>
       {pixelMeta && (

@@ -16,11 +16,13 @@ import ExitIntentPopup from '@/components/landing/ExitIntentPopup';
 import EmailCapturePopup from '@/components/landing/EmailCapturePopup';
 import ProductStructuredData from '@/components/landing/ProductStructuredData';
 import LandingHeader from '@/components/layout/LandingHeader';
+import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import LandingFooter from '@/components/layout/LandingFooter';
 import CookieConsent from '@/components/layout/CookieConsent';
 import TemplateRenderer from '@/components/templates/TemplateRenderer';
 import type { TemplateOverrides } from '@/components/templates/TemplateRenderer';
 import { getTemplate } from '@/lib/templates';
+import { isValidMarket, DEFAULT_MARKET } from '@/lib/market';
 import type { ABTest } from '@/types';
 
 interface Props {
@@ -105,6 +107,10 @@ export default async function LandingPage({ params }: Props) {
     notFound();
   }
 
+  // Marché de la PAGE (produit), pas celui du visiteur — la disclosure et
+  // le consentement doivent refléter le contenu affiché, cf. plan Sprint 1.
+  const market = isValidMarket(product.market) ? product.market : DEFAULT_MARKET;
+
   // Track page view (non-blocking)
   trackServerPageView(product.id);
 
@@ -129,20 +135,21 @@ export default async function LandingPage({ params }: Props) {
         <PixelInjector pixelMeta={product.pixel_meta} pixelTiktok={product.pixel_tiktok} pixelGtm={product.pixel_gtm} />
         <ProductStructuredData product={product} />
         <LandingHeader productName={product.name} />
+        <AffiliateDisclosureBanner market={market} />
         <TemplateRenderer
           product={product}
           template={tpl}
           overrides={tplOverrides}
           ctaHref={ctaHref}
         />
-        <LandingFooter />
+        <LandingFooter market={market} />
         <StickyBuy
           redirectCode={product.redirect_code}
           productId={product.id}
           price={product.price}
           productName={product.name}
         />
-        <CookieConsent />
+        <CookieConsent market={market} />
       </>
     );
   }
@@ -187,6 +194,8 @@ export default async function LandingPage({ params }: Props) {
         productName={product.name}
         affiliateUrl={product.affiliate_url}
       />
+
+      <AffiliateDisclosureBanner market={market} />
 
       <main>
         {/* 1. Hero */}
@@ -242,7 +251,7 @@ export default async function LandingPage({ params }: Props) {
       </main>
 
       {/* Footer Tendpick */}
-      <LandingFooter />
+      <LandingFooter market={market} />
 
       {/* Sticky mobile buy bar */}
       <StickyBuy
@@ -307,7 +316,7 @@ export default async function LandingPage({ params }: Props) {
       )}
 
       {/* GDPR Cookie Consent */}
-      <CookieConsent />
+      <CookieConsent market={market} />
     </>
   );
 }

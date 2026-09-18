@@ -1,12 +1,18 @@
 import Link from 'next/link';
+import type { Market } from '@/lib/market';
+import { CONSENT_COPY } from '@/lib/consent-copy';
 
-export default function LandingFooter() {
+interface LandingFooterProps {
+  market: Market;
+}
+
+export default function LandingFooter({ market }: LandingFooterProps) {
   return (
     <footer className="border-t border-white/10 bg-gray-950 mt-16">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-        {/* Disclaimer affiliation */}
+        {/* Disclaimer affiliation — localisé par marché, voir lib/consent-copy.ts */}
         <div className="bg-gray-900/60 border border-white/5 rounded-xl p-4 mb-8 text-xs text-gray-500 leading-relaxed">
-          <strong className="text-gray-400">Information importante :</strong> Tendpick est un site participatif au programme d&apos;affiliation d&apos;Amazon EU. En tant que partenaire Amazon, nous réalisons un bénéfice sur les achats remplissant les conditions requises. Cela n&apos;affecte pas le prix que vous payez. Les avis et recommandations présents sur ce site sont rédigés à titre informatif.
+          {CONSENT_COPY[market].footerDisclosure}
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
