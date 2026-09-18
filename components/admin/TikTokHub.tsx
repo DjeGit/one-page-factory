@@ -1,21 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import type { Product } from '@/types';
 
 interface Props { products: Product[]; }
-type Tab = 'publisher' | 'scripts' | 'merchant' | 'bio' | 'hashtags';
-
-const PLATFORMS = [
-  { id: 'tiktok',    label: 'TikTok',     emoji: '\u{1F3B5}' },
-  { id: 'instagram', label: 'Instagram',  emoji: '\u{1F4F8}' },
-  { id: 'facebook',  label: 'Facebook',   emoji: '\u{1F465}' },
-  { id: 'pinterest', label: 'Pinterest',  emoji: '\u{1F4CC}' },
-  { id: 'twitter',   label: 'Twitter/X',  emoji: '\u{1F426}' },
-  { id: 'linkedin',  label: 'LinkedIn',   emoji: '\u{1F4BC}' },
-  { id: 'youtube',   label: 'YouTube',    emoji: '\u25B6\uFE0F' },
-];
+type Tab = 'scripts' | 'merchant' | 'bio' | 'hashtags';
 
 const MKT_DOMAINS: Record<string,string> = { fr:'tendpick.fr', es:'tendpick.es', uk:'tendpick.com' };
 
@@ -28,20 +19,13 @@ const CATS = [
 ];
 
 export default function TikTokHub({ products }: Props) {
-  const [tab, setTab] = useState<Tab>('publisher');
+  const [tab, setTab] = useState<Tab>('scripts');
   const [prodId, setProdId] = useState(products[0]?.id || '');
   const [cat, setCat] = useState('tech');
   const [copied, setCopied] = useState<string|null>(null);
   const [regen, setRegen] = useState(false);
   const [regenErr, setRegenErr] = useState<string|null>(null);
   const router = useRouter();
-
-  const [ayrOk, setAyrOk] = useState<boolean|null>(null);
-  const [selPlatforms, setSelPlatforms] = useState<string[]>(['tiktok','instagram']);
-  const [caption, setCaption] = useState('');
-  const [imgUrl, setImgUrl] = useState('');
-  const [posting, setPosting] = useState(false);
-  const [postRes, setPostRes] = useState<{ok:boolean;msg:string}|null>(null);
 
   const [bios, setBios] = useState<Record<string,boolean>>(
     Object.fromEntries(products.map(p=>[p.id, p.active]))
@@ -50,10 +34,6 @@ export default function TikTokHub({ products }: Props) {
 
   const prod = products.find(p=>p.id===prodId);
   const activeCat = CATS.find(c=>c.id===cat);
-
-  useEffect(()=>{
-    fetch('/api/social?action=check').then(r=>r.json()).then(d=>setAyrOk(d.configured??false)).catch(()=>setAyrOk(false));
-  },[]);
 
   const copy = async (text:string, key:string) => {
     try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(()=>setCopied(null),2000); } catch{}
@@ -83,20 +63,6 @@ export default function TikTokHub({ products }: Props) {
     finally { setSavingBio(null); }
   };
 
-  const handlePost = async () => {
-    if(!caption.trim()||selPlatforms.length===0) return;
-    setPosting(true); setPostRes(null);
-    try {
-      const payload: Record<string,unknown> = { platforms:selPlatforms, post:caption };
-      if(imgUrl.trim()) payload.mediaUrls=[imgUrl.trim()];
-      const r = await fetch('/api/social',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-      const d = await r.json();
-      if(r.ok && !d.errors?.length) { setPostRes({ok:true,msg:'Publication envoyee !'}); setCaption(''); setImgUrl(''); }
-      else { setPostRes({ok:false,msg:d.message??'Erreur lors de la publication'}); }
-    } catch { setPostRes({ok:false,msg:'Erreur reseau'}); }
-    finally { setPosting(false); }
-  };
-
   const parseScript = (s:string) => {
     const w=s.split(' '), he=Math.min(Math.ceil(w.length*.2),20), cs=Math.max(Math.floor(w.length*.85),w.length-15);
     return { hook:w.slice(0,he).join(' '), body:w.slice(he,cs).join(' '), cta:w.slice(cs).join(' ') };
@@ -106,7 +72,6 @@ export default function TikTokHub({ products }: Props) {
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL||'https://votre-site.com';
   const TABS: {id:Tab;label:string}[] = [
-    {id:'publisher',label:'📣 Publier'},
     {id:'scripts',  label:'📝 Scripts TikTok'},
     {id:'merchant', label:'🛍️ Google Merchant'},
     {id:'bio',      label:'🔗 Lien en Bio'},
@@ -115,9 +80,14 @@ export default function TikTokHub({ products }: Props) {
 
   return (
     <div className="p-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-black text-gray-900">Hub Diffusion</h1>
-        <p className="text-gray-500 mt-1">Publiez sur tous vos canaux depuis un seul endroit</p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900">Hub Diffusion</h1>
+          <p className="text-gray-500 mt-1">Scripts, flux produit et lien en bio — pour la publication réelle multi-canal, voir Réseaux sociaux.</p>
+        </div>
+        <Link href="/admin/social" className="text-sm text-primary-600 font-semibold hover:underline whitespace-nowrap">
+          Réseaux sociaux (publier) →
+        </Link>
       </div>
 
       <div className="flex gap-2 border-b border-gray-200 mb-8 overflow-x-auto">
@@ -128,90 +98,6 @@ export default function TikTokHub({ products }: Props) {
           </button>
         ))}
       </div>
-
-      {/* ── PUBLIER ── */}
-      {tab==='publisher' && (
-        <div className="space-y-6 max-w-2xl">
-          {ayrOk===null && <div className="py-8 text-center text-gray-400">Chargement...</div>}
-
-          {ayrOk===true && (
-            <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-5">
-              <h3 className="font-bold text-gray-900">Composer une publication</h3>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">Plateformes</p>
-                <div className="flex flex-wrap gap-2">
-                  {PLATFORMS.map(p=>{
-                    const on=selPlatforms.includes(p.id);
-                    return (
-                      <button key={p.id} onClick={()=>setSelPlatforms(prev=>on?prev.filter(x=>x!==p.id):[...prev,p.id])}
-                        className={'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold border transition-all '+(on?'border-violet-500 bg-violet-50 text-violet-700':'border-gray-200 bg-white text-gray-600 hover:border-gray-300')}>
-                        <span>{p.emoji}</span>{p.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Caption</label>
-                <textarea value={caption} onChange={e=>setCaption(e.target.value)} placeholder="Decrivez votre produit, ajoutez des hashtags..." rows={5}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"/>
-                <p className="text-xs text-gray-400 mt-1">{caption.length} caracteres</p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">URL Image / Video (optionnel)</label>
-                <input type="url" value={imgUrl} onChange={e=>setImgUrl(e.target.value)} placeholder="https://..."
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"/>
-              </div>
-              {postRes && <div className={'px-4 py-3 rounded-xl text-sm font-medium '+(postRes.ok?'bg-emerald-50 text-emerald-700':'bg-red-50 text-red-700')}>{postRes.ok?'✓ ':'✗ '}{postRes.msg}</div>}
-              <button onClick={handlePost} disabled={posting||!caption.trim()||selPlatforms.length===0}
-                className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors">
-                {posting?'Publication en cours...':'Publier sur '+selPlatforms.length+' plateforme'+(selPlatforms.length>1?'s':'')}
-              </button>
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
-                <strong>Conseil :</strong> TikTok et Instagram ne permettent pas de liens cliquables dans les posts. Utilisez le lien en bio.
-              </div>
-            </div>
-          )}
-
-          {ayrOk===false && (
-            <div className="space-y-6">
-              <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-8 text-center">
-                <div className="text-6xl mb-4">📡</div>
-                <h2 className="text-xl font-bold text-gray-900 mb-2">Publiez partout en un clic</h2>
-                <p className="text-gray-600 text-sm max-w-md mx-auto">Ayrshare connecte TikTok, Instagram, Facebook, Pinterest, YouTube et LinkedIn depuis une seule API. Configurez une fois, publiez partout.</p>
-              </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {PLATFORMS.map(p=>(
-                  <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-4 text-center opacity-60">
-                    <div className="text-2xl mb-1">{p.emoji}</div>
-                    <p className="text-xs font-semibold text-gray-600">{p.label}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-white rounded-2xl border border-gray-200 p-6">
-                <h3 className="font-bold text-gray-900 mb-4">Configuration en 3 etapes</h3>
-                <div className="space-y-4">
-                  <div className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-sm flex items-center justify-center flex-shrink-0">1</div>
-                    <div><p className="font-semibold text-gray-900 text-sm">Creer un compte Ayrshare</p><p className="text-xs text-gray-500 mt-0.5">Gratuit pour les tests — plans a partir de 29$/mois</p><a href="https://app.ayrshare.com" target="_blank" rel="noopener noreferrer" className="text-xs text-violet-600 font-medium mt-1 block">app.ayrshare.com →</a></div>
-                  </div>
-                  <div className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-sm flex items-center justify-center flex-shrink-0">2</div>
-                    <div><p className="font-semibold text-gray-900 text-sm">Recuperer votre cle API</p><p className="text-xs text-gray-500 mt-0.5">Profile → API Key dans votre dashboard Ayrshare</p></div>
-                  </div>
-                  <div className="flex gap-4 items-start">
-                    <div className="w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-sm flex items-center justify-center flex-shrink-0">3</div>
-                    <div>
-                      <p className="font-semibold text-gray-900 text-sm">Ajouter dans .env.local puis recharger PM2</p>
-                      <div className="mt-2 bg-gray-900 rounded-xl px-3 py-2"><code className="text-emerald-400 text-xs">AYRSHARE_API_KEY=votre_cle_ici</code></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── SCRIPTS TIKTOK ── */}
       {tab==='scripts' && (
