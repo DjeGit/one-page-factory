@@ -1,16 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import type { Product } from '@/types';
-
-interface Lead {
-  id: string;
-  email: string;
-  product_id: string;
-  source_slug: string;
-  created_at: string;
-  market?: string;
-}
+import type { Contact } from '@/types';
+import { MARKETS } from '@/lib/market';
+import ContactFormModal from './leads/ContactFormModal';
+import ContactDetailPanel from './leads/ContactDetailPanel';
 
 interface LeadsStats {
   total: number;
@@ -25,60 +21,91 @@ interface LeadsManagerProps {
 
 const PAGE_SIZE = 50;
 
+const TYPE_BADGES: Record<string, string> = {
+  lead: 'bg-gray-100 text-gray-600',
+  client: 'bg-green-100 text-green-700',
+  fournisseur: 'bg-orange-100 text-orange-700',
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  lead: 'Lead',
+  client: 'Client',
+  fournisseur: 'Fournisseur',
+};
+
 export default function LeadsManager({ products }: LeadsManagerProps) {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const [stats, setStats] = useState<LeadsStats>({ total: 0, this_week: 0, today: 0, top_product: '—' });
   const [filterProductId, setFilterProductId] = useState('');
   const [filterMarket, setFilterMarket] = useState('');
+  const [filterType, setFilterType] = useState('');
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  const fetchLeads = useCallback(async () => {
+  const [showForm, setShowForm] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+
+  const fetchContacts = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (filterProductId) params.set('product_id', filterProductId);
       if (filterMarket) params.set('market', filterMarket);
+      if (filterType) params.set('contact_type', filterType);
       const res = await fetch(`/api/leads?${params}`);
       if (!res.ok) return;
       const data = await res.json();
-      const allLeads: Lead[] = Array.isArray(data) ? data : (data.leads || []);
-      setLeads(allLeads);
+      const all: Contact[] = Array.isArray(data) ? data : (data.leads || []);
+      setContacts(all);
 
-      // Compute stats
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekAgo = new Date(today);
       weekAgo.setDate(weekAgo.getDate() - 7);
 
-      const todayCount = allLeads.filter(l => new Date(l.created_at) >= today).length;
-      const weekCount = allLeads.filter(l => new Date(l.created_at) >= weekAgo).length;
+      const todayCount = all.filter((c) => new Date(c.created_at) >= today).length;
+      const weekCount = all.filter((c) => new Date(c.created_at) >= weekAgo).length;
 
-      // Top product
       const counts: Record<string, number> = {};
-      allLeads.forEach(l => { counts[l.product_id] = (counts[l.product_id] || 0) + 1; });
+      all.forEach((c) => { if (c.product_id) counts[c.product_id] = (counts[c.product_id] || 0) + 1; });
       const topId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-      const topProduct = products.find(p => p.id === topId)?.name || '—';
+      const topProduct = products.find((p) => p.id === topId)?.name || '—';
 
-      setStats({ total: allLeads.length, this_week: weekCount, today: todayCount, top_product: topProduct });
+      setStats({ total: all.length, this_week: weekCount, today: todayCount, top_product: topProduct });
       setPage(0);
     } catch {
       // silently fail
     } finally {
       setLoading(false);
     }
-  }, [filterProductId, filterMarket, products]);
+  }, [filterProductId, filterMarket, filterType, products]);
 
   useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads]);
+    fetchContacts();
+  }, [fetchContacts]);
+
+  // "Nouveau contact" du dashboard renvoie vers /admin/leads?new=1 : ouvre
+  // directement le formulaire de création à l'arrivée sur la page.
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setShowForm(true);
+      router.replace('/admin/leads');
+    }
+  }, [searchParams, router]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Supprimer ce lead ? Cette action est irréversible.')) return;
+    if (!confirm('Supprimer ce contact ? Cette action est irréversible.')) return;
     try {
       const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
-      if (res.ok) setLeads(prev => prev.filter(l => l.id !== id));
+      if (res.ok) {
+        setContacts((prev) => prev.filter((c) => c.id !== id));
+        setSelectedContact(null);
+      }
     } catch {
       // silently fail
     }
@@ -105,18 +132,18 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
     }
   };
 
-  const productName = (id: string) => {
-    const found = products.find(p => p.id === id);
-    return found ? found.name : id;
+  const contactName = (c: Contact) => {
+    const fullName = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
+    return fullName || c.company || c.email || '(sans nom)';
   };
 
-  const paginated = leads.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages = Math.ceil(leads.length / PAGE_SIZE);
+  const paginated = contacts.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalPages = Math.ceil(contacts.length / PAGE_SIZE);
 
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
             Leads &amp; Emails
@@ -124,24 +151,35 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
               {stats.total}
             </span>
           </h1>
-          <p className="text-gray-500 mt-1">Gérez vos contacts et leads capturés</p>
+          <p className="text-gray-500 mt-1">Répertoire de vos leads, clients et fournisseurs</p>
         </div>
-        <button
-          onClick={handleExport}
-          disabled={exporting || leads.length === 0}
-          className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          {exporting ? 'Export...' : 'Exporter CSV'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Nouveau contact
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={exporting || contacts.length === 0}
+            className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            {exporting ? 'Export...' : 'Exporter CSV'}
+          </button>
+        </div>
       </div>
 
       {/* Stats row */}
       <div className="grid sm:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total leads', value: stats.total, color: 'text-gray-900' },
+          { label: 'Total contacts', value: stats.total, color: 'text-gray-900' },
           { label: 'Cette semaine', value: stats.this_week, color: 'text-primary-600' },
           { label: "Aujourd'hui", value: stats.today, color: 'text-green-600' },
           { label: 'Top produit', value: stats.top_product, color: 'text-orange-600' },
@@ -161,9 +199,19 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
           className="px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 text-sm"
         >
           <option value="">🌍 Tous les marchés</option>
-          <option value="fr">🇫🇷 France</option>
-          <option value="es">🇪🇸 Espagne</option>
-          <option value="uk">🇬🇧 Anglophone</option>
+          {MARKETS.map((m) => (
+            <option key={m.code} value={m.code}>{m.flag} {m.label}</option>
+          ))}
+        </select>
+        <select
+          value={filterType}
+          onChange={(e) => { setFilterType(e.target.value); setPage(0); }}
+          className="px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 text-sm"
+        >
+          <option value="">Tous les types</option>
+          <option value="lead">Leads capturés</option>
+          <option value="client">Clients</option>
+          <option value="fournisseur">Fournisseurs</option>
         </select>
         <select
           value={filterProductId}
@@ -187,11 +235,11 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
             </svg>
             Chargement...
           </div>
-        ) : leads.length === 0 ? (
+        ) : contacts.length === 0 ? (
           <div className="py-16 text-center">
             <div className="text-4xl mb-3">📧</div>
-            <p className="text-gray-500">Aucun lead capturé pour le moment</p>
-            <p className="text-sm text-gray-400 mt-1">Activez la capture d&apos;email dans vos produits</p>
+            <p className="text-gray-500">Aucun contact pour le moment</p>
+            <p className="text-sm text-gray-400 mt-1">Activez la capture d&apos;email dans vos produits ou ajoutez un contact manuellement</p>
           </div>
         ) : (
           <>
@@ -199,44 +247,70 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Email</th>
-                    <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Marché</th>
-                    <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Produit source</th>
-                    <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date de capture</th>
+                    <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nom / Email</th>
+                    <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
+                    <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Marché(s)</th>
+                    <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coordonnées</th>
+                    <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {paginated.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <span className="font-medium text-gray-900">{lead.email}</span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-100 text-gray-700 whitespace-nowrap">
-                          {lead.market === 'fr' ? '🇫🇷 FR' : lead.market === 'es' ? '🇪🇸 ES' : lead.market === 'uk' ? '🇬🇧 UK' : '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="text-gray-700">{productName(lead.product_id)}</span>
-                        <div className="text-xs text-gray-400">/{lead.source_slug}</div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-500">
-                        {new Date(lead.created_at).toLocaleDateString('fr-FR', {
-                          day: '2-digit', month: '2-digit', year: 'numeric',
-                          hour: '2-digit', minute: '2-digit',
-                        })}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => handleDelete(lead.id)}
-                          className="text-sm text-red-500 hover:text-red-700 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
-                        >
-                          Supprimer
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {paginated.map((c) => {
+                    const markets = c.markets?.length ? c.markets : c.market ? [c.market] : [];
+                    return (
+                      <tr key={c.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => setSelectedContact(c)}
+                            className="font-medium text-gray-900 hover:text-primary-600 transition-colors text-left"
+                          >
+                            {contactName(c)}
+                          </button>
+                          {c.contact_type === 'lead' && (
+                            <div className="text-xs text-gray-400">
+                              {products.find((p) => p.id === c.product_id)?.name ?? c.source_slug ?? ''}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap ${TYPE_BADGES[c.contact_type] ?? 'bg-gray-100 text-gray-600'}`}>
+                            {TYPE_LABELS[c.contact_type] ?? c.contact_type}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex gap-1 flex-wrap">
+                            {markets.length === 0 ? (
+                              <span className="text-gray-300">—</span>
+                            ) : (
+                              markets.map((m) => (
+                                <span key={m} title={MARKETS.find((x) => x.code === m)?.label} className="text-base leading-none">
+                                  {MARKETS.find((x) => x.code === m)?.flag ?? m}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-500">
+                          {c.email && <div className="truncate max-w-[180px]">{c.email}</div>}
+                          {c.phone && <div className="text-gray-400">{c.phone}</div>}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-500">
+                          {new Date(c.created_at).toLocaleDateString('fr-FR', {
+                            day: '2-digit', month: '2-digit', year: 'numeric',
+                          })}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => handleDelete(c.id)}
+                            className="text-sm text-red-500 hover:text-red-700 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                          >
+                            Supprimer
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -245,7 +319,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
             {totalPages > 1 && (
               <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
                 <p className="text-sm text-gray-500">
-                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, leads.length)} sur {leads.length} leads
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, contacts.length)} sur {contacts.length} contacts
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -269,6 +343,30 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
           </>
         )}
       </div>
+
+      {showForm && (
+        <ContactFormModal
+          onClose={() => setShowForm(false)}
+          onSaved={() => { setShowForm(false); fetchContacts(); }}
+        />
+      )}
+
+      {editingContact && (
+        <ContactFormModal
+          contact={editingContact}
+          onClose={() => setEditingContact(null)}
+          onSaved={() => { setEditingContact(null); setSelectedContact(null); fetchContacts(); }}
+        />
+      )}
+
+      {selectedContact && !editingContact && (
+        <ContactDetailPanel
+          contact={selectedContact}
+          onClose={() => setSelectedContact(null)}
+          onEdit={() => setEditingContact(selectedContact)}
+          onDelete={() => handleDelete(selectedContact.id)}
+        />
+      )}
     </div>
   );
 }

@@ -71,7 +71,7 @@ export default function DashboardClient() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <Link
           href="/admin/products/new"
           className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-primary-300 hover:shadow-sm transition-all group"
@@ -112,6 +112,20 @@ export default function DashboardClient() {
           <div>
             <div className="font-semibold text-gray-900 text-sm">Étude de marché</div>
             <div className="text-gray-400 text-xs">Trouver des produits gagnants</div>
+          </div>
+        </Link>
+        <Link
+          href="/admin/leads?new=1"
+          className="flex items-center gap-3 p-4 bg-white border border-gray-200 rounded-2xl hover:border-green-300 hover:shadow-sm transition-all group"
+        >
+          <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-green-600 group-hover:bg-green-200 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </div>
+          <div>
+            <div className="font-semibold text-gray-900 text-sm">Nouveau contact</div>
+            <div className="text-gray-400 text-xs">Ajouter un client ou fournisseur</div>
           </div>
         </Link>
       </div>

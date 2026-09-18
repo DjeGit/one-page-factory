@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { cookies } from 'next/headers';
-import { DEFAULT_MARKET, isValidMarket } from '@/lib/market';
+import { DEFAULT_MARKET, isValidMarket, type Market } from '@/lib/market';
 
 // --- Email de bienvenue transactionnel (Brevo) ---
 const WELCOME_CONTENT = {
@@ -62,26 +62,88 @@ async function syncToBrevo(email: string, market: string, productName?: string) 
   } catch { /* silencieux */ }
 }
 
-// GET /api/leads?market=fr&product_id=... — filtres optionnels utilisés par
-// l'écran Admin > Leads (sélecteur "Tous les marchés" ou marché précis).
+// GET /api/leads?market=fr&product_id=...&contact_type=client — filtres
+// optionnels utilisés par l'écran Admin > Leads & Emails (Répertoire).
+// marketFilter matche soit market (marché "principal", leads auto-capturés)
+// soit markets[] (contact manuel rattaché à plusieurs marchés à la fois).
 export async function GET(req: NextRequest) {
   const sb = getSupabaseAdmin();
   const url = new URL(req.url);
   const productFilter = url.searchParams.get('product_id');
   const marketFilter = url.searchParams.get('market');
+  const typeFilter = url.searchParams.get('contact_type');
   const { data } = await sb
     .from('email_leads')
     .select('*, products(name, slug)')
     .order('created_at', { ascending: false });
   let leads = data || [];
-  if (productFilter) leads = leads.filter((l: Record<string, string>) => l.product_id === productFilter);
-  if (marketFilter) leads = leads.filter((l: Record<string, string>) => l.market === marketFilter);
+  if (productFilter) leads = leads.filter((l: Record<string, unknown>) => l.product_id === productFilter);
+  if (marketFilter) {
+    leads = leads.filter((l: Record<string, unknown>) =>
+      l.market === marketFilter || (Array.isArray(l.markets) && (l.markets as string[]).includes(marketFilter))
+    );
+  }
+  if (typeFilter) leads = leads.filter((l: Record<string, unknown>) => l.contact_type === typeFilter);
   return NextResponse.json(leads);
+}
+
+// Création manuelle d'un contact (client/fournisseur) depuis le
+// Répertoire — distinct de la capture automatique de leads publics
+// ci-dessous : pas d'upsert (pas de déduplication attendue ici), email
+// optionnel (un fournisseur peut n'avoir qu'un téléphone au départ), mais
+// au moins un moyen de contact (email ou téléphone) et au moins un marché
+// sont exigés.
+async function createManualContact(sb: ReturnType<typeof getSupabaseAdmin>, body: Record<string, unknown>) {
+  const contactType = body.contact_type;
+  if (contactType !== 'client' && contactType !== 'fournisseur') {
+    return NextResponse.json({ error: 'Type de contact invalide (client ou fournisseur)' }, { status: 400 });
+  }
+
+  const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null;
+  const phone = typeof body.phone === 'string' && body.phone.trim() ? body.phone.trim() : null;
+  if (!email && !phone) {
+    return NextResponse.json({ error: 'Renseignez au moins un email ou un téléphone' }, { status: 400 });
+  }
+  if (email && !email.includes('@')) {
+    return NextResponse.json({ error: 'Email invalide' }, { status: 400 });
+  }
+
+  const markets: Market[] = Array.isArray(body.markets) ? body.markets.filter(isValidMarket) : [];
+  if (markets.length === 0) {
+    return NextResponse.json({ error: 'Sélectionnez au moins un marché' }, { status: 400 });
+  }
+
+  const { data, error } = await sb
+    .from('email_leads')
+    .insert({
+      contact_type: contactType,
+      email,
+      phone,
+      first_name: typeof body.first_name === 'string' ? body.first_name.trim() || null : null,
+      last_name: typeof body.last_name === 'string' ? body.last_name.trim() || null : null,
+      company: typeof body.company === 'string' ? body.company.trim() || null : null,
+      website: typeof body.website === 'string' ? body.website.trim() || null : null,
+      notes: typeof body.notes === 'string' ? body.notes.trim() || null : null,
+      market: markets[0],
+      markets,
+      product_id: null,
+      source_slug: null,
+    })
+    .select()
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ success: true, data });
 }
 
 export async function POST(req: NextRequest) {
   const sb = getSupabaseAdmin();
   const body = await req.json();
+
+  if (body.manual === true) {
+    return createManualContact(sb, body);
+  }
+
   const { email, product_id, source_slug } = body;
   if (!email || !email.includes('@')) {
     return NextResponse.json({ error: 'Email invalide' }, { status: 400 });
@@ -105,7 +167,7 @@ export async function POST(req: NextRequest) {
   // encore sur cet environnement (code Postgres 42703 = colonne manquante).
   let upsertResult = await sb
     .from('email_leads')
-    .upsert({ email, product_id, source_slug, market }, { onConflict: 'email,product_id', ignoreDuplicates: true })
+    .upsert({ email, product_id, source_slug, market, markets: [market] }, { onConflict: 'email,product_id', ignoreDuplicates: true })
     .select().single();
   if (upsertResult.error && (upsertResult.error as { code?: string }).code === '42703') {
     upsertResult = await sb

@@ -159,6 +159,34 @@ export interface DashboardStats {
   total_views: number;
 }
 
+export type ContactType = 'lead' | 'client' | 'fournisseur';
+
+/**
+ * Une ligne de la table email_leads — soit un lead capturé automatiquement
+ * (contact_type='lead', product_id + source_slug renseignés), soit un
+ * contact ajouté à la main (client/fournisseur) depuis le Répertoire.
+ * `markets` (tableau) permet de rattacher un contact manuel à plusieurs
+ * marchés à la fois ; `market` (singulier) reste le marché "principal"
+ * pour la compatibilité avec l'export CSV et la sync Brevo existants.
+ */
+export interface Contact {
+  id: string;
+  contact_type: ContactType;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  company: string | null;
+  website: string | null;
+  notes: string | null;
+  market: Market;
+  markets: Market[];
+  product_id: string | null;
+  source_slug: string | null;
+  created_at: string;
+  products?: { name: string; slug: string } | null;
+}
+
 export interface ABTest {
   id: string;
   product_id: string;
