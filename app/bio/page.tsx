@@ -1,6 +1,6 @@
 import { getAllProducts } from '@/lib/supabase';
-import { cookies, headers } from 'next/headers';
-import { DEFAULT_MARKET, isValidMarket } from '@/lib/market';
+import { headers } from 'next/headers';
+import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
@@ -12,13 +12,17 @@ export const metadata: Metadata = {
 };
 
 export default async function BioPage() {
-  const cookieStore = cookies();
-  const publicMarketCookie = cookieStore.get('opf_market')?.value;
-  const market = isValidMarket(publicMarketCookie) ? publicMarketCookie : DEFAULT_MARKET;
+  // Audit 21/09 (bug HIGH corrigé) : dérivait le marché du cookie visiteur
+  // opf_market, illisible dans la même requête qui vient de le poser (page
+  // souvent la toute première ouverte via un lien bio Instagram/TikTok) —
+  // retombait donc systématiquement sur 'fr' pour un premier visiteur. Le
+  // host est disponible dès cette première requête, comme dans
+  // middleware.ts — même détection canonique partagée.
+  const host = headers().get('host') ?? '';
+  const market = getMarketFromHost(host);
   const allProducts = await getAllProducts(market);
   const active = allProducts.filter((p) => p.active);
 
-  const host = headers().get('host') ?? '';
   const siteUrl = host ? 'https://' + host : (process.env.NEXT_PUBLIC_SITE_URL || 'https://tendpick.fr').replace(/\/$/, '');
 
   return (

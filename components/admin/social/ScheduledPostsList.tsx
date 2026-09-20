@@ -10,12 +10,16 @@ interface ScheduledPost {
   text: string;
   market: Market;
   scheduled_at: string;
-  status: 'pending' | 'sent' | 'failed' | 'cancelled';
+  status: 'pending' | 'processing' | 'sent' | 'failed' | 'cancelled';
   result: { channelId: string; ok: boolean; message: string }[] | null;
 }
 
+// 'processing' (audit 21/09) : verrou anti-double-publication du cron —
+// fenêtre très courte en usage normal, mais un badge dédié évite un style
+// undefined si l'admin rafraîchit pile pendant la publication.
 const STATUS_BADGES: Record<string, string> = {
   pending: 'bg-blue-100 text-blue-700',
+  processing: 'bg-amber-100 text-amber-700',
   sent: 'bg-green-100 text-green-700',
   failed: 'bg-red-100 text-red-700',
   cancelled: 'bg-gray-100 text-gray-500',
@@ -23,6 +27,7 @@ const STATUS_BADGES: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Programmé',
+  processing: 'Publication en cours...',
   sent: 'Envoyé',
   failed: 'Échec',
   cancelled: 'Annulé',

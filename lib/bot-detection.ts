@@ -25,15 +25,26 @@ const BOT_USER_AGENT_PATTERNS: RegExp[] = [
   /facebot/i,
   /twitterbot/i,
   /linkedinbot/i,
-  /whatsapp/i,
   /telegrambot/i,
   /discordbot/i,
   /slackbot/i,
-  /pinterest/i,
   /redditbot/i,
   /skypeuripreview/i,
   /vkshare/i,
   /embedly/i,
+
+  // Audit 21/09 (bug MEDIUM corrigé) : WhatsApp et Pinterest ont un crawler
+  // dédié dont le user-agent se limite à "WhatsApp/x.y.z" ou
+  // "Pinterest/x.y (+https://...)" (aucune signature de navigateur). C'est
+  // ENTIÈREMENT DIFFÉRENT du navigateur intégré (in-app browser) de ces
+  // mêmes applications, dont le user-agent GARDE la signature Mozilla/
+  // AppleWebKit complète d'un vrai navigateur, avec juste un jeton ajouté
+  // en fin de chaîne (ex. "...Safari/604.1 [WhatsApp/2.23...]"). Un motif
+  // non ancré comme /whatsapp/i matchait aussi ce second cas et bloquait
+  // de vrais visiteurs. Ancré en ^, ce motif ne matche que le crawler
+  // pur : un in-app browser commence toujours par "Mozilla/5.0...".
+  /^whatsapp\//i,
+  /^pinterest\/[\d.]/i,
 
   // Bots IA (indexation / entraînement)
   /gptbot/i,

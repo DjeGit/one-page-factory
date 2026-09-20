@@ -114,14 +114,21 @@ export default async function LandingPage({ params }: Props) {
   // Track page view (non-blocking)
   trackServerPageView(product.id);
 
-  // Market i18n for static CTA copy (marché = langue, cf. lib/market.ts — 'uk' == anglophone)
-  const cookieMarket = (cookies().get('opf_market')?.value ?? 'fr') as 'fr' | 'es' | 'uk';
+  // Market i18n for static CTA copy (marché = langue, cf. lib/market.ts — 'uk' == anglophone).
+  // Audit 21/09 (bug HIGH corrigé) : utilisait avant le cookie visiteur
+  // opf_market, illisible dans la même requête qui vient de le poser (donc
+  // toujours 'fr' par défaut pour un premier visiteur) ET potentiellement
+  // porteur d'une valeur invalide ('com' avant correction du middleware,
+  // absente de CTA_I18N → plantage au rendu pour les visiteurs récurrents
+  // sur le marché anglophone). `market` (product.market, calculé plus haut)
+  // est déjà utilisé par AffiliateDisclosureBanner/LandingFooter/CookieConsent
+  // pour la même raison — on aligne le CTA sur la même source fiable.
   const CTA_I18N = {
     fr: { ctaTitle: 'Prêt à changer votre quotidien ?', ctaDesc: 'Des milliers de clients ont déjà fait le choix. Ne passez pas à côté.', ctaBtn: 'Je commande maintenant', trust: ['🔒 Paiement sécurisé Amazon', '🚚 Livraison Amazon Prime', '✅ Retours Amazon 30j'] },
     es: { ctaTitle: '¿Listo para cambiar tu vida?', ctaDesc: 'Miles de clientes ya han tomado la decisión. No te lo pierdas.', ctaBtn: 'Pedir ahora', trust: ['🔒 Pago seguro Amazon', '🚚 Envío Amazon Prime', '✅ Devoluciones Amazon 30 días'] },
     uk: { ctaTitle: 'Ready to change your life?', ctaDesc: 'Thousands of customers have already made the choice. Do not miss out.', ctaBtn: 'Order now', trust: ['🔒 Secure Amazon payment', '🚚 Amazon Prime delivery', '✅ Amazon 30-day returns'] },
   } as const;
-  const i18n = CTA_I18N[cookieMarket];
+  const i18n = CTA_I18N[market];
 
   // Design Studio: TemplateRenderer when template_id is set
   if (product.template_id) {

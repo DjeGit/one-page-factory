@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { cookies } from 'next/headers';
 import { DEFAULT_MARKET, isValidMarket, type Market } from '@/lib/market';
+import { getMarketFromHost } from '@/lib/market-from-host';
 
 // --- Email de bienvenue transactionnel (Brevo) ---
 const WELCOME_CONTENT = {
@@ -151,16 +151,21 @@ export async function POST(req: NextRequest) {
 
   // Marché du lead : dérivé du PRODUIT concerné (source la plus fiable —
   // Sprint 1), jamais de la préférence admin (route publique, cf. doc de
-  // lib/get-active-market.ts). Fallback sur le cookie public 'opf_market'
-  // (posé par le middleware selon le domaine visité) puis sur le défaut.
+  // lib/get-active-market.ts). Fallback sur le host de la requête (même
+  // détection canonique que middleware.ts).
+  //
+  // Audit 21/09 (bug HIGH corrigé) : le fallback lisait le cookie
+  // opf_market, illisible dans la même requête qui vient de le poser — un
+  // lead capturé hors page produit (popup générique, bio link) dès la
+  // première visite retombait toujours sur DEFAULT_MARKET ('fr'). Le host
+  // est fiable dès la première requête.
   let market: string = DEFAULT_MARKET;
   if (product_id) {
     const { data: product } = await sb.from('products').select('market').eq('id', product_id).single();
     if (product?.market && isValidMarket(product.market)) market = product.market;
   }
   if (market === DEFAULT_MARKET) {
-    const publicMarketCookie = cookies().get('opf_market')?.value;
-    if (publicMarketCookie && isValidMarket(publicMarketCookie)) market = publicMarketCookie;
+    market = getMarketFromHost(req.headers.get('host'));
   }
 
   // Upsert avec market ; filet de sécurité si jamais la colonne n'existe pas

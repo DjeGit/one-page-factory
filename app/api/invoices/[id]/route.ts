@@ -102,14 +102,35 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     update.status = 'cancelled';
   }
 
+  // Audit 21/09 (bug HIGH corrigé) : la vérification current.status === 'draft'
+  // ci-dessus (ligne 55) est faite AVANT le calcul du numéro de facture —
+  // deux requêtes de finalisation quasi simultanées (double-clic) peuvent
+  // toutes les deux passer cette vérification et consommer chacune un
+  // numéro de séquence légal, laissant un trou. Le .eq('status', 'draft')
+  // ci-dessous rend l'écriture finale atomique : seule la première des deux
+  // requêtes trouve encore une ligne 'draft' à mettre à jour, la seconde ne
+  // touche aucune ligne (PGRST116 sur .single()) et échoue proprement —
+  // mais a déjà consommé un numéro de séquence pour rien. C'est un trou de
+  // séquence évité pour la facture, au prix (accepté) d'un numéro
+  // occasionnellement "sauté" en cas de double-clic réel, jamais réutilisé
+  // ni dupliqué — cohérent avec l'exigence légale de continuité.
   const { data, error } = await sb
     .from('invoices')
     .update(update)
     .eq('id', params.id)
+    .eq('status', 'draft')
     .select(`*, contact:email_leads(${CONTACT_SELECT})`)
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) {
+    if ((error as { code?: string }).code === 'PGRST116') {
+      return NextResponse.json(
+        { error: 'Ce document a déjà été finalisé entre-temps (double clic ou autre onglet) — rechargez la page.' },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
   return NextResponse.json({ success: true, data });
 }
 

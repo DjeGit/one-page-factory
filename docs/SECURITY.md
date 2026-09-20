@@ -41,9 +41,16 @@ Les clés elles-mêmes ne sont jamais stockées en base, seulement le statut
 
 RLS (Row Level Security) est activée sur `products`, `market_products`,
 `ab_tests`, `clicks`, `page_views`, `email_leads`
-(`supabase/migrations/20260918000001_enable_rls.sql`). La clé
+(`supabase/migrations/20260918000001_enable_rls.sql`), ainsi que sur
+`integrations` (Sprint 3), `invoices` et `invoice_number_sequences`
+(Sprint 2, `20260918000007_invoices.sql`) et `scheduled_posts` (Sprint 4,
+`20260920000002_scheduled_posts.sql`) — même politique : service_role
+uniquement, aucun accès anon/authenticated. La clé
 `SUPABASE_SERVICE_ROLE_KEY` contourne RLS et ne doit **jamais** être exposée
-côté client (`NEXT_PUBLIC_*`) ni committée.
+côté client (`NEXT_PUBLIC_*`) ni committée. Si `SUPABASE_SERVICE_ROLE_KEY`
+est absente côté serveur, `getSupabaseAdmin()` (`lib/supabase.ts`) retombe
+sur la clé anon et le signale bruyamment dans les logs — RLS bloque alors
+la quasi-totalité des opérations admin (échecs, pas de fuite).
 
 ## Authentification admin
 

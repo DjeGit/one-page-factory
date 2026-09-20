@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProductByCode, trackClick, getSupabaseAdmin } from '@/lib/supabase';
 import { createHash } from 'crypto';
+import { isValidMarket, DEFAULT_MARKET } from '@/lib/market';
 
 function hashIp(ip: string): string {
   return createHash('sha256').update(ip + (process.env.ADMIN_SECRET || 'salt')).digest('hex').slice(0, 16);
@@ -59,12 +60,22 @@ export async function GET(
 
     // Clean 302 redirect to the product's affiliate URL. Les colonnes
     // affiliate_url_fr/es/com existent dans le schéma (chantier multi-marché
-    // antérieur) mais ne sont pas encore renseignées — on reste sur
-    // affiliate_url tant qu'elles ne le sont pas, avec fallback naturel.
-    const marketId = req.cookies.get('opf_market')?.value;
+    // antérieur, 'com' = suffixe DB historique du marché anglophone 'uk')
+    // mais ne sont pas encore renseignées — on reste sur affiliate_url tant
+    // qu'elles ne le sont pas, avec fallback naturel.
+    //
+    // Audit 21/09 (bug HIGH corrigé) : utilisait avant le cookie visiteur
+    // opf_market, illisible dans la même requête qui vient de le poser —
+    // en pratique un fallback silencieux sur l'URL FR pour toute
+    // redirection qui suit une première visite. product.market est la
+    // source fiable : c'est le marché RÉEL du produit cliqué, disponible
+    // immédiatement, sans dépendre d'un cookie déjà posé par ailleurs.
+    const productMarket = isValidMarket((product as any).market)
+      ? (product as any).market
+      : DEFAULT_MARKET;
     const affiliateUrl =
-      (marketId === 'es' ? (product as any).affiliate_url_es : null) ??
-      (marketId === 'com' ? (product as any).affiliate_url_com : null) ??
+      (productMarket === 'es' ? (product as any).affiliate_url_es : null) ??
+      (productMarket === 'uk' ? (product as any).affiliate_url_com : null) ??
       (product as any).affiliate_url_fr ??
       product.affiliate_url ??
       '/';

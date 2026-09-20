@@ -28,8 +28,20 @@ export function getSupabase(): SupabaseClient {
 // Admin client (for server-side operations with elevated privileges)
 export function getSupabaseAdmin(): SupabaseClient {
   if (!_supabaseAdmin) {
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || getSupabaseAnonKey();
-    _supabaseAdmin = createClient(getSupabaseUrl(), serviceKey, {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceKey) {
+      // Audit 21/09 : repli silencieux sur la clé anon si la clé service
+      // role est absente. RLS bloque totalement ce rôle (Sprint 0) — un
+      // repli silencieux ne dégrade donc pas gracieusement, il transforme
+      // un problème de config en échecs RLS confus partout dans l'admin,
+      // difficiles à diagnostiquer. On garde le repli (pour ne jamais
+      // planter le build si la variable n'est pas encore injectée à ce
+      // stade) mais le signale désormais bien fort dans les logs serveur.
+      console.error(
+        '[supabase] SUPABASE_SERVICE_ROLE_KEY absente — repli sur la clé anon, RLS va bloquer la quasi-totalité des opérations admin.'
+      );
+    }
+    _supabaseAdmin = createClient(getSupabaseUrl(), serviceKey || getSupabaseAnonKey(), {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
@@ -65,8 +77,15 @@ export function generateSlug(name: string): string {
 }
 
 // Hash IP for privacy
+//
+// Audit 21/09 : erreur de précédence d'opérateurs — `+` se lie avant `||`,
+// donc l'expression se lisait (ip + process.env.ADMIN_SECRET) || 'salt'.
+// Avec ADMIN_SECRET absent, `ip + undefined` donne une chaîne non vide
+// (ex. "1.2.3.4undefined"), donc le fallback 'salt' ne se déclenchait
+// jamais — code mort, sans impact pratique (ADMIN_SECRET est toujours
+// défini en prod) mais corrigé pour que l'intention soit sans ambiguïté.
 function hashIp(ip: string): string {
-  return createHash('sha256').update(ip + process.env.ADMIN_SECRET || 'salt').digest('hex').slice(0, 16);
+  return createHash('sha256').update(ip + (process.env.ADMIN_SECRET || 'salt')).digest('hex').slice(0, 16);
 }
 
 // Get IP from request

@@ -2,16 +2,22 @@
  * OPF — Middleware V2
  * - Détecte le marché depuis le hostname
  * - Routing domaine : OPF = back-office uniquement, Tendpick = public uniquement
+ *
+ * Audit 21/09 : cette fonction renvoyait 'com' pour le marché anglophone —
+ * une valeur qui n'existe pas dans le type Market canonique ('fr'|'es'|'uk',
+ * lib/market.ts). Le cookie opf_market posé plus bas transportait donc une
+ * valeur invalide pour tout code qui la comparait à 'uk'. Corrigé pour
+ * utiliser la détection canonique partagée (lib/market-from-host.ts) — le
+ * rendu des pages ne dépend plus de ce cookie de toute façon (voir
+ * app/[slug]/page.tsx et app/api/go/[code]/route.ts), il reste posé pour
+ * un usage futur éventuel côté client, mais avec la bonne valeur désormais.
  */
 import { NextRequest, NextResponse } from 'next/server';
-
-type Market = 'fr' | 'es' | 'com';
+import { getMarketFromHost } from '@/lib/market-from-host';
+import type { Market } from '@/lib/market';
 
 function getMarket(host: string): Market {
-  const h = (host ?? '').split(':')[0].toLowerCase();
-  if (h.includes('tendpick.es')) return 'es';
-  if (h.includes('tendpick.com') && !h.includes('tendpick.fr')) return 'com';
-  return 'fr';
+  return getMarketFromHost(host);
 }
 
 function isOPFDomain(host: string): boolean {

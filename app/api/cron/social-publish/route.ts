@@ -43,6 +43,20 @@ export async function POST(req: NextRequest) {
   const processed: { id: string; status: 'sent' | 'failed'; results: unknown[] }[] = [];
 
   for (const post of (due || []) as ScheduledPostRow[]) {
+    // Audit 21/09 (bug MEDIUM corrigé) : réclamation atomique AVANT tout
+    // appel réseau sortant — si une autre exécution du cron a déjà
+    // réclamé ce post entre le SELECT ci-dessus et ici (chevauchement),
+    // cette UPDATE ne touche aucune ligne et on saute le post plutôt que
+    // de le publier une seconde fois.
+    const { data: claimed } = await sb
+      .from('scheduled_posts')
+      .update({ status: 'processing' })
+      .eq('id', post.id)
+      .eq('status', 'pending')
+      .select('id')
+      .single();
+    if (!claimed) continue;
+
     const market = isValidMarket(post.market) ? post.market : 'fr';
     const content = {
       market,
@@ -71,12 +85,14 @@ export async function POST(req: NextRequest) {
     }
 
     const finalStatus: 'sent' | 'failed' = results.every((r) => r.ok) ? 'sent' : 'failed';
-    // Transition conditionnée sur status='pending' encore actuel : si deux
-    // exécutions du cron se chevauchaient, la seconde écrase le même
-    // résultat plutôt que de republier (la boucle ci-dessus tourne quand
-    // même deux fois dans ce cas de figure rare — accepté vu le volume
-    // attendu, pas de verrou dédié pour cette v1).
-    await sb.from('scheduled_posts').update({ status: finalStatus, result: results }).eq('id', post.id).eq('status', 'pending');
+    // La ligne appartient exclusivement à cette exécution depuis la
+    // réclamation ci-dessus (status='processing') — .eq('status',
+    // 'processing') reste une ceinture-bretelles défensive plutôt qu'une
+    // nécessité stricte. Cas limite accepté : un crash/timeout de la
+    // requête entière entre la réclamation et cette écriture laisserait le
+    // post bloqué en 'processing' (à repasser manuellement en 'pending' le
+    // cas échéant) — préférable à une republication en double.
+    await sb.from('scheduled_posts').update({ status: finalStatus, result: results }).eq('id', post.id).eq('status', 'processing');
     processed.push({ id: post.id, status: finalStatus, results });
   }
 
