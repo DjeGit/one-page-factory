@@ -20,6 +20,14 @@ const ENV_ALLOWLIST = [
   'INVOICE_ISSUER_NAME', 'INVOICE_ISSUER_ADDRESS', 'INVOICE_ISSUER_REG_NUMBER',
   'INVOICE_ISSUER_VAT_NUMBER', 'INVOICE_ISSUER_EMAIL',
 
+  // ─── Brevo (capture de leads, ajoutée avant ce sprint mais absente de
+  //     cette liste blanche jusqu'ici — donc jamais transmise à Next.js par
+  //     PM2 en prod même si présente dans .env.local du serveur, à vérifier) ─
+  'BREVO_API_KEY', 'BREVO_LIST_ID', 'BREVO_LIST_ID_FR', 'BREVO_LIST_ID_ES', 'BREVO_LIST_ID_UK',
+
+  // ─── Module nurture email (rapport 18/09, étape 3) ──────────────────────
+  'NURTURE_LIST_ID_FR', 'NURTURE_LIST_ID_ES', 'NURTURE_LIST_ID_UK',
+
   // ─── Sprint 3 : registre d'intégrations — sources de données marché ────
   'KEEPA_API_KEY', 'DATAFORSEO_LOGIN', 'DATAFORSEO_PASSWORD',
   'AMAZON_CREATORS_CREDENTIAL_ID', 'AMAZON_CREATORS_CREDENTIAL_SECRET', 'AMAZON_AFFILIATE_TAG',
