@@ -18,13 +18,20 @@ interface ProductOption {
   slug: string;
 }
 
+interface SocialComposerProps {
+  /** Rafraîchit la liste des posts programmés après une programmation réussie. */
+  onScheduled?: () => void;
+}
+
 /**
  * Composeur de publication réelle multi-canal — remplace le TikTok Hub
  * (copier/coller manuel) par un vrai appel au registre Sprint 3 via
- * /api/social/publish. N'affiche que les canaux configurés ET activés
- * (double-gate cohérent avec le reste du registre).
+ * /api/social/publish, avec un choix Publier maintenant / Programmer (ce
+ * second cas passe par /api/social/schedule — voir ScheduledPostsList
+ * pour le suivi/l'annulation des posts programmés). N'affiche que les
+ * canaux configurés ET activés (double-gate cohérent avec le registre).
  */
-export default function SocialComposer() {
+export default function SocialComposer({ onScheduled }: SocialComposerProps) {
   const { market } = useMarket();
   const [channels, setChannels] = useState<IntegrationStatus[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -35,6 +42,9 @@ export default function SocialComposer() {
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<{ channelId: string; ok: boolean; message: string }[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState<'now' | 'schedule'>('now');
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +77,7 @@ export default function SocialComposer() {
   const handlePublish = async () => {
     setSubmitting(true);
     setResults(null);
+    setScheduleMessage(null);
     try {
       const res = await fetch('/api/social/publish', {
         method: 'POST',
@@ -81,6 +92,39 @@ export default function SocialComposer() {
       });
       const json = await res.json();
       setResults(json.results || [{ channelId: '?', ok: false, message: json.error || 'Erreur inconnue' }]);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSchedule = async () => {
+    setSubmitting(true);
+    setResults(null);
+    setScheduleMessage(null);
+    try {
+      const res = await fetch('/api/social/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channelIds: selected,
+          text,
+          link: link || undefined,
+          imageUrls: imageUrl ? [imageUrl] : undefined,
+          market,
+          scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setScheduleMessage(`Erreur : ${json.error ?? 'inconnue'}`);
+      } else {
+        setScheduleMessage(`Post programmé pour le ${new Date(json.scheduled_at).toLocaleString('fr-FR')}.`);
+        setText('');
+        setLink('');
+        setImageUrl('');
+        setScheduledAt('');
+        onScheduled?.();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -177,6 +221,38 @@ export default function SocialComposer() {
         />
       </div>
 
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Quand</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setMode('now')}
+            className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+              mode === 'now' ? 'bg-primary-50 border-primary-300 text-primary-700' : 'border-gray-200 text-gray-500'
+            }`}
+          >
+            Publier maintenant
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('schedule')}
+            className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+              mode === 'schedule' ? 'bg-primary-50 border-primary-300 text-primary-700' : 'border-gray-200 text-gray-500'
+            }`}
+          >
+            Programmer
+          </button>
+        </div>
+        {mode === 'schedule' && (
+          <input
+            type="datetime-local"
+            value={scheduledAt}
+            onChange={(e) => setScheduledAt(e.target.value)}
+            className="mt-3 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+          />
+        )}
+      </div>
+
       {results && (
         <div className="space-y-1">
           {results.map((r) => (
@@ -189,15 +265,30 @@ export default function SocialComposer() {
           ))}
         </div>
       )}
+      {scheduleMessage && (
+        <div className={`text-sm px-3 py-2 rounded-lg ${scheduleMessage.startsWith('Erreur') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+          {scheduleMessage}
+        </div>
+      )}
 
       <div className="flex justify-end">
-        <button
-          onClick={handlePublish}
-          disabled={submitting || selected.length === 0 || !text.trim()}
-          className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
-        >
-          {submitting ? 'Publication...' : `Publier sur ${selected.length || 0} canal(aux)`}
-        </button>
+        {mode === 'now' ? (
+          <button
+            onClick={handlePublish}
+            disabled={submitting || selected.length === 0 || !text.trim()}
+            className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+          >
+            {submitting ? 'Publication...' : `Publier sur ${selected.length || 0} canal(aux)`}
+          </button>
+        ) : (
+          <button
+            onClick={handleSchedule}
+            disabled={submitting || selected.length === 0 || !text.trim() || !scheduledAt}
+            className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors"
+          >
+            {submitting ? 'Programmation...' : `Programmer sur ${selected.length || 0} canal(aux)`}
+          </button>
+        )}
       </div>
     </div>
   );

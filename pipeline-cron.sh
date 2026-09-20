@@ -17,13 +17,18 @@
 #   5 */6 * * *    MARKET=es /var/www/one-page-factory/pipeline-cron.sh market-refresh >> /var/log/opf-market.log 2>&1
 #   10 */6 * * *   MARKET=uk /var/www/one-page-factory/pipeline-cron.sh market-refresh >> /var/log/opf-market.log 2>&1
 #   30 4 * * *     /var/www/one-page-factory/pipeline-cron.sh exchange-rates >> /var/log/opf-market.log 2>&1
+#   * * * * *      /var/www/one-page-factory/pipeline-cron.sh social-publish >> /var/log/opf-social.log 2>&1
 #
 # market-refresh et exchange-rates utilisent INTERNAL_CRON_SECRET (ou, à
 # défaut, PIPELINE_SECRET puis ADMIN_SECRET) — cf. .env.example.
 # market-refresh n'écrit rien si aucune source de données n'est activée
 # pour ce marché dans Admin > Paramètres > Intégrations. exchange-rates
 # alimente exchange_rates (Sprint 5, coût/gain UK en GBP) via
-# frankfurter.app, gratuit, sans clé.
+# frankfurter.app, gratuit, sans clé. social-publish (module de publication
+# programmée, 18/09) tourne toutes les minutes — c'est le prix à payer pour
+# qu'un post programmé à une heure précise parte à quelques dizaines de
+# secondes près ; il ne fait rien (retourne processed:0) tant qu'aucun post
+# n'est dû, donc pas de souci de charge à cette fréquence.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -127,8 +132,23 @@ for r in data.get('results', []):
 "
     ;;
 
+  social-publish)
+    curl -s -X POST "$SITE_URL/api/cron/social-publish" \
+      -H "Authorization: Bearer $CRON_SECRET" \
+      -H "Content-Type: application/json" \
+      | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+n = data.get('processed', 0)
+if n:
+    print('Posts published:', n)
+    for p in data.get('posts', []):
+        print(' -', p['id'], ':', p['status'])
+"
+    ;;
+
   *)
-    echo "Usage: $0 {run|optimize|discover|dry-run|market-refresh|exchange-rates}"
+    echo "Usage: $0 {run|optimize|discover|dry-run|market-refresh|exchange-rates|social-publish}"
     exit 1
     ;;
 esac
