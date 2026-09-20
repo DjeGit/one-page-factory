@@ -3,6 +3,7 @@ import type { Product, AnalyticsData, DashboardStats } from '@/types';
 import type { Market } from '@/lib/market';
 import { NextRequest } from 'next/server';
 import { createHash } from 'crypto';
+import { isBotUserAgent } from '@/lib/bot-detection';
 
 // Lazy singleton clients — created on first use so env vars are available
 let _supabase: SupabaseClient | null = null;
@@ -202,9 +203,13 @@ export async function deleteProduct(id: string): Promise<boolean> {
 // =====================
 
 export async function trackClick(productId: string, req: NextRequest): Promise<void> {
+  const userAgent = req.headers.get('user-agent') || null;
+  // Sprint 5 : un bot qui suit un lien /go/[code] (link-checker, crawler
+  // SEO) ne représente pas une intention d'achat — on ne le compte pas.
+  if (isBotUserAgent(userAgent)) return;
+
   const ip = getIp(req);
   const ipHash = hashIp(ip);
-  const userAgent = req.headers.get('user-agent') || null;
   const referer = req.headers.get('referer') || null;
 
   await supabaseAdmin.from('clicks').insert({
@@ -216,17 +221,27 @@ export async function trackClick(productId: string, req: NextRequest): Promise<v
 }
 
 export async function trackPageView(productId: string, req: NextRequest): Promise<void> {
+  const userAgent = req.headers.get('user-agent') || null;
+  // Sprint 5 (suite à la question de Jerome sur la fiabilité des vues) :
+  // deux filtres avant de compter une vue —
+  //  1. bots/crawlers connus (lib/bot-detection.ts) : jamais comptés.
+  //  2. déduplication IP+produit+jour, appliquée côté DB via l'upsert +
+  //     l'index unique de la migration 20260920000003 : un même visiteur
+  //     qui recharge la page plusieurs fois dans la journée ne compte que
+  //     pour une vue (il recompte le lendemain — c'est voulu, on mesure du
+  //     trafic, pas des visiteurs uniques all-time).
+  if (isBotUserAgent(userAgent)) return;
+
   const ip = getIp(req);
   const ipHash = hashIp(ip);
-  const userAgent = req.headers.get('user-agent') || null;
   const referer = req.headers.get('referer') || null;
 
-  await supabaseAdmin.from('page_views').insert({
-    product_id: productId,
-    ip_hash: ipHash,
-    user_agent: userAgent,
-    referer: referer,
-  });
+  await supabaseAdmin
+    .from('page_views')
+    .upsert(
+      { product_id: productId, ip_hash: ipHash, user_agent: userAgent, referer: referer },
+      { onConflict: 'product_id,ip_hash,viewed_date', ignoreDuplicates: true }
+    );
 }
 
 // market omis = agrégat tous marchés (compat pages publiques / anciens
