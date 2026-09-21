@@ -176,7 +176,7 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
           onChange={(e) => setText(e.target.value)}
           rows={4}
           placeholder="Le texte du post..."
-          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
         />
       </div>
 
@@ -185,7 +185,7 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
           <label className="block text-xs font-semibold text-gray-500 mb-1">Lien vers un produit</label>
           <select
             onChange={(e) => handleProductPick(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
             defaultValue=""
           >
             <option value="" disabled>
@@ -205,7 +205,7 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
             value={link}
             onChange={(e) => setLink(e.target.value)}
             placeholder="https://..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         </div>
       </div>
@@ -217,7 +217,7 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
           value={imageUrl}
           onChange={(e) => setImageUrl(e.target.value)}
           placeholder="https://..."
-          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+          className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
         />
       </div>
 
@@ -248,7 +248,7 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
             type="datetime-local"
             value={scheduledAt}
             onChange={(e) => setScheduledAt(e.target.value)}
-            className="mt-3 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="mt-3 px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         )}
       </div>

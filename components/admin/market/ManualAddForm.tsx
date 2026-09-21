@@ -132,7 +132,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
             required
             value={form.name}
             onChange={(e) => update('name', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         </div>
 
@@ -146,7 +146,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
             placeholder="https://..."
             value={form.affiliate_url}
             onChange={(e) => update('affiliate_url', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         </div>
 
@@ -156,7 +156,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
             value={form.description}
             onChange={(e) => update('description', e.target.value)}
             rows={2}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         </div>
 
@@ -167,7 +167,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
             step="0.01"
             value={form.price}
             onChange={(e) => update('price', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         </div>
 
@@ -177,7 +177,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
             type="url"
             value={form.image_url}
             onChange={(e) => update('image_url', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         </div>
 
@@ -190,7 +190,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
             step="0.01"
             value={form.cost_price}
             onChange={(e) => update('cost_price', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         </div>
 
@@ -201,7 +201,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
             step="0.1"
             value={form.commission_rate}
             onChange={(e) => update('commission_rate', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300"
           />
         </div>
 
