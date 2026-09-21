@@ -8,6 +8,7 @@ import MarketFlagsPicker from './MarketFlagsPicker';
 
 interface ContactFormModalProps {
   contact?: Contact | null; // présent = édition, absent = création
+  defaultType?: 'client' | 'fournisseur' | 'partenaire'; // catégorie pré-sélectionnée à la création (onglet actif du Répertoire)
   onClose: () => void;
   onSaved: (contact: Contact) => void;
 }
@@ -24,9 +25,13 @@ interface FormState {
   markets: Market[];
 }
 
-function initialState(contact?: Contact | null): FormState {
+function initialState(contact?: Contact | null, defaultType?: 'client' | 'fournisseur' | 'partenaire'): FormState {
+  const manualTypes = ['client', 'fournisseur', 'partenaire'] as const;
+  const contactType = contact && (manualTypes as readonly string[]).includes(contact.contact_type)
+    ? (contact.contact_type as 'client' | 'fournisseur' | 'partenaire')
+    : (defaultType ?? 'client');
   return {
-    contact_type: contact?.contact_type === 'fournisseur' ? 'fournisseur' : 'client',
+    contact_type: contactType,
     first_name: contact?.first_name ?? '',
     last_name: contact?.last_name ?? '',
     email: contact?.email ?? '',
@@ -38,9 +43,9 @@ function initialState(contact?: Contact | null): FormState {
   };
 }
 
-export default function ContactFormModal({ contact, onClose, onSaved }: ContactFormModalProps) {
+export default function ContactFormModal({ contact, defaultType, onClose, onSaved }: ContactFormModalProps) {
   const isEdit = !!contact;
-  const [form, setForm] = useState<FormState>(initialState(contact));
+  const [form, setForm] = useState<FormState>(initialState(contact, defaultType));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,7 +109,7 @@ export default function ContactFormModal({ contact, onClose, onSaved }: ContactF
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Type de contact</label>
             <div className="flex gap-2">
-              {(['client', 'fournisseur'] as const).map((t) => (
+              {(['client', 'fournisseur', 'partenaire'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -115,7 +120,7 @@ export default function ContactFormModal({ contact, onClose, onSaved }: ContactF
                       : 'border-gray-200 text-gray-500 hover:border-gray-300'
                   }`}
                 >
-                  {t === 'client' ? '🧑‍💼 Client' : '📦 Fournisseur'}
+                  {t === 'client' ? '🧑‍💼 Client' : t === 'fournisseur' ? '📦 Fournisseur' : '🤝 Partenaire'}
                 </button>
               ))}
             </div>

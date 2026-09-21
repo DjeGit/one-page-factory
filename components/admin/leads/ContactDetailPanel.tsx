@@ -1,8 +1,10 @@
 'use client';
 
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { MARKETS } from '@/lib/market';
-import type { Contact } from '@/types';
+import type { Contact, ContactEmail } from '@/types';
+import EmailComposeModal from './EmailComposeModal';
 
 interface ContactDetailPanelProps {
   contact: Contact;
@@ -15,6 +17,7 @@ const TYPE_LABELS: Record<string, string> = {
   lead: '📧 Lead capturé',
   client: '🧑‍💼 Client',
   fournisseur: '📦 Fournisseur',
+  partenaire: '🤝 Partenaire',
 };
 
 export default function ContactDetailPanel({ contact, onClose, onEdit, onDelete }: ContactDetailPanelProps) {
@@ -23,6 +26,29 @@ export default function ContactDetailPanel({ contact, onClose, onEdit, onDelete 
   const isManual = contact.contact_type !== 'lead';
 
   const markets = contact.markets?.length ? contact.markets : contact.market ? [contact.market] : [];
+
+  const [showCompose, setShowCompose] = useState(false);
+  const [emailHistory, setEmailHistory] = useState<ContactEmail[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const fetchHistory = useCallback(async () => {
+    if (!contact.email) return;
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/leads/${contact.id}/send-email`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setEmailHistory(Array.isArray(data) ? data : []);
+    } catch {
+      // silencieux
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [contact.id, contact.email]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -128,15 +154,15 @@ export default function ContactDetailPanel({ contact, onClose, onEdit, onDelete 
           {/* Actions */}
           <div className="flex flex-wrap gap-3 pt-2 border-t border-gray-100">
             {contact.email ? (
-              <a
-                href={`mailto:${contact.email}`}
+              <button
+                onClick={() => setShowCompose(true)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
                 Envoyer un mail
-              </a>
+              </button>
             ) : (
               <span
                 title="Aucun email renseigné pour ce contact"
@@ -166,13 +192,48 @@ export default function ContactDetailPanel({ contact, onClose, onEdit, onDelete 
               Supprimer
             </button>
           </div>
-          {contact.email && (
-            <p className="text-xs text-gray-400">
-              Ouvre votre client mail par défaut — l&apos;envoi depuis une boîte mail dédiée sera configuré plus tard.
-            </p>
+
+          {/* Historique des emails envoyés */}
+          {contact.email && (emailHistory.length > 0 || historyLoading) && (
+            <div>
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                Emails envoyés
+              </h3>
+              {historyLoading ? (
+                <p className="text-sm text-gray-400">Chargement...</p>
+              ) : (
+                <div className="space-y-2">
+                  {emailHistory.map((mail) => (
+                    <div key={mail.id} className="flex items-start justify-between gap-3 px-3 py-2.5 rounded-xl bg-gray-50 border border-gray-100">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{mail.subject}</p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(mail.created_at).toLocaleDateString('fr-FR', {
+                            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                      <span className={`flex-shrink-0 text-xs font-semibold px-2 py-1 rounded-full ${
+                        mail.status === 'sent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {mail.status === 'sent' ? 'Envoyé' : 'Échec'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
+
+      {showCompose && (
+        <EmailComposeModal
+          contact={contact}
+          onClose={() => setShowCompose(false)}
+          onSent={() => { setShowCompose(false); fetchHistory(); }}
+        />
+      )}
     </div>
   );
 }

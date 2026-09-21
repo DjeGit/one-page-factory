@@ -25,13 +25,27 @@ const TYPE_BADGES: Record<string, string> = {
   lead: 'bg-gray-100 text-gray-600',
   client: 'bg-green-100 text-green-700',
   fournisseur: 'bg-orange-100 text-orange-700',
+  partenaire: 'bg-purple-100 text-purple-700',
 };
 
 const TYPE_LABELS: Record<string, string> = {
   lead: 'Lead',
   client: 'Client',
   fournisseur: 'Fournisseur',
+  partenaire: 'Partenaire',
 };
+
+// Onglets du Répertoire — "Tous" et "Leads capturés" en plus des 3
+// catégories manuelles demandées (client / fournisseur / partenaire) :
+// on ne retire pas l'accès aux leads auto-capturés ni à la vue globale,
+// on met juste les 3 catégories manuelles en avant comme onglets dédiés.
+const TABS: { key: string; label: string; creatable: 'client' | 'fournisseur' | 'partenaire' | null }[] = [
+  { key: '', label: 'Tous', creatable: 'client' },
+  { key: 'lead', label: '📧 Leads capturés', creatable: null },
+  { key: 'client', label: '🧑\u200d💼 Clients', creatable: 'client' },
+  { key: 'fournisseur', label: '📦 Pro / Fournisseurs', creatable: 'fournisseur' },
+  { key: 'partenaire', label: '🤝 Partenaires', creatable: 'partenaire' },
+];
 
 export default function LeadsManager({ products }: LeadsManagerProps) {
   const searchParams = useSearchParams();
@@ -146,12 +160,12 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
       <div className="flex items-center justify-between mb-8 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-black text-gray-900 flex items-center gap-3">
-            Leads &amp; Emails
+            Contacts
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-primary-100 text-primary-700">
               {stats.total}
             </span>
           </h1>
-          <p className="text-gray-500 mt-1">Répertoire de vos leads, clients et fournisseurs</p>
+          <p className="text-gray-500 mt-1">Répertoire de vos leads, clients, fournisseurs et partenaires</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -191,6 +205,23 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
         ))}
       </div>
 
+      {/* Onglets par catégorie */}
+      <div className="mb-5 flex items-center gap-1.5 flex-wrap border-b border-gray-200 pb-px">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => { setFilterType(tab.key); setPage(0); }}
+            className={`px-4 py-2.5 text-sm font-semibold rounded-t-xl border-b-2 transition-colors ${
+              filterType === tab.key
+                ? 'border-primary-600 text-primary-700 bg-primary-50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filters */}
       <div className="mb-5 flex items-center gap-3 flex-wrap">
         <select
@@ -202,16 +233,6 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
           {MARKETS.map((m) => (
             <option key={m.code} value={m.code}>{m.flag} {m.label}</option>
           ))}
-        </select>
-        <select
-          value={filterType}
-          onChange={(e) => { setFilterType(e.target.value); setPage(0); }}
-          className="px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 text-sm"
-        >
-          <option value="">Tous les types</option>
-          <option value="lead">Leads capturés</option>
-          <option value="client">Clients</option>
-          <option value="fournisseur">Fournisseurs</option>
         </select>
         <select
           value={filterProductId}
@@ -346,6 +367,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
 
       {showForm && (
         <ContactFormModal
+          defaultType={TABS.find((t) => t.key === filterType)?.creatable ?? 'client'}
           onClose={() => setShowForm(false)}
           onSaved={() => { setShowForm(false); fetchContacts(); }}
         />

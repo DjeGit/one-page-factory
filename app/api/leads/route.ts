@@ -63,7 +63,7 @@ async function syncToBrevo(email: string, market: string, productName?: string) 
 }
 
 // GET /api/leads?market=fr&product_id=...&contact_type=client — filtres
-// optionnels utilisés par l'écran Admin > Leads & Emails (Répertoire).
+// optionnels utilisés par l'écran Admin > Contacts (Répertoire).
 // marketFilter matche soit market (marché "principal", leads auto-capturés)
 // soit markets[] (contact manuel rattaché à plusieurs marchés à la fois).
 export async function GET(req: NextRequest) {
@@ -95,8 +95,8 @@ export async function GET(req: NextRequest) {
 // sont exigés.
 async function createManualContact(sb: ReturnType<typeof getSupabaseAdmin>, body: Record<string, unknown>) {
   const contactType = body.contact_type;
-  if (contactType !== 'client' && contactType !== 'fournisseur') {
-    return NextResponse.json({ error: 'Type de contact invalide (client ou fournisseur)' }, { status: 400 });
+  if (contactType !== 'client' && contactType !== 'fournisseur' && contactType !== 'partenaire') {
+    return NextResponse.json({ error: 'Type de contact invalide (client, fournisseur ou partenaire)' }, { status: 400 });
   }
 
   const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null;

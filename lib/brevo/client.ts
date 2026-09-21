@@ -64,3 +64,47 @@ export async function removeBrevoContactFromList(email: string, listId: number):
     return { ok: false, status: 0 };
   }
 }
+
+export interface SendTransactionalEmailParams {
+  to: string;
+  subject: string;
+  htmlContent: string;
+  senderEmail?: string;
+  senderName?: string;
+  replyTo?: string;
+}
+
+/**
+ * Envoie un email transactionnel via Brevo (POST /smtp/email). Utilisé
+ * par l'admin pour écrire à un contact du Répertoire (client, fournisseur,
+ * partenaire) depuis l'app plutôt que via mailto: — voir
+ * app/api/leads/[id]/send-email/route.ts. Expéditeur par défaut :
+ * contact@tendpick.com, authentifié (DKIM+DMARC) et vérifié côté Brevo
+ * depuis le 22/09. Contrairement à upsertBrevoContact/removeBrevoContactFromList,
+ * lève une exception en cas d'échec plutôt que de retourner { ok: false }
+ * silencieusement : ici l'appelant doit savoir si l'email est réellement
+ * parti pour l'enregistrer correctement dans contact_emails (status
+ * 'sent' vs 'failed').
+ */
+export async function sendTransactionalEmail(params: SendTransactionalEmailParams): Promise<void> {
+  if (!isBrevoConfigured()) {
+    throw new Error('BREVO_API_KEY non configurée');
+  }
+  const senderEmail = params.senderEmail ?? 'contact@tendpick.com';
+  const senderName = params.senderName ?? 'Tendpick';
+  const res = await fetch(`${BREVO_BASE}/smtp/email`, {
+    method: 'POST',
+    headers: { 'api-key': getApiKey(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender: { name: senderName, email: senderEmail },
+      to: [{ email: params.to }],
+      ...(params.replyTo ? { replyTo: { email: params.replyTo } } : {}),
+      subject: params.subject,
+      htmlContent: params.htmlContent,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => res.statusText);
+    throw new Error(`[Brevo] Échec de l'envoi (${res.status}) : ${errText}`);
+  }
+}

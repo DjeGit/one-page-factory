@@ -159,7 +159,7 @@ export interface DashboardStats {
   total_views: number;
 }
 
-export type ContactType = 'lead' | 'client' | 'fournisseur';
+export type ContactType = 'lead' | 'client' | 'fournisseur' | 'partenaire';
 
 /**
  * Une ligne de la table email_leads — soit un lead capturé automatiquement
@@ -185,6 +185,24 @@ export interface Contact {
   source_slug: string | null;
   created_at: string;
   products?: { name: string; slug: string } | null;
+}
+
+/**
+ * Une ligne de contact_emails — historique des emails envoyés manuellement
+ * à un contact du Répertoire depuis l'admin (distinct des séquences de
+ * relance automatiques du module nurture, qui ne passent pas par cette
+ * table).
+ */
+export interface ContactEmail {
+  id: string;
+  contact_id: string;
+  sender_email: string;
+  recipient_email: string;
+  subject: string;
+  body_html: string;
+  status: 'sent' | 'failed';
+  error: string | null;
+  created_at: string;
 }
 
 export type InvoiceType = 'invoice' | 'credit_note';

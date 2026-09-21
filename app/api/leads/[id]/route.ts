@@ -30,8 +30,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: 'Sélectionnez au moins un marché' }, { status: 400 });
   }
 
-  if (body.contact_type !== 'client' && body.contact_type !== 'fournisseur') {
-    return NextResponse.json({ error: 'Type de contact invalide (client ou fournisseur)' }, { status: 400 });
+  if (body.contact_type !== 'client' && body.contact_type !== 'fournisseur' && body.contact_type !== 'partenaire') {
+    return NextResponse.json({ error: 'Type de contact invalide (client, fournisseur ou partenaire)' }, { status: 400 });
   }
 
   const { data, error } = await sb
