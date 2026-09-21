@@ -134,7 +134,7 @@ export default function ContactFormModal({ contact, defaultType, onClose, onSave
                 type="text"
                 value={form.first_name}
                 onChange={(e) => set('first_name', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400"
               />
             </div>
             <div>
@@ -143,7 +143,7 @@ export default function ContactFormModal({ contact, defaultType, onClose, onSave
                 type="text"
                 value={form.last_name}
                 onChange={(e) => set('last_name', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400"
               />
             </div>
           </div>
@@ -157,7 +157,7 @@ export default function ContactFormModal({ contact, defaultType, onClose, onSave
                 value={form.email}
                 onChange={(e) => set('email', e.target.value)}
                 placeholder="contact@exemple.com"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400"
               />
             </div>
             <div>
@@ -167,7 +167,7 @@ export default function ContactFormModal({ contact, defaultType, onClose, onSave
                 value={form.phone}
                 onChange={(e) => set('phone', e.target.value)}
                 placeholder="+33 6 12 34 56 78"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400"
               />
             </div>
           </div>
@@ -181,7 +181,7 @@ export default function ContactFormModal({ contact, defaultType, onClose, onSave
                 type="text"
                 value={form.company}
                 onChange={(e) => set('company', e.target.value)}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400"
               />
             </div>
             <div>
@@ -191,7 +191,7 @@ export default function ContactFormModal({ contact, defaultType, onClose, onSave
                 value={form.website}
                 onChange={(e) => set('website', e.target.value)}
                 placeholder="https://…"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400"
               />
             </div>
           </div>
@@ -212,7 +212,7 @@ export default function ContactFormModal({ contact, defaultType, onClose, onSave
               onChange={(e) => set('notes', e.target.value)}
               rows={3}
               placeholder="Notes internes sur ce contact…"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400 resize-none"
             />
           </div>
 

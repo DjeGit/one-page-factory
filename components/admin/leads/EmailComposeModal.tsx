@@ -72,7 +72,7 @@ export default function EmailComposeModal({ contact, onClose, onSent }: EmailCom
               onChange={(e) => setSubject(e.target.value)}
               required
               placeholder="Objet du message"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400"
             />
           </div>
 
@@ -84,7 +84,7 @@ export default function EmailComposeModal({ contact, onClose, onSent }: EmailCom
               required
               rows={8}
               placeholder="Votre message…"
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 placeholder-gray-400 resize-none"
             />
           </div>
 
