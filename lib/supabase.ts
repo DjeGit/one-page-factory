@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import type { Product, AnalyticsData, DashboardStats } from '@/types';
+import type { Category, Product, AnalyticsData, DashboardStats } from '@/types';
 import type { Market } from '@/lib/market';
 import { NextRequest } from 'next/server';
 import { createHash } from 'crypto';
@@ -154,6 +154,86 @@ export async function getAllProducts(market?: Market): Promise<Product[]> {
 
   if (error || !data) return [];
   return data as Product[];
+}
+
+// Categories (23/09) — liste complete triee par sort_order, utilisee par
+// l'admin (formulaire produit) et par la nav publique.
+export async function getCategories(): Promise<Category[]> {
+  const { data, error } = await supabaseAdmin
+    .from('categories')
+    .select('*')
+    .order('sort_order', { ascending: true });
+
+  if (error || !data) return [];
+  return data as Category[];
+}
+
+export async function getCategoryBySlug(slug: string): Promise<Category | null> {
+  const { data, error } = await supabaseAdmin
+    .from('categories')
+    .select('*')
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as Category;
+}
+
+// Produits actifs d'une categorie pour un marche donne — page publique
+// /c/[slug].
+export async function getActiveProductsByCategory(categoryId: string, market: Market): Promise<Product[]> {
+  const { data, error } = await supabaseAdmin
+    .from('products')
+    .select('*')
+    .eq('category_id', categoryId)
+    .eq('market', market)
+    .eq('active', true)
+    .order('updated_at', { ascending: false });
+
+  if (error || !data) return [];
+  return data as Product[];
+}
+
+export async function createCategory(categoryData: Partial<Category> & { slug: string; name_fr: string; name_es: string; name_uk: string }): Promise<Category | null> {
+  const { data, error } = await supabaseAdmin
+    .from('categories')
+    .insert(categoryData)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating category:', error);
+    return null;
+  }
+  return data as Category;
+}
+
+export async function updateCategory(id: string, categoryData: Partial<Category>): Promise<Category | null> {
+  const { data, error } = await supabaseAdmin
+    .from('categories')
+    .update(categoryData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating category:', error);
+    return null;
+  }
+  return data as Category;
+}
+
+export async function deleteCategory(id: string): Promise<boolean> {
+  const { error } = await supabaseAdmin
+    .from('categories')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting category:', error);
+    return false;
+  }
+  return true;
 }
 
 export async function createProduct(productData: Partial<Product> & { market: Market }): Promise<Product | null> {

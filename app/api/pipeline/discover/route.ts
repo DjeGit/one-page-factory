@@ -76,6 +76,15 @@ export async function POST(req: NextRequest) {
   const imported = [];
   const skipped = [];
 
+  // Categories (23/09) — tout import automatique Amazon va par defaut
+  // dans "Best of Amazon" ; la curation fine (deplacer un produit vers
+  // Tech/Mode/etc.) se fait ensuite a la main dans l'admin.
+  const { data: defaultCategory } = await sb
+    .from('categories')
+    .select('id')
+    .eq('slug', 'best-of-amazon')
+    .maybeSingle();
+
   for (const { signal, score } of toImport) {
     const slug = generateSlug(signal.name);
     const { data: existing } = await sb.from('products').select('id').eq('slug', slug).maybeSingle();
@@ -98,6 +107,7 @@ export async function POST(req: NextRequest) {
         }`.trim(),
         market,
         product_source: 'auto_discovered',
+        category_id: defaultCategory?.id ?? null,
         active: false,
       })
       .select()

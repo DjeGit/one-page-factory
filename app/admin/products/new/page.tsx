@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import ProductForm from '@/components/admin/ProductForm';
+import { getCategories } from '@/lib/supabase';
 
 interface Props {
   searchParams: { template?: string };
 }
 
-export default function NewProductPage({ searchParams }: Props) {
+export default async function NewProductPage({ searchParams }: Props) {
   const initialTemplateId = searchParams.template || undefined;
+  const categories = await getCategories();
 
   return (
     <div className="p-8">
@@ -29,7 +31,7 @@ export default function NewProductPage({ searchParams }: Props) {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-8">
-        <ProductForm mode="create" initialTemplateId={initialTemplateId} />
+        <ProductForm mode="create" initialTemplateId={initialTemplateId} categories={categories} />
       </div>
     </div>
   );

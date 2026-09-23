@@ -3,13 +3,14 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import GenerateButton from './GenerateButton';
-import type { Product, GeneratedContent } from '@/types';
+import type { Product, GeneratedContent, Category } from '@/types';
 import { TEMPLATES } from '@/lib/templates';
 
 interface ProductFormProps {
   product?: Product;
   mode: 'create' | 'edit';
   initialTemplateId?: string;
+  categories?: Category[];
 }
 
 function isValidJson(str: string): boolean {
@@ -17,7 +18,7 @@ function isValidJson(str: string): boolean {
   try { JSON.parse(str); return true; } catch { return false; }
 }
 
-export default function ProductForm({ product, mode, initialTemplateId }: ProductFormProps) {
+export default function ProductForm({ product, mode, initialTemplateId, categories = [] }: ProductFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export default function ProductForm({ product, mode, initialTemplateId }: Produc
     image_url: product?.image_url || '',
     active: product?.active ?? true,
     slug: product?.slug || '',
+    category_id: product?.category_id || '',
     hero_title: product?.hero_title || '',
     hero_subtitle: product?.hero_subtitle || '',
     pain_points: product?.pain_points ? JSON.stringify(product.pain_points, null, 2) : '[]',
@@ -112,6 +114,7 @@ export default function ProductForm({ product, mode, initialTemplateId }: Produc
         image_url: form.image_url || null,
         active: form.active,
         slug: form.slug || undefined,
+        category_id: form.category_id || null,
         hero_title: form.hero_title || null,
         hero_subtitle: form.hero_subtitle || null,
         pain_points: painPoints,
@@ -228,6 +231,22 @@ export default function ProductForm({ product, mode, initialTemplateId }: Produc
               />
               <p className="text-xs text-gray-400 mt-1">Laissez vide pour auto-générer</p>
             </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Catégorie</label>
+            <select
+              value={form.category_id}
+              onChange={(e) => handleChange('category_id', e.target.value)}
+              className={inputClass}
+            >
+              <option value="">— Aucune catégorie —</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.icon ? `${cat.icon} ` : ''}{cat.name_fr}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

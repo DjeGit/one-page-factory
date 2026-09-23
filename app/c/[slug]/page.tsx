@@ -1,37 +1,51 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { getSupabaseAdmin, getCategories } from '@/lib/supabase';
-import type { Product } from '@/types';
+import { headers } from 'next/headers';
+import { notFound } from 'next/navigation';
+import { getCategoryBySlug, getActiveProductsByCategory, getCategories } from '@/lib/supabase';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
+import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Catalogue produits — Tendpick',
-  description: 'Découvrez tous les produits sélectionnés par Tendpick : les meilleures ventes Amazon avec des fiches détaillées.',
-};
-
-async function getAllActive(): Promise<Product[]> {
-  try {
-    const sb = getSupabaseAdmin();
-    const { data } = await sb
-      .from('products')
-      .select('*')
-      .eq('active', true)
-      .order('updated_at', { ascending: false });
-    return (data as Product[]) || [];
-  } catch {
-    return [];
-  }
+interface Props {
+  params: { slug: string };
 }
 
-export default async function ProduitsPage() {
-  const [products, categories] = await Promise.all([getAllActive(), getCategories()]);
+function categoryName(category: { name_fr: string; name_es: string; name_uk: string }, market: string): string {
+  if (market === 'es') return category.name_es;
+  if (market === 'uk') return category.name_uk;
+  return category.name_fr;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const category = await getCategoryBySlug(params.slug);
+  if (!category) return {};
+  const host = headers().get('host');
+  const market = getMarketFromHost(host);
+  const name = categoryName(category, market);
+  return {
+    title: `${name} — Tendpick`,
+    description: `Découvrez notre sélection ${name} sur Tendpick.`,
+  };
+}
+
+export default async function CategoryPage({ params }: Props) {
+  const category = await getCategoryBySlug(params.slug);
+  if (!category) notFound();
+
+  const host = headers().get('host');
+  const market = getMarketFromHost(host);
+  const [products, allCategories] = await Promise.all([
+    getActiveProductsByCategory(category.id, market),
+    getCategories(),
+  ]);
+
+  const name = categoryName(category, market);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-
       {/* Navigation */}
       <header className="border-b border-white/10 sticky top-0 z-50 bg-gray-950/95 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -40,23 +54,29 @@ export default async function ProduitsPage() {
             <span className="bg-gradient-to-r from-violet-400 to-amber-400 bg-clip-text text-transparent">Tendpick</span>
           </Link>
           <nav className="flex items-center gap-6">
-            <span className="text-sm text-violet-400 font-medium hidden sm:block">Catalogue</span>
+            <Link href="/produits" className="text-sm text-gray-400 hover:text-white transition-colors hidden sm:block">
+              Catalogue
+            </Link>
           </nav>
         </div>
       </header>
 
       {/* Category chips */}
-      {categories.length > 0 && (
+      {allCategories.length > 1 && (
         <div className="border-b border-white/10 bg-gray-950/60">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-2">
-            {categories.map((c) => (
+            {allCategories.map((c) => (
               <Link
                 key={c.id}
                 href={`/c/${c.slug}`}
-                className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-white/10 text-gray-400 hover:text-white hover:border-white/30"
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                  c.slug === category.slug
+                    ? 'bg-violet-500/20 border-violet-500/50 text-violet-300'
+                    : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'
+                }`}
               >
                 {c.icon ? `${c.icon} ` : ''}
-                {c.name_fr}
+                {categoryName(c, market)}
               </Link>
             ))}
           </div>
@@ -66,20 +86,21 @@ export default async function ProduitsPage() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-10">
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3">
-            Notre sélection
+            {category.icon ? `${category.icon} ` : ''}
+            {name}
           </h1>
           <p className="text-gray-400">
             {products.length > 0
-              ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''} — mis à jour chaque semaine`
-              : 'Nouveaux produits bientôt disponibles'}
+              ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''}`
+              : 'Nouveaux produits bientôt disponibles dans cette catégorie'}
           </p>
         </div>
 
         {products.length === 0 ? (
           <div className="text-center py-24 text-gray-500">
-            <div className="text-5xl mb-4">📦</div>
-            <p className="text-lg">Première sélection en cours de préparation…</p>
-            <p className="text-sm mt-2">Revenez dans quelques heures !</p>
+            <div className="text-5xl mb-4">{category.icon || '📦'}</div>
+            <p className="text-lg">Sélection en cours de préparation…</p>
+            <p className="text-sm mt-2">Revenez dans quelques jours !</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">

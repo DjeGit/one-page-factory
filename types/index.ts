@@ -26,6 +26,17 @@ export interface Testimonial {
   avatar?: string;
 }
 
+export interface Category {
+  id: string;
+  slug: string;
+  name_fr: string;
+  name_es: string;
+  name_uk: string;
+  icon: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -78,6 +89,10 @@ export interface Product {
   source_product_ref?: string | null; // lien optionnel vers le même produit physique sur un autre marché
   product_source?: 'auto_discovered' | 'manual_affiliate' | 'own_product' | null;
 
+  // Categories (23/09) — une categorie par produit.
+  category_id?: string | null;
+  category?: Category | null; // jointure optionnelle, remplie par getAllProducts/getProductBySlug
+
   // Coût vs gain par produit (Sprint 5, colonnes préparées en Sprint 1)
   cost_price?: number | null;
   ad_spend_allocated?: number | null;
@@ -98,6 +113,7 @@ export interface ProductFormData {
   image_url: string;
   active: boolean;
   market?: Market;
+  category_id?: string | null;
   hero_title: string;
   hero_subtitle: string;
   pain_points: PainPoint[];

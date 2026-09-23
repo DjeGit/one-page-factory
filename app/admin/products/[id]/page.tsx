@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getProductById } from '@/lib/supabase';
+import { getProductById, getCategories } from '@/lib/supabase';
 import ProductForm from '@/components/admin/ProductForm';
 
 interface Props {
@@ -13,6 +13,8 @@ export default async function EditProductPage({ params }: Props) {
   if (!product) {
     notFound();
   }
+
+  const categories = await getCategories();
 
   return (
     <div className="p-8">
@@ -71,7 +73,7 @@ export default async function EditProductPage({ params }: Props) {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-8">
-        <ProductForm mode="edit" product={product} />
+        <ProductForm mode="edit" product={product} categories={categories} />
       </div>
     </div>
   );
