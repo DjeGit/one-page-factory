@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
     const content = await generateProductContent(
       body.description,
       body.name,
-      body.price
+      body.price,
+      body.market || 'fr'
     );
 
     return NextResponse.json(content);

@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import type { GeneratedContent } from '@/types';
+import type { Market } from '@/lib/market';
 
 interface GenerateButtonProps {
   name: string;
   description: string;
   price?: number | null;
+  market?: Market;
   onGenerated: (content: GeneratedContent) => void;
   disabled?: boolean;
 }
@@ -15,6 +17,7 @@ export default function GenerateButton({
   name,
   description,
   price,
+  market,
   onGenerated,
   disabled,
 }: GenerateButtonProps) {
@@ -34,7 +37,7 @@ export default function GenerateButton({
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, description, price }),
+        body: JSON.stringify({ name, description, price, market: market || 'fr' }),
       });
 
       if (!res.ok) {

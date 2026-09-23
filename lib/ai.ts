@@ -7,23 +7,60 @@
  */
 import OpenAI from 'openai';
 import type { GeneratedContent } from '@/types';
+import type { Market } from '@/lib/market';
 
 // ─── Shared prompt ───────────────────────────────────────────────────────────
+
+// Langue et repères culturels par marché — corrige le bug où tout le
+// contenu genere (y compris pour .es et le marche anglophone) sortait
+// systematiquement en francais avec des temoignages "Marie L., Lyon"
+// quel que soit le marche du produit (trouve le 23/09/2026).
+const LANGUAGE_LABELS: Record<Market, string> = {
+  fr: 'français',
+  es: 'espagnol (español, castillan)',
+  uk: 'anglais (English, ton UK/international)',
+};
+
+const TESTIMONIAL_LOCALES: Record<Market, { name: string; location: string }[]> = {
+  fr: [
+    { name: 'Marie L.', location: 'Lyon' },
+    { name: 'Thomas B.', location: 'Paris' },
+    { name: 'Sophie M.', location: 'Bordeaux' },
+  ],
+  es: [
+    { name: 'María L.', location: 'Madrid' },
+    { name: 'Carlos B.', location: 'Barcelona' },
+    { name: 'Sofía M.', location: 'Valencia' },
+  ],
+  uk: [
+    { name: 'Emma L.', location: 'London' },
+    { name: 'James B.', location: 'Manchester' },
+    { name: 'Sophie M.', location: 'Bristol' },
+  ],
+};
 
 export function buildContentPrompt(
   productName: string,
   productDescription: string,
-  price?: number | null
+  price?: number | null,
+  market: Market = 'fr'
 ): string {
   const priceContext = price ? `Le produit coûte ${price}€.` : '';
+  const lang = LANGUAGE_LABELS[market] || LANGUAGE_LABELS.fr;
+  const [t1, t2, t3] = TESTIMONIAL_LOCALES[market] || TESTIMONIAL_LOCALES.fr;
   return `Tu es un expert en copywriting de conversion et en marketing d'affiliation.
-Génère du contenu marketing percutant en français pour la page de vente suivante.
+Génère du contenu marketing percutant en ${lang} pour la page de vente suivante.
+IMPORTANT : toutes les valeurs textuelles du JSON (titres, descriptions, FAQ,
+témoignages, meta) doivent être rédigées en ${lang}, y compris les prénoms et
+villes des témoignages (utilise des prénoms et villes crédibles pour ce marché,
+par exemple ${t1.name} (${t1.location}), ${t2.name} (${t2.location}) — adapte,
+n'utilise pas forcément ces noms exacts).
 
 Produit : ${productName}
 Description : ${productDescription}
 ${priceContext}
 
-Génère un JSON avec exactement cette structure (tout en français) :
+Génère un JSON avec exactement cette structure (tout en ${lang}) :
 
 {
   "hero_title": "Titre accrocheur et percutant (max 80 caractères), qui parle directement au problème du client",
@@ -49,15 +86,16 @@ Génère un JSON avec exactement cette structure (tout en français) :
   ],
   "tiktok_script": "Script TikTok court et viral (30 secondes max) : Hook + Problème + Solution + CTA. Commence par une phrase choc.",
   "testimonials": [
-    { "name": "Marie L.", "location": "Lyon", "rating": 5, "text": "Témoignage réaliste et enthousiaste (2-3 phrases) avec des détails spécifiques", "date": "il y a 3 jours" },
-    { "name": "Thomas B.", "location": "Paris", "rating": 5, "text": "Témoignage différent avec d'autres bénéfices mentionnés", "date": "il y a 1 semaine" },
-    { "name": "Sophie M.", "location": "Bordeaux", "rating": 5, "text": "Témoignage d'une personne sceptique au départ qui a été convaincue", "date": "il y a 2 semaines" }
+    { "name": "${t1.name}", "location": "${t1.location}", "rating": 5, "text": "Témoignage réaliste et enthousiaste (2-3 phrases, EN ${lang}) avec des détails spécifiques", "date": "il y a 3 jours (traduit en ${lang})" },
+    { "name": "${t2.name}", "location": "${t2.location}", "rating": 5, "text": "Témoignage différent avec d'autres bénéfices mentionnés (EN ${lang})", "date": "il y a 1 semaine (traduit en ${lang})" },
+    { "name": "${t3.name}", "location": "${t3.location}", "rating": 5, "text": "Témoignage d'une personne sceptique au départ qui a été convaincue (EN ${lang})", "date": "il y a 2 semaines (traduit en ${lang})" }
   ],
   "meta_title": "Titre SEO optimisé (max 60 caractères)",
   "meta_description": "Description meta pour le SEO (max 155 caractères), avec call-to-action"
 }
 
-IMPORTANT: Retourne uniquement le JSON valide, sans markdown ni texte supplémentaire.`;
+IMPORTANT: Retourne uniquement le JSON valide, sans markdown ni texte supplémentaire.
+RAPPEL: le contenu doit être entièrement en ${lang}, pas en français si ${lang} n'est pas le français.`;
 }
 
 // ─── Gemini 2.5 Flash (via OpenAI-compatible endpoint) ───────────────────────
@@ -206,9 +244,10 @@ function parseAndValidate(content: string, productName: string, productDescripti
 export async function generateProductContent(
   productDescription: string,
   productName: string,
-  price?: number | null
+  price?: number | null,
+  market: Market = 'fr'
 ): Promise<GeneratedContent & { _provider: string }> {
-  const prompt = buildContentPrompt(productName, productDescription, price);
+  const prompt = buildContentPrompt(productName, productDescription, price, market);
   const provider = getActiveProvider();
 
   try {

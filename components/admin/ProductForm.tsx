@@ -387,6 +387,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
               name={form.name}
               description={form.description}
               price={form.price ? parseFloat(form.price) : null}
+              market={product?.market || 'fr'}
               onGenerated={handleGenerated}
               disabled={!form.name || !form.description}
             />
@@ -494,6 +495,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
               name={form.name}
               description={form.description}
               price={form.price ? parseFloat(form.price) : null}
+              market={product?.market || 'fr'}
               onGenerated={handleGenerated}
               disabled={!form.name || !form.description}
             />

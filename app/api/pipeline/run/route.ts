@@ -50,7 +50,7 @@ async function stepGenerate(maxProducts: number) {
   // Products with no hero_title = no AI content yet
   const { data: products } = await sb
     .from('products')
-    .select('id, name, description, price')
+    .select('id, name, description, price, market')
     .is('hero_title', null)
     .eq('active', false)
     .limit(maxProducts);
@@ -65,7 +65,8 @@ async function stepGenerate(maxProducts: number) {
       const content = await generateProductContent(
         p.description || p.name,
         p.name,
-        p.price
+        p.price,
+        p.market
       );
 
       await sb
