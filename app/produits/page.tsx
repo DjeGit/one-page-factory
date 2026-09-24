@@ -4,6 +4,10 @@ import { getSupabaseAdmin, getCategories } from '@/lib/supabase';
 import type { Product } from '@/types';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import { getMarketFromHost } from '@/lib/market-from-host';
+import CookieConsent from '@/components/layout/CookieConsent';
+import PixelInjector from '@/components/landing/PixelInjector';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +32,9 @@ async function getAllActive(): Promise<Product[]> {
 
 export default async function ProduitsPage() {
   const [products, categories] = await Promise.all([getAllActive(), getCategories()]);
+  // Marché déduit du domaine (pas de produit unique sur cette page),
+  // même logique que app/layout.tsx (lib/market-from-host.ts).
+  const market = getMarketFromHost(headers().get('host'));
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -139,6 +146,15 @@ export default async function ProduitsPage() {
           </div>
         </div>
       </footer>
+
+      {/* Tracking site (audit 24/09) : voir app/page.tsx pour le contexte
+          complet sur les pixels globaux vs pixels par produit. */}
+      <CookieConsent market={market} />
+      <PixelInjector
+        pixelMeta={process.env.SITE_PIXEL_META}
+        pixelTiktok={process.env.SITE_PIXEL_TIKTOK}
+        pixelGtm={process.env.SITE_PIXEL_GTM}
+      />
     </div>
   );
 }

@@ -3,6 +3,10 @@ import Image from 'next/image';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import type { Product } from '@/types';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
+import { headers } from 'next/headers';
+import { getMarketFromHost } from '@/lib/market-from-host';
+import CookieConsent from '@/components/layout/CookieConsent';
+import PixelInjector from '@/components/landing/PixelInjector';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +27,9 @@ async function getFeaturedProducts(): Promise<Product[]> {
 
 export default async function HomePage() {
   const featured = await getFeaturedProducts();
+  // Marché déduit du domaine (pas de produit ici pour le déduire autrement),
+  // même logique que app/layout.tsx (lib/market-from-host.ts).
+  const market = getMarketFromHost(headers().get('host'));
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -184,6 +191,17 @@ export default async function HomePage() {
           <p>© {new Date().getFullYear()} Tendpick</p>
         </div>
       </footer>
+
+      {/* Tracking site (audit 24/09) : home/catalogue n'ont pas de produit
+          unique, donc pas de pixel_meta/pixel_tiktok/pixel_gtm par produit —
+          on utilise des IDs de pixel globaux (env), avec le même gating de
+          consentement que sur les pages produit. */}
+      <CookieConsent market={market} />
+      <PixelInjector
+        pixelMeta={process.env.SITE_PIXEL_META}
+        pixelTiktok={process.env.SITE_PIXEL_TIKTOK}
+        pixelGtm={process.env.SITE_PIXEL_GTM}
+      />
     </div>
   );
 }
