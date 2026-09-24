@@ -1,4 +1,5 @@
 import { getAllProducts } from '@/lib/supabase';
+import Image from 'next/image';
 import { headers } from 'next/headers';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
@@ -148,10 +149,11 @@ export default async function BioPage() {
                 }}
               >
                 {product.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={product.image_url}
                     alt={product.name}
+                    width={48}
+                    height={48}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (

@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import type { Product } from '@/types';
 import type { TemplateConfig } from '@/lib/templates';
 
@@ -193,13 +194,16 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
       }}
     >
       {product.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={product.image_url}
           alt={product.name}
+          width={340}
+          height={340}
           style={{
             maxWidth: '100%',
             maxHeight: '340px',
+            width: 'auto',
+            height: 'auto',
             objectFit: 'contain',
             borderRadius: '12px',
             boxShadow: isDark ? '0 20px 60px rgba(0,0,0,0.5)' : '0 20px 60px rgba(0,0,0,0.15)',
