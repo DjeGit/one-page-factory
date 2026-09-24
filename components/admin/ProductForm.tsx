@@ -58,7 +58,6 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
     email_capture_enabled: product?.email_capture_enabled ?? false,
     email_capture_discount: product?.email_capture_discount?.toString() || '10',
     exit_intent_enabled: product?.exit_intent_enabled ?? true,
-    social_proof_enabled: product?.social_proof_enabled ?? true,
   });
 
   const handleToggle = (field: string) => {
@@ -132,7 +131,6 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
         email_capture_enabled: form.email_capture_enabled,
         email_capture_discount: form.email_capture_discount ? parseInt(form.email_capture_discount) : 10,
         exit_intent_enabled: form.exit_intent_enabled,
-        social_proof_enabled: form.social_proof_enabled,
         template_id: form.template_id || 'dark-pro',
       };
 
@@ -620,70 +618,6 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           <div className="pt-6 border-t border-gray-200">
             <h3 className="text-base font-bold text-gray-900 mb-4">Engagement</h3>
             <div className="space-y-5">
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => handleToggle('email_capture_enabled')}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                    form.email_capture_enabled ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                      form.email_capture_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-                <label className="text-sm font-medium text-gray-700">Activer la capture d&apos;email</label>
-              </div>
-
-              {form.email_capture_enabled && (
-                <div className="ml-14">
-                  <label className={labelClass}>Remise proposée (%)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={form.email_capture_discount}
-                    onChange={(e) => handleChange('email_capture_discount', e.target.value)}
-                    className={`${inputClass} max-w-[150px]`}
-                  />
-                </div>
-              )}
-
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => handleToggle('exit_intent_enabled')}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                    form.exit_intent_enabled ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                      form.exit_intent_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-                <label className="text-sm font-medium text-gray-700">Activer le popup de sortie</label>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => handleToggle('social_proof_enabled')}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                    form.social_proof_enabled ? 'bg-green-500' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                      form.social_proof_enabled ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-                <label className="text-sm font-medium text-gray-700">Afficher les notifications sociales</label>
-              </div>
             </div>
           </div>
         </div>

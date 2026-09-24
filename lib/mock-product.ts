@@ -43,7 +43,6 @@ export const MOCK_PRODUCT: Product = {
   meta_description: 'Découvrez la solution qui a déjà aidé 12 000 personnes à transformer leur quotidien.',
   email_capture_enabled: false,
   exit_intent_enabled: false,
-  social_proof_enabled: false,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };

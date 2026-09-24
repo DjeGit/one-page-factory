@@ -11,7 +11,6 @@ import FAQ from '@/components/landing/FAQ';
 import CTAButton from '@/components/landing/CTAButton';
 import StickyBuy from '@/components/landing/StickyBuy';
 import PixelInjector from '@/components/landing/PixelInjector';
-import SocialProofNotification from '@/components/landing/SocialProofNotification';
 import ExitIntentPopup from '@/components/landing/ExitIntentPopup';
 import EmailCapturePopup from '@/components/landing/EmailCapturePopup';
 import ProductStructuredData from '@/components/landing/ProductStructuredData';
@@ -267,17 +266,11 @@ export default async function LandingPage({ params }: Props) {
         productName={product.name}
       />
 
-      {/* Social proof notification */}
-      {product.social_proof_enabled !== false && (
-        <SocialProofNotification productName={product.name} />
-      )}
-
       {/* Exit intent popup */}
       {product.exit_intent_enabled !== false && (
         <ExitIntentPopup
           productName={product.name}
           redirectCode={product.redirect_code}
-          price={product.price}
         />
       )}
 

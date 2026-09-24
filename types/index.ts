@@ -82,7 +82,6 @@ export interface Product {
   email_capture_enabled?: boolean;
   email_capture_discount?: number;
   exit_intent_enabled?: boolean;
-  social_proof_enabled?: boolean;
 
   // Multi-marché (Sprint 1) — un produit = un marché strict.
   market: Market;

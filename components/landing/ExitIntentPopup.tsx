@@ -5,15 +5,11 @@ import { useEffect, useRef, useState } from 'react';
 interface ExitIntentPopupProps {
   productName: string;
   redirectCode: string;
-  price: number | null;
-  discount?: number;
 }
 
 export default function ExitIntentPopup({
   productName,
   redirectCode,
-  price,
-  discount = 15,
 }: ExitIntentPopupProps) {
   const [visible, setVisible] = useState(false);
   const shownRef = useRef(false);
@@ -21,10 +17,6 @@ export default function ExitIntentPopup({
 
   const storageKey = `exit_shown_${redirectCode}`;
   const ctaClickedKey = `cta_clicked_${redirectCode}`;
-
-  // Countdown state: starts at 10:00 = 600 seconds
-  const [secondsLeft, setSecondsLeft] = useState(600);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function show() {
     if (shownRef.current) return;
@@ -35,22 +27,10 @@ export default function ExitIntentPopup({
     shownRef.current = true;
     localStorage.setItem(storageKey, '1');
     setVisible(true);
-
-    // Start countdown
-    countdownRef.current = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
   }
 
   function close() {
     setVisible(false);
-    if (countdownRef.current) clearInterval(countdownRef.current);
   }
 
   function resetInactivityTimer() {
@@ -83,15 +63,9 @@ export default function ExitIntentPopup({
     return () => {
       document.removeEventListener('mouseleave', handleMouseLeave);
       if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const minutes = Math.floor(secondsLeft / 60)
-    .toString()
-    .padStart(2, '0');
-  const seconds = (secondsLeft % 60).toString().padStart(2, '0');
 
   if (!visible) return null;
 
@@ -124,30 +98,6 @@ export default function ExitIntentPopup({
           <span className="font-bold text-gray-900">{productName}</span> ?
         </p>
 
-        {/* Countdown */}
-        <div className="bg-gray-50 rounded-xl p-4 mb-6">
-          <p className="text-sm text-gray-500 mb-1">Cette offre expire dans</p>
-          <div className="text-4xl font-black tabular-nums" style={{ color: secondsLeft < 60 ? '#ef4444' : '#f97316' }}>
-            {minutes}:{seconds}
-          </div>
-        </div>
-
-        {/* Offer */}
-        <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4 mb-6">
-          <p className="text-orange-700 font-bold text-lg">
-            🎉 Offre exclusive : -{discount}% supplémentaire
-          </p>
-          {price !== null && (
-            <p className="text-orange-600 text-sm mt-1">
-              Soit{' '}
-              <span className="font-bold">
-                {(price * (1 - discount / 100)).toFixed(2)}€
-              </span>{' '}
-              au lieu de {price.toFixed(2)}€
-            </p>
-          )}
-        </div>
-
         {/* CTA */}
         <a
           href={`/api/go/${redirectCode}`}
@@ -166,7 +116,7 @@ export default function ExitIntentPopup({
           onClick={close}
           className="text-gray-400 text-sm hover:text-gray-600 transition-colors underline"
         >
-          Non merci, je préfère payer plein tarif
+          Non merci
         </button>
       </div>
 
