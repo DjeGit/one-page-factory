@@ -1,8 +1,12 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { isValidMarket, type Market } from '@/lib/market';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const sb = getSupabaseAdmin();
   await sb.from('email_leads').delete().eq('id', params.id);
   return NextResponse.json({ success: true });
@@ -13,6 +17,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 // Les leads capturés automatiquement (contact_type='lead') ne passent pas
 // par cette route (pas d'UI d'édition prévue pour eux).
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const sb = getSupabaseAdmin();
   const body = await req.json();
 

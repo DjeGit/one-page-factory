@@ -17,13 +17,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, generateSlug } from '@/lib/supabase';
 import { generateProductContent } from '@/lib/ai';
-
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '');
-  const secret = process.env.PIPELINE_SECRET || process.env.ADMIN_SECRET || '';
-  return token === secret;
-}
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 const AUTH_HEADER = {
@@ -131,7 +125,7 @@ async function stepOptimize(dryRun: boolean) {
 // ─── Main handler ──────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedRequest(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProductById, updateProduct } from '@/lib/supabase';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { productId: string } }
 ) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const product = await getProductById(params.productId);
     if (!product) {
@@ -24,6 +28,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { productId: string } }
 ) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const body = await req.json();
     const { template_id, template_config } = body;

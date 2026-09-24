@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateProductContent } from '@/lib/ai';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
 export async function POST(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const body = await req.json();
 

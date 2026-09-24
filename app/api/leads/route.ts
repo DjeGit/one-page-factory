@@ -2,6 +2,7 @@ import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { DEFAULT_MARKET, isValidMarket, type Market } from '@/lib/market';
 import { getMarketFromHost } from '@/lib/market-from-host';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
 // --- Email de bienvenue transactionnel (Brevo) ---
 const WELCOME_CONTENT = {
@@ -67,6 +68,9 @@ async function syncToBrevo(email: string, market: string, productName?: string) 
 // marketFilter matche soit market (marché "principal", leads auto-capturés)
 // soit markets[] (contact manuel rattaché à plusieurs marchés à la fois).
 export async function GET(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const sb = getSupabaseAdmin();
   const url = new URL(req.url);
   const productFilter = url.searchParams.get('product_id');
@@ -140,7 +144,13 @@ export async function POST(req: NextRequest) {
   const sb = getSupabaseAdmin();
   const body = await req.json();
 
+  // Ajout manuel de contact (client/fournisseur, écran admin Répertoire) —
+  // distinct de la capture publique ci-dessous, qui doit rester accessible
+  // sans authentification (formulaires sur les pages produit publiques).
   if (body.manual === true) {
+    if (!isAuthorizedRequest(req)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     return createManualContact(sb, body);
   }
 

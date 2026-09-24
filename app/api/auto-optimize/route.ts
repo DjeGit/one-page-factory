@@ -12,16 +12,10 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '');
-  const secret = process.env.PIPELINE_SECRET || process.env.ADMIN_SECRET || '';
-  return token === secret;
-}
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedRequest(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -102,7 +96,7 @@ export async function POST(req: NextRequest) {
 
 // GET = stats overview without applying changes
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedRequest(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

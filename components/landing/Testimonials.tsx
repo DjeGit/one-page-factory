@@ -52,7 +52,7 @@ export default function Testimonials({ testimonials }: TestimonialsProps) {
           <h2 className="text-3xl sm:text-4xl font-black text-white mb-4">
             Ce qu&apos;en pensent les acheteurs
           </h2>
-          <p className="text-gray-500 text-sm">Sélection éditoriale basée sur les avis clients Amazon</p>
+          <p className="text-gray-500 text-sm">Exemples illustratifs — voir la mention ci-dessous</p>
         </div>
 
         {/* Testimonials grid */}
@@ -76,10 +76,12 @@ export default function Testimonials({ testimonials }: TestimonialsProps) {
                     <div className="text-gray-500 text-xs">{testimonial.location}</div>
                   </div>
                 </div>
-                {/* Amazon badge */}
-                <div className="flex items-center gap-1 text-orange-400 bg-orange-400/10 px-2 py-1 rounded-full">
-                  <span className="text-xs font-medium">Amazon</span>
-                </div>
+                {/* Badge "Amazon" retiré (22/09) : laissait croire que ces
+                    témoignages venaient d'avis clients Amazon vérifiés, alors
+                    qu'ils sont générés par l'IA (lib/ai.ts) — contredisait la
+                    mention légale en bas de section. Sujet plus large (garder
+                    des témoignages fictifs mais bien étiquetés, ou basculer
+                    sur de vrais avis) encore ouvert, cf. doc de suivi. */}
               </div>
 
               {/* Stars */}

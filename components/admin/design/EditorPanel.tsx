@@ -192,16 +192,10 @@ export default function EditorPanel({ overrides, onChange, template, productSlug
                 onChange={(v) => updateSection('faq', v)}
                 label="FAQ"
               />
-              <Toggle
-                checked={overrides.sections.countdown}
-                onChange={(v) => updateSection('countdown', v)}
-                label="Compte à rebours"
-              />
-              <Toggle
-                checked={overrides.sections.stock}
-                onChange={(v) => updateSection('stock', v)}
-                label="Stock limité"
-              />
+              {/* Compte à rebours / Stock limité retirés (22/09) : ces
+                  sections affichaient des valeurs fictives et figées
+                  ("02:34:21", "7 unités") sans donnée réelle derrière —
+                  risque de pratique commerciale trompeuse. */}
             </div>
           </div>
         )}

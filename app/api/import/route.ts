@@ -1,9 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin, generateSlug } from '@/lib/supabase';
 import type { ImportRow } from '@/types';
 import { getActiveMarket } from '@/lib/get-active-market';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const sb = getSupabaseAdmin();
   const body = await req.json();
   const rows: ImportRow[] = body.rows || [];

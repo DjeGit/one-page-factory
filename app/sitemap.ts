@@ -1,6 +1,13 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import type { MetadataRoute } from 'next';
 
+// Sans ce `revalidate`, Next.js générait ce sitemap UNE SEULE FOIS au build
+// (route statique par défaut) — d'où un sitemap.xml figé à la date du
+// dernier déploiement, sans aucune des pages produit créées depuis (audit
+// du 22/09). Régénéré au plus une fois par heure désormais, ce qui reste
+// largement suffisant pour un crawl moteur de recherche.
+export const revalidate = 3600;
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const sb = getSupabaseAdmin();
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://tendpick.com').replace(/\/$/, '');

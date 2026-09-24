@@ -20,13 +20,7 @@ import { DEFAULT_MARKET, isValidMarket, type Market } from '@/lib/market';
 import amazonScrapingFallback from '@/lib/integrations/data-sources/amazon-scraping-fallback';
 import { scoreSignal, trendScoreFromScore } from '@/lib/market/scoring';
 import type { RawProductSignal } from '@/lib/integrations/types';
-
-function isAuthorized(req: NextRequest): boolean {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '');
-  const secret = process.env.PIPELINE_SECRET || process.env.ADMIN_SECRET || '';
-  return token === secret;
-}
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
 function marketFrom(value: unknown): Market {
   return typeof value === 'string' && isValidMarket(value) ? value : DEFAULT_MARKET;
@@ -40,7 +34,7 @@ async function discoverAndScore(market: Market) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedRequest(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -135,7 +129,7 @@ export async function POST(req: NextRequest) {
 
 // GET = dry run preview
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedRequest(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -74,7 +74,7 @@ export default function FAQ({ items }: FAQProps) {
         <div className="text-center mt-12">
           <p className="text-gray-500 mb-2">Vous avez d&apos;autres questions ?</p>
           <a
-            href="mailto:support@example.com"
+            href="mailto:contact@tendpick.com"
             className="text-primary-400 hover:text-primary-300 font-medium transition-colors"
           >
             Contactez notre support →

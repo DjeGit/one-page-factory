@@ -45,7 +45,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       // og:type=product est un type OpenGraph standard (namespace produit
       // Facebook/e-commerce) mais absent de l'union TypeScript de Next.js —
       // cast local nécessaire, la valeur réelle envoyée reste bien 'product'.
-      type: 'product' as unknown as 'website',
       url: `${siteUrl}/${product.slug}`,
     },
     twitter: {

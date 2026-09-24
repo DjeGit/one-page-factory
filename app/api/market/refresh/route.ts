@@ -11,28 +11,19 @@
  * vraie source (`source` = id d'intégration d'origine).
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { getActiveMarket } from '@/lib/get-active-market';
-import { hashAdminToken } from '@/lib/admin-auth';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 import { isValidMarket, type Market } from '@/lib/market';
 import { getActiveDataSources, refreshMarketFromActiveSources } from '@/lib/integrations/data-source-chain';
 import { scoreSignal, trendScoreFromScore, confidenceScoreFromSignal } from '@/lib/market/scoring';
 
 // ─── Auth guard ────────────────────────────────────────────────────────────
 // Double entrée : session admin (cookie, appel depuis le back-office) OU
-// secret serveur-à-serveur (Bearer, appel cron 6h). Même pattern que
-// app/api/pipeline/discover/route.ts pour le mode cron.
-function isAuthorized(req: NextRequest): boolean {
-  const authCookie = cookies().get('admin_auth');
-  const adminSecret = process.env.ADMIN_SECRET || 'changeme';
-  if (authCookie?.value === hashAdminToken(adminSecret)) return true;
-
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '');
-  const cronSecret = process.env.INTERNAL_CRON_SECRET || process.env.PIPELINE_SECRET || process.env.ADMIN_SECRET || '';
-  return Boolean(token) && Boolean(cronSecret) && token === cronSecret;
-}
+// secret serveur-à-serveur (Bearer, appel cron 6h) — cf. lib/admin-auth.ts.
+// Remplace un `isAuthorized()` local dupliqué qui comparait les secrets
+// avec `===` (faille de timing, audit du 22/09) par la version centralisée,
+// à comparaison en temps constant.
 
 // GET = pré-check pour l'UI : quelles sources seraient interrogées si on
 // lance un refresh maintenant (évite de lancer un refresh "à l'aveugle").
@@ -42,7 +33,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isAuthorizedRequest(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

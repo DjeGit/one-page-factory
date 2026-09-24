@@ -182,13 +182,16 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
   );
 
   const HeroImage = () => (
-    <div style={{
-      flex: '0 0 auto',
-      width: template.heroLayout === 'centered' ? '280px' : '340px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }}>
+    <div
+      className="tp-hero-image"
+      style={{
+        flex: '0 0 auto',
+        width: template.heroLayout === 'centered' ? '280px' : '340px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       {product.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -228,7 +231,7 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
 
     if (template.heroLayout === 'centered') {
       return (
-        <section style={heroStyle}>
+        <section style={heroStyle} className="tp-hero-section">
           <div style={{ maxWidth: '800px', margin: '0 auto', textAlign: 'center' }}>
             {/* Badge */}
             <div style={{
@@ -294,8 +297,8 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
 
     if (template.heroLayout === 'split-left') {
       return (
-        <section style={heroStyle}>
-          <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '48px' }}>
+        <section style={heroStyle} className="tp-hero-section">
+          <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '48px' }} className="tp-hero-split">
             <HeroContent />
             <HeroImage />
           </div>
@@ -305,8 +308,8 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
 
     // split-right
     return (
-      <section style={heroStyle}>
-        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '48px' }}>
+      <section style={heroStyle} className="tp-hero-section">
+        <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', gap: '48px' }} className="tp-hero-split">
           <HeroImage />
           <HeroContent />
         </div>
@@ -329,51 +332,38 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
 
   const content = (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', ...gradientStyle }}>
+      {/* Styles responsive (22/09) : ce composant est entièrement en styles
+          inline (pas de classes Tailwind) — une media query classique est
+          donc le seul moyen de faire varier une valeur selon la largeur
+          d'écran ici. `!important` nécessaire pour prendre le dessus sur
+          les styles inline qui fixaient les mêmes propriétés (largeur de
+          l'image hero, direction du hero split) — avant ce correctif, le
+          hero en disposition split-left/split-right ne repassait jamais en
+          colonne sur mobile et l'image gardait sa largeur fixe (280-340px),
+          provoquant un débordement horizontal sur petit écran. */}
+      <style>{`
+        @media (max-width: 640px) {
+          .tp-hero-split { flex-direction: column !important; text-align: center; }
+          .tp-hero-image { width: 100% !important; }
+          .tp-hero-image img, .tp-hero-image > div { max-width: 220px !important; margin: 0 auto; }
+          .tp-hero-section { padding: 40px 20px !important; }
+          .tp-section { padding: 32px 20px !important; }
+        }
+      `}</style>
+
       {/* HERO */}
       {renderHero()}
 
-      {/* COUNTDOWN */}
-      {sections.countdown && (
-        <section style={{ ...sectionStyle, background: template.accentColor, borderTop: 'none' }}>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ color: '#fff', fontWeight: 700, fontSize: '14px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              ⏱ Offre limitée — se termine dans
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
-              {[['02', 'heures'], ['34', 'min'], ['21', 'sec']].map(([val, label]) => (
-                <div key={label} style={{ textAlign: 'center' }}>
-                  <div style={{
-                    backgroundColor: 'rgba(0,0,0,0.25)',
-                    color: '#fff',
-                    fontSize: '2rem',
-                    fontWeight: 900,
-                    borderRadius: '8px',
-                    padding: '8px 16px',
-                    minWidth: '64px',
-                    lineHeight: 1,
-                  }}>{val}</div>
-                  <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px', marginTop: '4px', textTransform: 'uppercase' }}>{label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* STOCK */}
-      {sections.stock && (
-        <section style={{ padding: '16px 48px', background: isDark ? 'rgba(220,38,38,0.15)' : '#fef2f2', borderTop: `1px solid ${isDark ? 'rgba(220,38,38,0.3)' : '#fecaca'}` }}>
-          <div style={{ textAlign: 'center' }}>
-            <span style={{ color: '#dc2626', fontWeight: 700, fontSize: '14px' }}>
-              🔴 Attention : Plus que <strong>7 unités</strong> disponibles — commandez maintenant avant rupture de stock !
-            </span>
-          </div>
-        </section>
-      )}
+      {/* COUNTDOWN et STOCK retirés (22/09) : valeurs 100% fictives et figées
+          ("02:34:21", "7 unités") sans aucune donnée réelle derrière — même
+          risque de pratique commerciale trompeuse déjà écarté sur le
+          parcours legacy (cf. app/[slug]/page.tsx). sections.countdown /
+          sections.stock restent dans le type le temps de nettoyer les
+          template_config existants, mais ne sont plus lus ici. */}
 
       {/* PAIN POINTS */}
       {sections.painPoints && product.pain_points && product.pain_points.length > 0 && (
-        <section style={sectionStyle}>
+        <section style={sectionStyle} className="tp-section">
           <h2 style={sectionTitleStyle}>Vous en avez assez de... ?</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', maxWidth: '900px', margin: '0 auto' }}>
             {product.pain_points.slice(0, 3).map((point, i) => (
@@ -394,7 +384,7 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
 
       {/* BENEFITS */}
       {sections.benefits && product.benefits && product.benefits.length > 0 && (
-        <section style={sectionStyle}>
+        <section style={sectionStyle} className="tp-section">
           <h2 style={sectionTitleStyle}>Pourquoi choisir ce produit ?</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', maxWidth: '1000px', margin: '0 auto' }}>
             {product.benefits.map((benefit, i) => (
@@ -416,7 +406,7 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
 
       {/* TESTIMONIALS */}
       {sections.testimonials && product.testimonials && product.testimonials.length > 0 && (
-        <section style={sectionStyle}>
+        <section style={sectionStyle} className="tp-section">
           <h2 style={sectionTitleStyle}>Ce que disent nos clients</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', maxWidth: '1000px', margin: '0 auto' }}>
             {product.testimonials.slice(0, 3).map((testimonial, i) => (
@@ -459,7 +449,7 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
 
       {/* FAQ */}
       {sections.faq && product.faq && product.faq.length > 0 && (
-        <section style={sectionStyle}>
+        <section style={sectionStyle} className="tp-section">
           <h2 style={sectionTitleStyle}>Questions fréquentes</h2>
           <div style={{ maxWidth: '700px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {product.faq.map((item, i) => (
@@ -478,7 +468,7 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
       )}
 
       {/* Final CTA */}
-      <section style={{ padding: '48px', textAlign: 'center', borderTop: `1px solid ${dividerColor}` }}>
+      <section className="tp-section" style={{ padding: '48px', textAlign: 'center', borderTop: `1px solid ${dividerColor}` }}>
         <h2 style={{ fontSize: '1.8rem', fontWeight: 900, color: textBase, marginBottom: '16px' }}>
           Prêt à transformer votre vie ?
         </h2>

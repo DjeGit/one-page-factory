@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as cheerio from 'cheerio';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { isValidMarket, type Market } from '@/lib/market';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
 const AMAZON_DOMAIN: Record<Market, string> = { fr: 'amazon.fr', es: 'amazon.es', uk: 'amazon.co.uk' };
 const LOCALE: Record<Market, string> = { fr: 'fr-FR,fr;q=0.9', es: 'es-ES,es;q=0.9,en;q=0.8', uk: 'en-GB,en;q=0.9' };
@@ -93,6 +94,9 @@ async function scrapeAmazonCategory(market: Market, category: (typeof CATEGORY_P
 }
 
 export async function GET(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { searchParams } = new URL(req.url);
   const requested = searchParams.get('market');
   const market: Market = isValidMarket(requested) ? requested : getActiveMarket();
@@ -109,6 +113,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const { searchParams } = new URL(req.url);
   const requested = searchParams.get('market');
   if (isValidMarket(requested)) {

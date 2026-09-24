@@ -31,11 +31,10 @@ export default function HeroSection({ product, heroTitle, heroSubtitle, heroCta 
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Left: Content */}
           <div className="order-2 lg:order-1 text-center lg:text-left">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 bg-accent-500/20 border border-accent-500/30 text-accent-400 px-4 py-2 rounded-full text-sm font-semibold mb-6 animate-pulse-slow">
-              <span>⚡</span>
-              <span>Tendance — Stock limité</span>
-            </div>
+            {/* Badge "Tendance — Stock limité" retiré (22/09) : affirmation
+                fictive affichée sur tout produit sans donnée réelle
+                derrière — risque de pratique commerciale trompeuse, même
+                décision que pour le compte à rebours/stock du Design Studio. */}
 
             {/* Main Title */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight mb-6">

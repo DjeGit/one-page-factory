@@ -1,15 +1,22 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { getActiveMarket } from '@/lib/get-active-market';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const sb = getSupabaseAdmin();
   const market = getActiveMarket();
   const { data } = await sb.from('ab_tests').select('*, products(name, slug)').eq('market', market).order('created_at', { ascending: false });
   return NextResponse.json(data || []);
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const sb = getSupabaseAdmin();
   const body = await req.json();
   // market dénormalisé depuis le produit concerné (cf. Sprint 1)

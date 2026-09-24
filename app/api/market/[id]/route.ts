@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  if (!isAuthorizedRequest(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const supabaseAdmin = getSupabaseAdmin();
   const body = await request.json();
 
@@ -16,7 +20,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   return NextResponse.json(data);
 }
 
-export async function DELETE(_request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  if (!isAuthorizedRequest(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   const supabaseAdmin = getSupabaseAdmin();
 
   const { error } = await supabaseAdmin
