@@ -39,6 +39,15 @@ const TESTIMONIAL_LOCALES: Record<Market, { name: string; location: string }[]> 
   ],
 };
 
+// Fallback du titre hero quand le parsing JSON de la reponse IA echoue
+// (parseAndValidate, strategie 3) - avant ce correctif ce texte etait
+// toujours "Decouvrez {nom}" en dur, meme pour les marches ES/UK.
+const HERO_FALLBACK_PREFIX: Record<Market, string> = {
+  fr: 'Découvrez',
+  es: 'Descubre',
+  uk: 'Discover',
+};
+
 export function buildContentPrompt(
   productName: string,
   productDescription: string,
@@ -199,7 +208,7 @@ async function generateWithProvider(
 
 // ─── Main exported function ───────────────────────────────────────────────────
 
-function parseAndValidate(content: string, productName: string, productDescription: string): GeneratedContent {
+function parseAndValidate(content: string, productName: string, productDescription: string, market: Market = 'fr'): GeneratedContent {
   // Step 1: strip markdown fences
   let cleaned = content
     .replace(/^```(?:json)?\n?/m, '')
@@ -229,7 +238,7 @@ function parseAndValidate(content: string, productName: string, productDescripti
   }
 
   return {
-    hero_title: parsed.hero_title || `Découvrez ${productName}`,
+    hero_title: parsed.hero_title || `${HERO_FALLBACK_PREFIX[market] || HERO_FALLBACK_PREFIX.fr} ${productName}`,
     hero_subtitle: parsed.hero_subtitle || productDescription,
     pain_points: Array.isArray(parsed.pain_points) ? parsed.pain_points.slice(0, 3) : [],
     benefits: Array.isArray(parsed.benefits) ? parsed.benefits.slice(0, 6) : [],
@@ -252,7 +261,7 @@ export async function generateProductContent(
 
   try {
     const raw = await generateWithProvider(prompt, provider);
-    const result = parseAndValidate(raw, productName, productDescription);
+    const result = parseAndValidate(raw, productName, productDescription, market);
     return { ...result, _provider: provider };
   } catch (err) {
     // Fallback chain
@@ -268,7 +277,7 @@ export async function generateProductContent(
 
       try {
         const raw = await generateWithProvider(prompt, fallback);
-        const result = parseAndValidate(raw, productName, productDescription);
+        const result = parseAndValidate(raw, productName, productDescription, market);
         return { ...result, _provider: `${fallback} (fallback from ${provider})` };
       } catch {
         continue;
