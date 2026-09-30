@@ -112,6 +112,29 @@ export default function CategoriesManager({ initialCategories }: Props) {
     }
   };
 
+  const toggleActive = async (cat: Category) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/categories/${cat.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !cat.is_active }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erreur lors de la mise a jour');
+      }
+      const updated = await res.json();
+      setCategories((prev) => prev.map((c) => (c.id === cat.id ? updated : c)));
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCreate = async () => {
     setSaving(true);
     setError(null);
@@ -161,6 +184,7 @@ export default function CategoriesManager({ initialCategories }: Props) {
             <th className="px-4 py-3">Nom (ES)</th>
             <th className="px-4 py-3">Nom (UK)</th>
             <th className="px-4 py-3">Ordre</th>
+            <th className="px-4 py-3">Visibilite</th>
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
@@ -189,6 +213,20 @@ export default function CategoriesManager({ initialCategories }: Props) {
                     <td className="px-4 py-2">
                       <input type="number" className={inputClass} value={editDraft.sort_order} onChange={(e) => setEditDraft((d) => ({ ...d, sort_order: e.target.value }))} />
                     </td>
+                    <td className="px-4 py-2">
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => toggleActive(cat)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
+                          cat.is_active
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                      >
+                        {cat.is_active ? 'Actif' : 'Masque'}
+                      </button>
+                    </td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">
                       <button disabled={saving} onClick={() => saveEdit(cat.id)} className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg mr-2 disabled:opacity-50">
                         Enregistrer
@@ -206,6 +244,20 @@ export default function CategoriesManager({ initialCategories }: Props) {
                     <td className="px-4 py-3 text-gray-600">{cat.name_es}</td>
                     <td className="px-4 py-3 text-gray-600">{cat.name_uk}</td>
                     <td className="px-4 py-3 text-gray-500">{cat.sort_order}</td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => toggleActive(cat)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
+                          cat.is_active
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                      >
+                        {cat.is_active ? 'Actif' : 'Masque'}
+                      </button>
+                    </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={() => startEdit(cat)} className="px-3 py-1.5 border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 mr-2">
                         Modifier
@@ -240,6 +292,7 @@ export default function CategoriesManager({ initialCategories }: Props) {
               <td className="px-4 py-2">
                 <input type="number" className={inputClass} value={newDraft.sort_order} onChange={(e) => setNewDraft((d) => ({ ...d, sort_order: e.target.value }))} />
               </td>
+              <td className="px-4 py-2 text-xs text-gray-400">Actif</td>
               <td className="px-4 py-2 text-right whitespace-nowrap">
                 <button
                   disabled={saving || !newDraft.slug || !newDraft.name_fr || !newDraft.name_es || !newDraft.name_uk}

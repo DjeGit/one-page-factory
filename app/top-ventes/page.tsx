@@ -1,30 +1,27 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { headers } from 'next/headers';
 import { getSupabaseAdmin, getActiveCategories } from '@/lib/supabase';
 import type { Product } from '@/types';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
-import type { Metadata } from 'next';
-import { headers } from 'next/headers';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Market } from '@/lib/market';
-import CookieConsent from '@/components/layout/CookieConsent';
-import PixelInjector from '@/components/landing/PixelInjector';
+import type { Metadata } from 'next';
 import SiteHeader from '@/components/layout/SiteHeader';
+import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Catalogue produits — Tendpick',
-  description: 'Découvrez tous les produits sélectionnés par Tendpick : les meilleures ventes en ligne avec des fiches détaillées.',
+  title: 'Top Ventes — Tendpick',
+  description: 'Les produits les plus populaires, classés par plateforme : Amazon, Rakuten, AliExpress.',
 };
 
-function categoryName(c: { name_fr: string; name_es: string; name_uk: string }, market: Market): string {
-  if (market === 'es') return c.name_es;
-  if (market === 'uk') return c.name_uk;
-  return c.name_fr;
+interface Props {
+  searchParams: { source?: string };
 }
 
-async function getAllActive(market: Market): Promise<Product[]> {
+async function getActiveProducts(market: Market): Promise<Product[]> {
   try {
     const sb = getSupabaseAdmin();
     const { data } = await sb
@@ -39,57 +36,78 @@ async function getAllActive(market: Market): Promise<Product[]> {
   }
 }
 
-export default async function ProduitsPage() {
-  // Marché déduit du domaine (pas de produit unique sur cette page),
-  // même logique que app/layout.tsx (lib/market-from-host.ts).
+export default async function TopVentesPage({ searchParams }: Props) {
   const market = getMarketFromHost(headers().get('host'));
-  const [products, categories] = await Promise.all([getAllActive(market), getActiveCategories()]);
+  const [allProducts, categories] = await Promise.all([
+    getActiveProducts(market),
+    getActiveCategories(),
+  ]);
+
+  const withSource = allProducts
+    .map((p) => ({ product: p, source: getProductSource(p.affiliate_url) }))
+    .filter((x): x is { product: Product; source: TopVentesSource } => x.source !== null);
+
+  const activeSource = TOP_VENTES_SOURCES.some((s) => s.key === searchParams.source)
+    ? (searchParams.source as TopVentesSource)
+    : null;
+
+  const filtered = activeSource
+    ? withSource.filter((x) => x.source === activeSource)
+    : withSource;
 
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteHeader categories={categories} market={market} />
 
-      {categories.length > 0 && (
-        <div className="border-b border-site-border bg-white">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-2">
-            {categories.map((c) => (
-              <Link
-                key={c.id}
-                href={`/c/${c.slug}`}
-                className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary"
-              >
-                {c.icon ? `${c.icon} ` : ''}
-                {categoryName(c, market)}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-        <div className="mb-10">
-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">
-            Notre sélection
-          </h1>
+        <div className="mb-8">
+          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">Top Ventes</h1>
           <p className="text-site-text-secondary">
-            {products.length > 0
-              ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''} — mis à jour chaque semaine`
-              : 'Nouveaux produits bientôt disponibles'}
+            {filtered.length > 0
+              ? `${filtered.length} produit${filtered.length > 1 ? 's' : ''} parmi les plus populaires`
+              : 'Sélection en cours de préparation'}
           </p>
         </div>
 
-        {products.length === 0 ? (
+        <div className="flex flex-wrap gap-2 mb-10">
+          <Link
+            href="/top-ventes"
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+              !activeSource
+                ? 'bg-site-primary border-site-primary text-white'
+                : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
+            }`}
+          >
+            Tout
+          </Link>
+          {TOP_VENTES_SOURCES.map((s) => (
+            <Link
+              key={s.key}
+              href={`/top-ventes?source=${s.key}`}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                activeSource === s.key
+                  ? 'bg-site-primary border-site-primary text-white'
+                  : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
+              }`}
+            >
+              <span>{s.icon}</span>
+              {s.label}
+            </Link>
+          ))}
+        </div>
+
+        {filtered.length === 0 ? (
           <div className="text-center py-24 text-site-text-secondary">
             <div className="text-5xl mb-4">📦</div>
-            <p className="text-lg">Première sélection en cours de préparation…</p>
-            <p className="text-sm mt-2">Revenez dans quelques heures !</p>
+            <p className="text-lg">Aucun produit pour le moment sur cette plateforme.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {products.map((p) => {
+            {filtered.map(({ product: p, source }) => {
               const img = p.image_url
                 ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
                 : null;
+              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === source);
               return (
                 <Link
                   key={p.id}
@@ -108,6 +126,12 @@ export default async function ProduitsPage() {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
+                    )}
+                    {sourceMeta && (
+                      <span className="absolute top-2 left-2 bg-white/95 border border-site-border rounded-full px-2 py-0.5 text-xs font-medium text-site-text-secondary flex items-center gap-1">
+                        <span>{sourceMeta.icon}</span>
+                        {sourceMeta.label}
+                      </span>
                     )}
                   </div>
                   <div className="p-3 flex flex-col gap-1 flex-1">
@@ -141,13 +165,6 @@ export default async function ProduitsPage() {
           </div>
         </div>
       </footer>
-
-      <CookieConsent market={market} />
-      <PixelInjector
-        pixelMeta={process.env.SITE_PIXEL_META}
-        pixelTiktok={process.env.SITE_PIXEL_TIKTOK}
-        pixelGtm={process.env.SITE_PIXEL_GTM}
-      />
     </div>
   );
 }

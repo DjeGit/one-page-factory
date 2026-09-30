@@ -16,6 +16,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       name_uk: body.name_uk,
       icon: body.icon ?? null,
       sort_order: body.sort_order,
+      is_active: body.is_active,
     });
 
     if (!category) {

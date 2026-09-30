@@ -190,7 +190,7 @@ async function generateWithProvider(
         ],
         ...(isJsonMode ? { response_format: { type: 'json_object' } } : {}),
         temperature: 0.8,
-        max_tokens: 3000,
+        max_tokens: 8000,
       });
       return response.choices[0]?.message?.content || '';
     } catch (err: unknown) {
@@ -233,6 +233,11 @@ function parseAndValidate(content: string, productName: string, productDescripti
       parsed = JSON.parse(fixed) as GeneratedContent;
     } catch {
       // Strategy 3: return safe defaults (never throw — don't block the pipeline)
+      console.warn(
+        '[ai] Echec du parsing JSON apres 2 strategies, contenu vide en fallback.',
+        'Longueur brute:', content.length,
+        'Debut:', content.slice(0, 200)
+      );
       parsed = {};
     }
   }

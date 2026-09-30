@@ -34,6 +34,17 @@ const config: Config = {
           800: '#92400e',
           900: '#78350f',
         },
+        site: {
+          primary: '#1B2A4A',
+          secondary: '#4A90D9',
+          cta: '#FF6B35',
+          'cta-hover': '#E8592A',
+          bg: '#F7F9FC',
+          surface: '#FFFFFF',
+          text: '#1A1A2E',
+          'text-secondary': '#5B6472',
+          border: '#E2E8F0',
+        },
       },
       fontFamily: {
         sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],

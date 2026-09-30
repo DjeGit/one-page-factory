@@ -168,6 +168,21 @@ export async function getCategories(): Promise<Category[]> {
   return data as Category[];
 }
 
+// Categories visibles publiquement (nav, accueil, /produits, /c/[slug]) —
+// l'admin voit tout via getCategories(), le site public ne voit que
+// is_active=true (Jerome, 28/09 : pouvoir masquer une categorie sans la
+// supprimer ni deplacer ses produits).
+export async function getActiveCategories(): Promise<Category[]> {
+  const { data, error } = await supabaseAdmin
+    .from('categories')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
+
+  if (error || !data) return [];
+  return data as Category[];
+}
+
 export async function getCategoryBySlug(slug: string): Promise<Category | null> {
   const { data, error } = await supabaseAdmin
     .from('categories')

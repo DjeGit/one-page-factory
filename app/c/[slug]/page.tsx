@@ -2,10 +2,11 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
-import { getCategoryBySlug, getActiveProductsByCategory, getCategories } from '@/lib/supabase';
+import { getCategoryBySlug, getActiveProductsByCategory, getActiveCategories } from '@/lib/supabase';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
+import SiteHeader from '@/components/layout/SiteHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,31 +40,17 @@ export default async function CategoryPage({ params }: Props) {
   const market = getMarketFromHost(host);
   const [products, allCategories] = await Promise.all([
     getActiveProductsByCategory(category.id, market),
-    getCategories(),
+    getActiveCategories(),
   ]);
 
   const name = categoryName(category, market);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* Navigation */}
-      <header className="border-b border-white/10 sticky top-0 z-50 bg-gray-950/95 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight">
-            <span className="text-2xl">⚡</span>
-            <span className="bg-gradient-to-r from-violet-400 to-amber-400 bg-clip-text text-transparent">Tendpick</span>
-          </Link>
-          <nav className="flex items-center gap-6">
-            <Link href="/produits" className="text-sm text-gray-400 hover:text-white transition-colors hidden sm:block">
-              Catalogue
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className="min-h-screen bg-site-bg text-site-text">
+      <SiteHeader categories={allCategories} market={market} />
 
-      {/* Category chips */}
       {allCategories.length > 1 && (
-        <div className="border-b border-white/10 bg-gray-950/60">
+        <div className="border-b border-site-border bg-white">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-2">
             {allCategories.map((c) => (
               <Link
@@ -71,8 +58,8 @@ export default async function CategoryPage({ params }: Props) {
                 href={`/c/${c.slug}`}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
                   c.slug === category.slug
-                    ? 'bg-violet-500/20 border-violet-500/50 text-violet-300'
-                    : 'border-white/10 text-gray-400 hover:text-white hover:border-white/30'
+                    ? 'bg-site-secondary/10 border-site-secondary text-site-secondary'
+                    : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
                 }`}
               >
                 {c.icon ? `${c.icon} ` : ''}
@@ -85,11 +72,11 @@ export default async function CategoryPage({ params }: Props) {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-10">
-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3">
+          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">
             {category.icon ? `${category.icon} ` : ''}
             {name}
           </h1>
-          <p className="text-gray-400">
+          <p className="text-site-text-secondary">
             {products.length > 0
               ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''}`
               : 'Nouveaux produits bientôt disponibles dans cette catégorie'}
@@ -97,7 +84,7 @@ export default async function CategoryPage({ params }: Props) {
         </div>
 
         {products.length === 0 ? (
-          <div className="text-center py-24 text-gray-500">
+          <div className="text-center py-24 text-site-text-secondary">
             <div className="text-5xl mb-4">{category.icon || '📦'}</div>
             <p className="text-lg">Sélection en cours de préparation…</p>
             <p className="text-sm mt-2">Revenez dans quelques jours !</p>
@@ -112,9 +99,9 @@ export default async function CategoryPage({ params }: Props) {
                 <Link
                   key={p.id}
                   href={`/${p.slug}`}
-                  className="bg-gray-900 border border-white/10 rounded-xl overflow-hidden hover:border-violet-500/50 transition-all hover:-translate-y-0.5 group flex flex-col"
+                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
                 >
-                  <div className="aspect-square relative bg-gray-800 flex-shrink-0">
+                  <div className="aspect-square relative bg-site-bg flex-shrink-0">
                     {img ? (
                       <Image
                         src={img}
@@ -125,20 +112,20 @@ export default async function CategoryPage({ params }: Props) {
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl text-gray-600">📦</div>
+                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
                     )}
                   </div>
                   <div className="p-3 flex flex-col gap-1 flex-1">
-                    <p className="text-sm font-medium text-gray-200 line-clamp-2 leading-snug flex-1">
+                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
                       {p.hero_title || p.name}
                     </p>
                     <div className="flex items-center justify-between mt-1">
                       {p.price ? (
-                        <span className="text-violet-400 font-bold text-sm">{p.price.toFixed(2)} €</span>
+                        <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
                       ) : (
-                        <span className="text-gray-500 text-xs">Prix sur Amazon</span>
+                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
                       )}
-                      <span className="text-xs text-gray-500 group-hover:text-violet-400 transition-colors">
+                      <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
                         Voir →
                       </span>
                     </div>
@@ -150,13 +137,12 @@ export default async function CategoryPage({ params }: Props) {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-white/10 mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
-          <span>© {new Date().getFullYear()} Tendpick — Partenaire Amazon</span>
+      <footer className="border-t border-site-border bg-white mt-16">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-site-text-secondary">
+          <span>© {new Date().getFullYear()} Tendpick</span>
           <div className="flex gap-6">
-            <Link href="/mentions-legales" className="hover:text-gray-300 transition-colors">Mentions légales</Link>
-            <Link href="/politique-confidentialite" className="hover:text-gray-300 transition-colors">Confidentialité</Link>
+            <Link href="/mentions-legales" className="hover:text-site-primary transition-colors">Mentions légales</Link>
+            <Link href="/politique-confidentialite" className="hover:text-site-primary transition-colors">Confidentialité</Link>
           </div>
         </div>
       </footer>

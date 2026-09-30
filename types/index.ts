@@ -34,6 +34,7 @@ export interface Category {
   name_uk: string;
   icon: string | null;
   sort_order: number;
+  is_active: boolean;
   created_at: string;
 }
 
