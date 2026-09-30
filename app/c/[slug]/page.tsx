@@ -7,6 +7,7 @@ import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
 import SiteHeader from '@/components/layout/SiteHeader';
+import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +96,7 @@ export default async function CategoryPage({ params }: Props) {
               const img = p.image_url
                 ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
                 : null;
+              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === getProductSource(p.affiliate_url));
               return (
                 <Link
                   key={p.id}
@@ -113,6 +115,12 @@ export default async function CategoryPage({ params }: Props) {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
+                    )}
+                    {sourceMeta && (
+                      <span className="absolute top-2 left-2 bg-white/95 border border-site-border rounded-full px-2 py-0.5 text-xs font-medium text-site-text-secondary flex items-center gap-1">
+                        <span>{sourceMeta.icon}</span>
+                        {sourceMeta.label}
+                      </span>
                     )}
                   </div>
                   <div className="p-3 flex flex-col gap-1 flex-1">

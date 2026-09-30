@@ -11,9 +11,8 @@ export default function MentionsLegales() {
     <div className="min-h-screen bg-site-bg text-site-text">
       <header className="border-b border-site-border bg-white">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center gap-4">
-          <Link href="/" className="flex items-center gap-2 font-extrabold text-site-primary">
-            <span className="w-2.5 h-2.5 rounded-full bg-site-cta" />
-            Tendpick
+          <Link href="/" className="flex items-center font-extrabold text-site-primary lowercase">
+            tendpick
           </Link>
         </div>
       </header>

@@ -9,9 +9,13 @@ import type { Market } from '@/lib/market';
 import CookieConsent from '@/components/layout/CookieConsent';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
-import { TOP_VENTES_SOURCES } from '@/lib/top-ventes';
+import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 
 export const dynamic = 'force-dynamic';
+
+interface Props {
+  searchParams: { source?: string };
+}
 
 function categoryName(c: { name_fr: string; name_es: string; name_uk: string }, market: Market): string {
   if (market === 'es') return c.name_es;
@@ -35,14 +39,45 @@ async function getFeaturedProducts(market: Market): Promise<Product[]> {
   }
 }
 
-export default async function HomePage() {
+// Top Ventes (accueil) : pool plus large que "Sélection du moment" pour avoir
+// de quoi remplir les 3 onglets Amazon/Rakuten/AliExpress (30/09).
+async function getTopVentesPool(market: Market): Promise<Product[]> {
+  try {
+    const sb = getSupabaseAdmin();
+    const { data } = await sb
+      .from('products')
+      .select('*')
+      .eq('active', true)
+      .eq('market', market)
+      .order('updated_at', { ascending: false })
+      .limit(24);
+    return (data as Product[]) || [];
+  } catch {
+    return [];
+  }
+}
+
+export default async function HomePage({ searchParams }: Props) {
   // Marché déduit du domaine (pas de produit ici pour le déduire autrement),
   // même logique que app/layout.tsx (lib/market-from-host.ts).
   const market = getMarketFromHost(headers().get('host'));
-  const [featured, categories] = await Promise.all([
+  const [featured, categories, topVentesPool] = await Promise.all([
     getFeaturedProducts(market),
     getActiveCategories(),
+    getTopVentesPool(market),
   ]);
+
+  const topVentesWithSource = topVentesPool
+    .map((p) => ({ product: p, source: getProductSource(p.affiliate_url) }))
+    .filter((x): x is { product: Product; source: TopVentesSource } => x.source !== null);
+
+  const activeSource: TopVentesSource = TOP_VENTES_SOURCES.some((s) => s.key === searchParams.source)
+    ? (searchParams.source as TopVentesSource)
+    : TOP_VENTES_SOURCES[0].key;
+
+  const topVentesProducts = topVentesWithSource
+    .filter((x) => x.source === activeSource)
+    .slice(0, 4);
 
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
@@ -70,23 +105,85 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Top Ventes teaser */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
-        <div className="bg-site-primary rounded-2xl px-6 sm:px-10 py-10 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">Top Ventes</h2>
-          <p className="text-white/70 mb-8">Les produits les plus populaires, classés par plateforme</p>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {TOP_VENTES_SOURCES.map((s) => (
-              <Link
-                key={s.key}
-                href={`/top-ventes?source=${s.key}`}
-                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 transition-colors px-5 py-2.5 rounded-full text-white text-sm font-medium"
-              >
-                <span>{s.icon}</span>
-                {s.label}
-              </Link>
-            ))}
+      {/* Top Ventes — design bleu validé (Design.html) : onglets par plateforme
+          + grille de vrais produits (pas de notes/étoiles ni badges fictifs :
+          aucun champ de note existe sur Product, cf. précédent du code qui a
+          justement retiré ces signaux de confiance factices ailleurs). */}
+      <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+        <h2 className="text-2xl sm:text-3xl font-bold text-site-primary mb-6">Top Ventes</h2>
+
+        <div className="flex flex-wrap gap-2 mb-8">
+          {TOP_VENTES_SOURCES.map((s) => (
+            <Link
+              key={s.key}
+              href={`/?source=${s.key}#top-ventes`}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                activeSource === s.key
+                  ? 'bg-site-primary border-site-primary text-white'
+                  : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
+              }`}
+            >
+              <span>{s.icon}</span>
+              {s.label}
+            </Link>
+          ))}
+        </div>
+
+        {topVentesProducts.length === 0 ? (
+          <p className="text-site-text-secondary">Sélection en cours de préparation pour cette plateforme.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {topVentesProducts.map(({ product: p, source }) => {
+              const img = p.image_url
+                ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
+                : null;
+              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === source);
+              return (
+                <Link
+                  key={p.id}
+                  href={`/${p.slug}`}
+                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
+                >
+                  <div className="aspect-square relative bg-site-bg flex-shrink-0">
+                    {img ? (
+                      <Image
+                        src={img}
+                        alt={p.name}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        unoptimized={img.includes('/fetch/')}
+                        sizes="(max-width: 640px) 50vw, 25vw"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
+                    )}
+                  </div>
+                  <div className="p-3 flex flex-col gap-1 flex-1">
+                    {sourceMeta && (
+                      <span className="text-xs text-site-text-secondary flex items-center gap-1">
+                        <span>{sourceMeta.icon}</span>
+                        {sourceMeta.label}
+                      </span>
+                    )}
+                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
+                      {p.hero_title || p.name}
+                    </p>
+                    {p.price ? (
+                      <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
+                    ) : (
+                      <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
+        )}
+
+        <div className="text-center mt-8">
+          <Link href="/top-ventes" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
+            Voir tout le Top Ventes →
+          </Link>
         </div>
       </section>
 
@@ -197,9 +294,8 @@ export default async function HomePage() {
       {/* Footer */}
       <footer className="border-t border-site-border bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-site-text-secondary">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-site-cta" />
-            <span className="font-semibold text-site-primary">Tendpick</span>
+          <div className="flex items-center font-extrabold text-site-primary lowercase">
+            tendpick
           </div>
           <div className="flex items-center gap-6">
             <Link href="/produits" className="hover:text-site-primary transition-colors">Catalogue</Link>
