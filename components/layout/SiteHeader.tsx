@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Menu, X, ChevronDown, Search } from 'lucide-react';
+import { Menu, X, Search, ShoppingCart } from 'lucide-react';
 import type { Category } from '@/types';
 import type { Market } from '@/lib/market';
 import { TOP_VENTES_SOURCES } from '@/lib/top-ventes';
@@ -25,6 +25,7 @@ export default function SiteHeader({ categories, market }: Props) {
   const [topVentesOpen, setTopVentesOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const topVentesRef = useRef<HTMLDivElement>(null);
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -33,6 +34,31 @@ export default function SiteHeader({ categories, market }: Props) {
     router.push(q ? `/produits?q=${encodeURIComponent(q)}` : '/produits');
   }
 
+  // Menu déroulant "Top Ventes" (30/09) : au clic plutôt qu'au survol (plus
+  // fiable au trackpad/tactile), fermeture au clic extérieur ou sur Échap.
+  // Le bug remonté par Jerome ("le menu déroulant ne fonctionne pas") venait
+  // de overflow-x-auto sur <nav> : poser overflow-x seul sans overflow-y fait
+  // retomber overflow-y sur "auto" côté navigateur, ce qui rognait le panneau
+  // en position absolute qui dépasse verticalement — nav n'a plus besoin de
+  // scroll horizontal (6 entrées fixes tiennent sur 1440px), on l'a retiré.
+  useEffect(() => {
+    if (!topVentesOpen) return;
+    function onClickOutside(e: MouseEvent) {
+      if (topVentesRef.current && !topVentesRef.current.contains(e.target as Node)) {
+        setTopVentesOpen(false);
+      }
+    }
+    function onEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setTopVentesOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [topVentesOpen]);
+
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-site-border">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
@@ -40,24 +66,24 @@ export default function SiteHeader({ categories, market }: Props) {
           tendpick
         </Link>
 
-        <nav className="hidden md:flex items-center gap-5 overflow-x-auto">
-          <div
-            className="relative shrink-0"
-            onMouseEnter={() => setTopVentesOpen(true)}
-            onMouseLeave={() => setTopVentesOpen(false)}
-          >
+        {/* Nav — design validé (Design.html) : pas d'icônes sur les liens,
+            pas de chevron sur Top Ventes. */}
+        <nav className="hidden md:flex items-center gap-8">
+          <div className="relative shrink-0" ref={topVentesRef}>
             <button
               type="button"
-              className="flex items-center gap-1 text-sm font-medium text-site-text hover:text-site-primary transition-colors whitespace-nowrap"
+              onClick={() => setTopVentesOpen((v) => !v)}
+              aria-expanded={topVentesOpen}
+              className="text-[15px] font-semibold text-site-primary hover:text-site-secondary transition-colors whitespace-nowrap"
             >
               Top Ventes
-              <ChevronDown className="w-4 h-4" />
             </button>
             {topVentesOpen && (
-              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-56">
+              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-56 z-50">
                 <div className="bg-white rounded-xl border border-site-border shadow-lg py-2">
                   <Link
                     href="/top-ventes"
+                    onClick={() => setTopVentesOpen(false)}
                     className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-site-text hover:bg-site-bg transition-colors"
                   >
                     Tout voir
@@ -67,9 +93,9 @@ export default function SiteHeader({ categories, market }: Props) {
                     <Link
                       key={s.key}
                       href={`/top-ventes?source=${s.key}`}
-                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-site-text hover:bg-site-bg transition-colors"
+                      onClick={() => setTopVentesOpen(false)}
+                      className="block px-4 py-2.5 text-sm text-site-text hover:bg-site-bg transition-colors"
                     >
-                      <span>{s.icon}</span>
                       {s.label}
                     </Link>
                   ))}
@@ -82,15 +108,14 @@ export default function SiteHeader({ categories, market }: Props) {
             <Link
               key={c.id}
               href={`/c/${c.slug}`}
-              className="flex items-center gap-1.5 text-sm font-medium text-site-text hover:text-site-primary transition-colors whitespace-nowrap shrink-0"
+              className="text-[15px] text-site-text hover:text-site-primary transition-colors whitespace-nowrap shrink-0"
             >
-              <span>{c.icon || '📦'}</span>
               {categoryName(c, market)}
             </Link>
           ))}
         </nav>
 
-        <div className="hidden md:flex items-center gap-1 shrink-0 relative">
+        <div className="hidden md:flex items-center gap-5 shrink-0 relative">
           {searchOpen ? (
             <form onSubmit={submitSearch} className="flex items-center">
               <input
@@ -107,12 +132,28 @@ export default function SiteHeader({ categories, market }: Props) {
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="p-2 text-site-text hover:text-site-primary transition-colors"
+              className="text-site-text hover:text-site-primary transition-colors"
               aria-label="Rechercher"
             >
               <Search className="w-5 h-5" />
             </button>
           )}
+          {/* Panier (30/09) : visuel conforme à la maquette, pas encore
+              fonctionnel. Le badge affiche honnêtement "0" — pas une donnée
+              inventée : aucun produit n'est encore vendu en direct (tous les
+              produits sont en affiliation aujourd'hui), le panier n'agrégera
+              que des produits en mode "direct" une fois ce mode activé. */}
+          <button
+            type="button"
+            aria-label="Panier, 0 article"
+            className="relative text-site-text hover:text-site-primary transition-colors"
+            title="Panier — bientôt disponible"
+          >
+            <ShoppingCart className="w-5 h-5" />
+            <span className="absolute -top-1.5 -right-2 bg-site-cta text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              0
+            </span>
+          </button>
         </div>
 
         <button
@@ -153,9 +194,8 @@ export default function SiteHeader({ categories, market }: Props) {
                 key={s.key}
                 href={`/top-ventes?source=${s.key}`}
                 onClick={() => setMobileOpen(false)}
-                className="flex items-center gap-2 px-2 py-2.5 text-sm text-site-text rounded-lg hover:bg-site-bg"
+                className="px-2 py-2.5 text-sm text-site-text rounded-lg hover:bg-site-bg"
               >
-                <span>{s.icon}</span>
                 {s.label}
               </Link>
             ))}
@@ -167,12 +207,19 @@ export default function SiteHeader({ categories, market }: Props) {
                   key={c.id}
                   href={`/c/${c.slug}`}
                   onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-2 px-2 py-2.5 text-sm text-site-text rounded-lg hover:bg-site-bg"
+                  className="block px-2 py-2.5 text-sm text-site-text rounded-lg hover:bg-site-bg"
                 >
-                  <span>{c.icon || '📦'}</span>
                   {categoryName(c, market)}
                 </Link>
               ))}
+            </div>
+
+            <div className="mt-2 pt-2 border-t border-site-border flex items-center justify-between px-2 py-2.5 text-sm text-site-text-secondary">
+              <span className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4" />
+                Panier
+              </span>
+              <span>0 article</span>
             </div>
           </div>
         </div>

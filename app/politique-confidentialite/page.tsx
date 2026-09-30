@@ -1,21 +1,25 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import type { Metadata } from 'next';
+import { getActiveCategories } from '@/lib/supabase';
+import { getMarketFromHost } from '@/lib/market-from-host';
+import SiteHeader from '@/components/layout/SiteHeader';
+import SiteFooter from '@/components/layout/SiteFooter';
+
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   title: 'Politique de confidentialité — Tendpick',
   robots: { index: false },
 };
 
-export default function PolitiqueConfidentialite() {
+export default async function PolitiqueConfidentialite() {
+  const market = getMarketFromHost(headers().get('host'));
+  const categories = await getActiveCategories();
+
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
-      <header className="border-b border-site-border bg-white">
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center gap-4">
-          <Link href="/" className="flex items-center font-extrabold text-site-primary lowercase">
-            tendpick
-          </Link>
-        </div>
-      </header>
+      <SiteHeader categories={categories} market={market} />
 
       <main className="max-w-3xl mx-auto px-4 py-12 prose prose-sm">
         <h1 className="text-2xl font-bold mb-2">Politique de confidentialité</h1>
@@ -82,6 +86,8 @@ export default function PolitiqueConfidentialite() {
           </Link>
         </div>
       </main>
+
+      <SiteFooter categories={categories} market={market} />
     </div>
   );
 }

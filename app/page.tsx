@@ -9,6 +9,7 @@ import type { Market } from '@/lib/market';
 import CookieConsent from '@/components/layout/CookieConsent';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
+import SiteFooter from '@/components/layout/SiteFooter';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,43 @@ function categoryName(c: { name_fr: string; name_es: string; name_uk: string }, 
   if (market === 'uk') return c.name_uk;
   return c.name_fr;
 }
+
+// Descriptions courtes par catégorie (section "Explorer par catégorie",
+// design validé 30/09) — copie éditoriale, pas une donnée produit, donc pas
+// de souci de véracité à vérifier contrairement aux notes/avis. Clé = slug
+// (supabase/migrations/20260923000001_categories.sql). Reprend au mot près
+// les 4 descriptions déjà rédigées dans la maquette Design.html pour les
+// catégories communes ; complète les 4 autres dans le même esprit.
+const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+  'best-of-amazon': 'Les meilleures ventes Amazon du moment',
+  tech: 'Objets connectés, audio, accessoires',
+  'mode-beaute': 'Vêtements, accessoires, soins beauté',
+  'maison-deco': 'Rangement, ambiance, petit électroménager',
+  'sport-bien-etre': 'Fitness, plein air, relaxation',
+  gaming: 'Jeux, streaming, paris sportifs',
+  'art-design': 'Déco murale, papeterie, objets créatifs',
+  loisirs: 'Jeux, hobbies, temps libre',
+};
+
+// Articles de blog (30/09) : Jerome a demandé de construire le DESIGN de la
+// section blog maintenant ("on rajoutera les liens plus tard") — le blog
+// lui-même (table blog_posts, pages /blog) n'existe pas encore, cf. Sprint 3
+// du plan. Contenu placeholder assumé, liens desactivés (href="#") tant que
+// les vraies pages n'existent pas — pas de lien mort affiché comme réel.
+const BLOG_PLACEHOLDER = [
+  {
+    title: '5 accessoires tech qui changent le quotidien',
+    excerpt: 'Sélection testée et comparée, avec nos coups de cœur du mois.',
+  },
+  {
+    title: 'Aménager un coin bien-être chez soi',
+    excerpt: 'Idées déco et petit budget pour un espace calme.',
+  },
+  {
+    title: 'Le yoga à la maison : par où commencer',
+    excerpt: 'Le matériel essentiel pour débuter sans se ruiner.',
+  },
+];
 
 async function getFeaturedProducts(market: Market): Promise<Product[]> {
   try {
@@ -83,26 +121,26 @@ export default async function HomePage({ searchParams }: Props) {
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteHeader categories={categories} market={market} />
 
-      {/* Hero — design bleu validé (Design.html) */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-16">
-        <div className="bg-site-primary rounded-2xl px-6 sm:px-12 py-14 sm:py-20">
-          <p className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-white/50 mb-4">
-            Comparateur multi-plateformes
-          </p>
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-5 leading-tight text-white max-w-2xl">
-            Les meilleures ventes tendance, comparées pour vous
-          </h1>
-          <p className="text-base sm:text-lg text-white/70 max-w-xl mb-8">
-            Amazon, Rakuten, AliExpress et bientôt d&apos;autres sources — un seul
-            endroit pour comparer avant d&apos;acheter.
-          </p>
-          <Link
-            href="/top-ventes"
-            className="inline-flex items-center gap-2 bg-site-cta hover:bg-site-cta-hover transition-colors px-6 py-3 rounded-xl font-semibold text-sm sm:text-base text-white shadow-sm"
-          >
-            Découvrir le Top Ventes
-          </Link>
-        </div>
+      {/* Hero — bandeau plein largeur (pas une carte arrondie flottante :
+          la maquette Design.html va bord à bord), texte aligné à gauche
+          comme sur la maquette. */}
+      <section className="bg-site-primary px-6 sm:px-16 py-14 sm:py-20 flex flex-col items-start gap-4">
+        <span className="text-xs sm:text-[13px] font-semibold uppercase tracking-wider text-[#8FB8E8]">
+          Comparateur multi-plateformes
+        </span>
+        <h1 className="text-[28px] sm:text-[44px] leading-[1.15] font-bold text-white max-w-[720px]">
+          Les meilleures ventes tendance, comparées pour vous
+        </h1>
+        <p className="text-base sm:text-lg text-[#C7D6EA] max-w-[600px]">
+          Amazon, Rakuten, AliExpress et bientôt d&apos;autres sources — un seul
+          endroit pour comparer avant d&apos;acheter.
+        </p>
+        <Link
+          href="/top-ventes"
+          className="mt-2 inline-flex items-center gap-2 bg-site-cta hover:bg-site-cta-hover transition-colors px-7 py-3.5 rounded-lg font-semibold text-base text-white shadow-sm"
+        >
+          Découvrir le Top Ventes
+        </Link>
       </section>
 
       {/* Top Ventes — design bleu validé (Design.html) : onglets par plateforme
@@ -132,7 +170,7 @@ export default async function HomePage({ searchParams }: Props) {
         {topVentesProducts.length === 0 ? (
           <p className="text-site-text-secondary">Sélection en cours de préparation pour cette plateforme.</p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
             {topVentesProducts.map(({ product: p, source }) => {
               const img = p.image_url
                 ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
@@ -142,9 +180,9 @@ export default async function HomePage({ searchParams }: Props) {
                 <Link
                   key={p.id}
                   href={`/${p.slug}`}
-                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
+                  className="bg-white border border-site-border rounded-xl p-4 flex flex-col gap-2 hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group"
                 >
-                  <div className="aspect-square relative bg-site-bg flex-shrink-0">
+                  <div className="h-40 relative bg-site-bg rounded-lg overflow-hidden flex-shrink-0">
                     {img ? (
                       <Image
                         src={img}
@@ -158,22 +196,22 @@ export default async function HomePage({ searchParams }: Props) {
                       <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
                     )}
                   </div>
-                  <div className="p-3 flex flex-col gap-1 flex-1">
-                    {sourceMeta && (
-                      <span className="text-xs text-site-text-secondary flex items-center gap-1">
-                        <span>{sourceMeta.icon}</span>
-                        {sourceMeta.label}
-                      </span>
-                    )}
-                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
-                      {p.hero_title || p.name}
-                    </p>
-                    {p.price ? (
-                      <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
-                    ) : (
-                      <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
-                    )}
-                  </div>
+                  {/* Étiquette plateforme (source réelle, déduite de
+                      l'URL affiliée) — pas de mention "Best-seller / Promo /
+                      Livraison rapide" comme sur la maquette : ce sont des
+                      affirmations non vérifiées pour des vrais produits
+                      vendus à de vrais clients. */}
+                  {sourceMeta && (
+                    <span className="text-xs text-site-text-secondary">{sourceMeta.label}</span>
+                  )}
+                  <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
+                    {p.hero_title || p.name}
+                  </p>
+                  {p.price ? (
+                    <span className="text-site-cta font-bold text-base">{p.price.toFixed(2)} €</span>
+                  ) : (
+                    <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
+                  )}
                 </Link>
               );
             })}
@@ -187,19 +225,26 @@ export default async function HomePage({ searchParams }: Props) {
         </div>
       </section>
 
-      {/* Categories grid */}
+      {/* Explorer par catégorie — design validé (Design.html) : fond bleu
+          clair, pastille pleine couleur (pas d'icône/emoji dans la
+          pastille, la maquette n'en montre pas). */}
       {categories.length > 0 && (
-        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
-          <h2 className="text-xl font-bold text-site-primary mb-6">Parcourir par catégorie</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <section className="bg-white px-4 sm:px-16 py-16 flex flex-col gap-6">
+          <h2 className="max-w-6xl mx-auto w-full text-2xl sm:text-[28px] font-bold text-site-text">
+            Explorer par catégorie
+          </h2>
+          <div className="max-w-6xl mx-auto w-full grid grid-cols-2 sm:grid-cols-4 gap-6">
             {categories.map((c) => (
               <Link
                 key={c.id}
                 href={`/c/${c.slug}`}
-                className="bg-white border border-site-border rounded-xl p-5 flex flex-col items-center gap-2 text-center hover:border-site-secondary hover:shadow-md transition-all"
+                className="bg-[#EAF2FB] rounded-2xl p-8 flex flex-col gap-3 hover:shadow-md transition-shadow"
               >
-                <span className="text-3xl">{c.icon || '📦'}</span>
-                <span className="text-sm font-medium text-site-text">{categoryName(c, market)}</span>
+                <span className="w-12 h-12 rounded-full bg-site-secondary" />
+                <span className="text-lg font-bold text-site-text">{categoryName(c, market)}</span>
+                <span className="text-[13px] text-site-text-secondary">
+                  {CATEGORY_DESCRIPTIONS[c.slug] || 'Notre sélection dans cette catégorie'}
+                </span>
               </Link>
             ))}
           </div>
@@ -279,33 +324,30 @@ export default async function HomePage({ searchParams }: Props) {
         </div>
       </section>
 
-      {/* CTA final */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-20 text-center">
-        <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-site-primary">Prêt à découvrir nos coups de cœur ?</h2>
-        <p className="text-site-text-secondary mb-8">Une sélection de produits mise à jour chaque semaine.</p>
-        <Link
-          href="/produits"
-          className="inline-flex items-center gap-2 bg-site-cta hover:bg-site-cta-hover transition-colors px-8 py-3.5 rounded-xl font-semibold text-base text-white shadow-sm"
-        >
-          Voir tous les produits →
-        </Link>
+      {/* Depuis le blog — design construit maintenant (30/09), contenu et
+          liens réels à brancher au Sprint 3 (cf. plan de refonte : le blog
+          reprend les catégories produit comme univers éditoriaux). Les
+          cartes ne sont volontairement pas cliquables ("Lire l'article"
+          n'a pas de href) tant que les pages n'existent pas vraiment. */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 flex flex-col gap-6">
+        <h2 className="text-2xl sm:text-[28px] font-bold text-site-text">Depuis le blog</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          {BLOG_PLACEHOLDER.map((post) => (
+            <div key={post.title} className="flex flex-col gap-2">
+              <div className="h-36 bg-site-bg border border-site-border rounded-lg flex items-center justify-center text-site-text-secondary text-sm">
+                Image article
+              </div>
+              <span className="text-base font-bold text-site-text">{post.title}</span>
+              <span className="text-[13px] text-site-text-secondary">{post.excerpt}</span>
+              <span className="text-[13px] font-semibold text-site-text-secondary cursor-default">
+                Lire l&apos;article → <span className="italic font-normal">(bientôt)</span>
+              </span>
+            </div>
+          ))}
+        </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-site-border bg-white">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-site-text-secondary">
-          <div className="flex items-center font-extrabold text-site-primary lowercase">
-            tendpick
-          </div>
-          <div className="flex items-center gap-6">
-            <Link href="/produits" className="hover:text-site-primary transition-colors">Catalogue</Link>
-            <Link href="/top-ventes" className="hover:text-site-primary transition-colors">Top Ventes</Link>
-            <Link href="/mentions-legales" className="hover:text-site-primary transition-colors">Mentions légales</Link>
-            <Link href="/politique-confidentialite" className="hover:text-site-primary transition-colors">Confidentialité</Link>
-          </div>
-          <p>© {new Date().getFullYear()} Tendpick</p>
-        </div>
-      </footer>
+      <SiteFooter categories={categories} market={market} />
 
       {/* Tracking site (audit 24/09) : home/catalogue n'ont pas de produit
           unique, donc pas de pixel_meta/pixel_tiktok/pixel_gtm par produit —

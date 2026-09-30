@@ -7,6 +7,7 @@ import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
 import SiteHeader from '@/components/layout/SiteHeader';
+import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 
 export const dynamic = 'force-dynamic';
@@ -145,15 +146,7 @@ export default async function CategoryPage({ params }: Props) {
         )}
       </main>
 
-      <footer className="border-t border-site-border bg-white mt-16">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-site-text-secondary">
-          <span>© {new Date().getFullYear()} Tendpick</span>
-          <div className="flex gap-6">
-            <Link href="/mentions-legales" className="hover:text-site-primary transition-colors">Mentions légales</Link>
-            <Link href="/politique-confidentialite" className="hover:text-site-primary transition-colors">Confidentialité</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter categories={allCategories} market={market} />
     </div>
   );
 }
