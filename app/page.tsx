@@ -48,33 +48,24 @@ export default async function HomePage() {
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteHeader categories={categories} market={market} />
 
-      {/* Hero */}
-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 pb-16 text-center">
-        <div className="inline-flex items-center gap-2 bg-white border border-site-border rounded-full px-4 py-1.5 text-sm text-site-text-secondary mb-6 shadow-sm">
-          <span className="w-2 h-2 rounded-full bg-site-cta animate-pulse" />
-          Sélection mise à jour chaque semaine
-        </div>
-        <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-6 leading-tight text-site-primary">
-          Les meilleurs produits{' '}
-          <span className="text-site-cta">du moment</span>
-        </h1>
-        <p className="text-lg sm:text-xl text-site-text-secondary max-w-2xl mx-auto mb-10">
-          Nous analysons les meilleures ventes en ligne pour vous présenter uniquement
-          les produits qui valent vraiment votre attention — avec une fiche complète
-          pour chaque article.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            href="/produits"
-            className="bg-site-cta hover:bg-site-cta-hover transition-colors px-8 py-3.5 rounded-xl font-semibold text-base w-full sm:w-auto text-center text-white shadow-sm"
-          >
-            Découvrir les produits →
-          </Link>
+      {/* Hero — design bleu validé (Design.html) */}
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-16">
+        <div className="bg-site-primary rounded-2xl px-6 sm:px-12 py-14 sm:py-20">
+          <p className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-white/50 mb-4">
+            Comparateur multi-plateformes
+          </p>
+          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-5 leading-tight text-white max-w-2xl">
+            Les meilleures ventes tendance, comparées pour vous
+          </h1>
+          <p className="text-base sm:text-lg text-white/70 max-w-xl mb-8">
+            Amazon, Rakuten, AliExpress et bientôt d&apos;autres sources — un seul
+            endroit pour comparer avant d&apos;acheter.
+          </p>
           <Link
             href="/top-ventes"
-            className="text-site-text-secondary hover:text-site-primary transition-colors text-sm underline underline-offset-4"
+            className="inline-flex items-center gap-2 bg-site-cta hover:bg-site-cta-hover transition-colors px-6 py-3 rounded-xl font-semibold text-sm sm:text-base text-white shadow-sm"
           >
-            Voir le Top Ventes
+            Découvrir le Top Ventes
           </Link>
         </div>
       </section>

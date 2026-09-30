@@ -30,7 +30,7 @@ export default function RootLayout({
 
   return (
     <html lang={HTML_LANG[market]}>
-      <body className="bg-gray-950 text-white">
+      <body className="bg-site-bg text-site-text">
         {children}
       </body>
     </html>

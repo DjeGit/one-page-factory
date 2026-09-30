@@ -39,12 +39,12 @@ export default function CookieConsent({ market }: CookieConsentProps) {
       aria-label={copy.title}
       className="fixed bottom-0 left-0 right-0 z-[100] p-4 sm:p-6"
     >
-      <div className="max-w-3xl mx-auto bg-gray-900 border border-white/15 rounded-2xl shadow-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+      <div className="max-w-3xl mx-auto bg-site-primary border border-white/10 rounded-2xl shadow-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white mb-1">{copy.title}</p>
-          <p className="text-xs text-gray-400 leading-relaxed">
+          <p className="text-xs text-white/60 leading-relaxed">
             {copy.body}{' '}
-            <a href="/politique-confidentialite" className="underline hover:text-gray-200 transition-colors">
+            <a href="/politique-confidentialite" className="underline hover:text-white transition-colors">
               {copy.learnMore}
             </a>
           </p>
@@ -52,13 +52,13 @@ export default function CookieConsent({ market }: CookieConsentProps) {
         <div className="flex gap-3 flex-shrink-0 w-full sm:w-auto">
           <button
             onClick={() => setConsent('declined')}
-            className="flex-1 sm:flex-none text-xs text-gray-400 hover:text-white border border-white/15 hover:border-white/30 transition-colors px-4 py-2 rounded-lg"
+            className="flex-1 sm:flex-none text-xs text-white/70 hover:text-white border border-white/15 hover:border-white/30 transition-colors px-4 py-2 rounded-lg"
           >
             {copy.decline}
           </button>
           <button
             onClick={() => setConsent('accepted')}
-            className="flex-1 sm:flex-none text-xs bg-violet-600 hover:bg-violet-500 transition-colors text-white font-semibold px-4 py-2 rounded-lg"
+            className="flex-1 sm:flex-none text-xs bg-site-cta hover:bg-site-cta-hover transition-colors text-white font-semibold px-4 py-2 rounded-lg"
           >
             {copy.accept}
           </button>
