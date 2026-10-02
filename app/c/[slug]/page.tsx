@@ -57,10 +57,9 @@ export default async function CategoryPage({ params }: Props) {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-10">
-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">
-            {category.icon ? `${category.icon} ` : ''}
-            {name}
-          </h1>
+          {/* Icône de catégorie retirée du titre (03/10, demande Jerome :
+              "enlève tous les icônes à côté des titres"). */}
+          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{name}</h1>
           <p className="text-site-text-secondary">
             {products.length > 0
               ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''}`

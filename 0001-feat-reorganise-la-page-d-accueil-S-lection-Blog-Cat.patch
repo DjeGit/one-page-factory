@@ -1,0 +1,275 @@
+From f942967be0e84205bb1980eee21d144d5de25764 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 3 Oct 2026 00:51:22 +0200
+Subject: [PATCH] =?UTF-8?q?feat:=20reorganise=20la=20page=20d'accueil=20(S?=
+ =?UTF-8?q?=C3=A9lection/Blog/Cat=C3=A9gorie),=20titres=20restyles?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Supprime la section "Explorer par categorie" (doublon du menu, meme
+  logique que les autres retraits d'icones/categories deja faits).
+- "Selection du moment" reprend exactement le format de Top Ventes
+  (grille 4 colonnes, meme carte produit avec etiquette plateforme en
+  texte) et passe juste en dessous de Top Ventes.
+- "Depuis le blog" remonte a la place de l'ancienne section categorie,
+  avant "Comment ca marche".
+- Nouveau style de titre de section (kicker orange en majuscules +
+  titre navy, meme taille) applique uniformement a Top Ventes,
+  Selection du moment et Depuis le blog.
+- Retire l'icone de categorie a cote du titre H1 sur les pages
+  categorie (/c/[slug]), dernier endroit ou elle apparaissait encore
+  a cote d'un titre.
+---
+ app/c/[slug]/page.tsx |   7 +-
+ app/page.tsx          | 164 ++++++++++++++++++------------------------
+ 2 files changed, 72 insertions(+), 99 deletions(-)
+
+diff --git a/app/c/[slug]/page.tsx b/app/c/[slug]/page.tsx
+index c6f9340..082749e 100644
+--- a/app/c/[slug]/page.tsx
++++ b/app/c/[slug]/page.tsx
+@@ -57,10 +57,9 @@ export default async function CategoryPage({ params }: Props) {
+ 
+       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+         <div className="mb-10">
+-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">
+-            {category.icon ? `${category.icon} ` : ''}
+-            {name}
+-          </h1>
++          {/* Icône de catégorie retirée du titre (03/10, demande Jerome :
++              "enlève tous les icônes à côté des titres"). */}
++          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{name}</h1>
+           <p className="text-site-text-secondary">
+             {products.length > 0
+               ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''}`
+diff --git a/app/page.tsx b/app/page.tsx
+index d74194f..41af301 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -19,29 +19,6 @@ interface Props {
+   searchParams: { source?: string };
+ }
+ 
+-function categoryName(c: { name_fr: string; name_es: string; name_uk: string }, market: Market): string {
+-  if (market === 'es') return c.name_es;
+-  if (market === 'uk') return c.name_uk;
+-  return c.name_fr;
+-}
+-
+-// Descriptions courtes par catégorie (section "Explorer par catégorie",
+-// design validé 30/09) — copie éditoriale, pas une donnée produit, donc pas
+-// de souci de véracité à vérifier contrairement aux notes/avis. Clé = slug
+-// (supabase/migrations/20260923000001_categories.sql). Reprend au mot près
+-// les 4 descriptions déjà rédigées dans la maquette Design.html pour les
+-// catégories communes ; complète les 4 autres dans le même esprit.
+-const CATEGORY_DESCRIPTIONS: Record<string, string> = {
+-  'best-of-amazon': 'Les meilleures ventes Amazon du moment',
+-  tech: 'Objets connectés, audio, accessoires',
+-  'mode-beaute': 'Vêtements, accessoires, soins beauté',
+-  'maison-deco': 'Rangement, ambiance, petit électroménager',
+-  'sport-bien-etre': 'Fitness, plein air, relaxation',
+-  gaming: 'Jeux, streaming, paris sportifs',
+-  'art-design': 'Déco murale, papeterie, objets créatifs',
+-  loisirs: 'Jeux, hobbies, temps libre',
+-};
+-
+ // Articles de blog (30/09) : Jerome a demandé de construire le DESIGN de la
+ // section blog maintenant ("on rajoutera les liens plus tard") — le blog
+ // lui-même (table blog_posts, pages /blog) n'existe pas encore, cf. Sprint 3
+@@ -135,7 +112,14 @@ export default async function HomePage({ searchParams }: Props) {
+           aucun champ de note existe sur Product, cf. précédent du code qui a
+           justement retiré ces signaux de confiance factices ailleurs). */}
+       <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+-        <h2 className="text-2xl sm:text-3xl font-bold text-site-primary mb-6">Top Ventes</h2>
++        {/* Titres de section (03/10, demande Jerome) : même format/taille sur
++            Top Ventes, Sélection du moment et Depuis le blog — petit kicker
++            orange en majuscules au-dessus d'un titre navy, plus marqué que
++            le simple h2 bold d'avant. */}
++        <div className="mb-6 sm:mb-8">
++          <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Classement</span>
++          <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Top Ventes</h2>
++        </div>
+ 
+         <div className="flex flex-wrap gap-3 mb-8">
+           {TOP_VENTES_SOURCES.map((s) => (
+@@ -211,48 +195,31 @@ export default async function HomePage({ searchParams }: Props) {
+         </div>
+       </section>
+ 
+-      {/* Explorer par catégorie — design validé (Design.html) : fond bleu
+-          clair, pastille pleine couleur (pas d'icône/emoji dans la
+-          pastille, la maquette n'en montre pas). */}
+-      {categories.length > 0 && (
+-        <section className="bg-white px-4 sm:px-16 py-16 flex flex-col gap-6">
+-          <h2 className="max-w-6xl mx-auto w-full text-2xl sm:text-[28px] font-bold text-site-text">
+-            Explorer par catégorie
+-          </h2>
+-          <div className="max-w-6xl mx-auto w-full grid grid-cols-2 sm:grid-cols-4 gap-6">
+-            {categories.map((c) => (
+-              <Link
+-                key={c.id}
+-                href={`/c/${c.slug}`}
+-                className="bg-[#EAF2FB] rounded-2xl p-8 flex flex-col gap-3 hover:shadow-md transition-shadow"
+-              >
+-                <span className="w-12 h-12 rounded-full bg-site-secondary" />
+-                <span className="text-lg font-bold text-site-text">{categoryName(c, market)}</span>
+-                <span className="text-[13px] text-site-text-secondary">
+-                  {CATEGORY_DESCRIPTIONS[c.slug] || 'Notre sélection dans cette catégorie'}
+-                </span>
+-              </Link>
+-            ))}
+-          </div>
+-        </section>
+-      )}
+-
+-      {/* Featured products */}
++      {/* Sélection du moment — repositionnée juste sous Top Ventes et alignée
++          sur son format exact (03/10, demande Jerome) : même grille 4
++          colonnes, même carte produit (étiquette plateforme texte, pas de
++          badge sur l'image), même style de titre. L'ancienne version 3
++          colonnes/carte simplifiée est abandonnée au profit de la
++          cohérence entre les deux sections produits de la page. */}
+       {featured.length > 0 && (
+         <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+-          <h2 className="text-xl font-bold text-site-primary mb-6">Sélection du moment</h2>
+-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
++          <div className="mb-6 sm:mb-8">
++            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Fraîchement ajouté</span>
++            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Sélection du moment</h2>
++          </div>
++          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+             {featured.map((p) => {
+               const img = p.image_url
+                 ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
+                 : null;
++              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === getProductSource(p.affiliate_url));
+               return (
+                 <Link
+                   key={p.id}
+                   href={`/${p.slug}`}
+-                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group"
++                  className="bg-white border border-site-border rounded-xl p-4 flex flex-col gap-2 hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group"
+                 >
+-                  <div className="aspect-square relative bg-site-bg">
++                  <div className="h-40 relative bg-site-bg rounded-lg overflow-hidden flex-shrink-0">
+                     {img ? (
+                       <Image
+                         src={img}
+@@ -260,36 +227,66 @@ export default async function HomePage({ searchParams }: Props) {
+                         fill
+                         className="object-cover group-hover:scale-105 transition-transform duration-300"
+                         unoptimized={img.includes('/fetch/')}
+-                        sizes="(max-width: 640px) 50vw, 33vw"
++                        sizes="(max-width: 640px) 50vw, 25vw"
+                       />
+                     ) : (
+                       <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
+                     )}
+                   </div>
+-                  <div className="p-3">
+-                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug mb-1">
+-                      {p.hero_title || p.name}
+-                    </p>
+-                    {p.price && (
+-                      <p className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</p>
+-                    )}
+-                  </div>
++                  {sourceMeta && (
++                    <span className="text-xs text-site-text-secondary">{sourceMeta.label}</span>
++                  )}
++                  <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
++                    {p.hero_title || p.name}
++                  </p>
++                  {p.price ? (
++                    <span className="text-site-cta font-bold text-base">{p.price.toFixed(2)} €</span>
++                  ) : (
++                    <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
++                  )}
+                 </Link>
+               );
+             })}
+           </div>
+-          {featured.length >= 6 && (
+-            <div className="text-center mt-8">
+-              <Link href="/produits" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
+-                Voir tous les produits →
+-              </Link>
+-            </div>
+-          )}
++          <div className="text-center mt-8">
++            <Link href="/produits" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
++              Voir tous les produits →
++            </Link>
++          </div>
+         </section>
+       )}
+ 
++      {/* Depuis le blog — déplacée ici (03/10, demande Jerome) : prend la
++          place de l'ancienne section "Explorer par catégorie" (retirée,
++          doublon du menu), juste après les deux sections produits. Contenu
++          et liens réels à brancher au Sprint 3 (cf. plan de refonte) ; les
++          cartes ne sont volontairement pas cliquables ("Lire l'article" n'a
++          pas de href) tant que les pages n'existent pas vraiment. */}
++      <section className="bg-white border-y border-site-border px-4 sm:px-6 py-16">
++        <div className="max-w-6xl mx-auto flex flex-col gap-6">
++          <div>
++            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Nos conseils</span>
++            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Depuis le blog</h2>
++          </div>
++          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
++            {BLOG_PLACEHOLDER.map((post) => (
++              <div key={post.title} className="flex flex-col gap-2">
++                <div className="h-36 bg-site-bg border border-site-border rounded-lg flex items-center justify-center text-site-text-secondary text-sm">
++                  Image article
++                </div>
++                <span className="text-base font-bold text-site-text">{post.title}</span>
++                <span className="text-[13px] text-site-text-secondary">{post.excerpt}</span>
++                <span className="text-[13px] font-semibold text-site-text-secondary cursor-default">
++                  Lire l&apos;article → <span className="italic font-normal">(bientôt)</span>
++                </span>
++              </div>
++            ))}
++          </div>
++        </div>
++      </section>
++
+       {/* Comment ça marche */}
+-      <section id="comment" className="bg-white border-y border-site-border py-20">
++      <section id="comment" className="py-20">
+         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
+           <h2 className="text-2xl sm:text-3xl font-bold mb-12 text-site-primary">Comment ça marche</h2>
+           <div className="grid sm:grid-cols-3 gap-8">
+@@ -310,29 +307,6 @@ export default async function HomePage({ searchParams }: Props) {
+         </div>
+       </section>
+ 
+-      {/* Depuis le blog — design construit maintenant (30/09), contenu et
+-          liens réels à brancher au Sprint 3 (cf. plan de refonte : le blog
+-          reprend les catégories produit comme univers éditoriaux). Les
+-          cartes ne sont volontairement pas cliquables ("Lire l'article"
+-          n'a pas de href) tant que les pages n'existent pas vraiment. */}
+-      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16 flex flex-col gap-6">
+-        <h2 className="text-2xl sm:text-[28px] font-bold text-site-text">Depuis le blog</h2>
+-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+-          {BLOG_PLACEHOLDER.map((post) => (
+-            <div key={post.title} className="flex flex-col gap-2">
+-              <div className="h-36 bg-site-bg border border-site-border rounded-lg flex items-center justify-center text-site-text-secondary text-sm">
+-                Image article
+-              </div>
+-              <span className="text-base font-bold text-site-text">{post.title}</span>
+-              <span className="text-[13px] text-site-text-secondary">{post.excerpt}</span>
+-              <span className="text-[13px] font-semibold text-site-text-secondary cursor-default">
+-                Lire l&apos;article → <span className="italic font-normal">(bientôt)</span>
+-              </span>
+-            </div>
+-          ))}
+-        </div>
+-      </section>
+-
+       <SiteFooter categories={categories} market={market} />
+ 
+       {/* Tracking site (audit 24/09) : home/catalogue n'ont pas de produit
+-- 
+2.43.0
+
