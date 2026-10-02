@@ -10,6 +10,7 @@ import CookieConsent from '@/components/layout/CookieConsent';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
+import HeroCarousel from '@/components/landing/HeroCarousel';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 
 export const dynamic = 'force-dynamic';
@@ -121,41 +122,13 @@ export default async function HomePage({ searchParams }: Props) {
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteHeader categories={categories} market={market} />
 
-      {/* Hero — demande Jerome du 02/10 (2 captures à l'appui) : garder le
-          cadre actuel (bandeau navy plein largeur) mais y remettre le texte
-          et les CTA de l'ancienne version, centrés dans le bandeau.
-          Ajustement du 02/10 (2e passe) : hauteur réduite (moins de
-          padding vertical) pour rester proportionnée au reste du site, et
-          taille du titre resserrée (+ sans max-width qui forçait le retour
-          à la ligne) pour tenir sur une seule ligne en desktop. */}
-      <section className="bg-site-primary px-6 py-10 sm:py-14 flex flex-col items-center text-center gap-2">
-        <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm text-white/80 mb-3">
-          <span className="w-2 h-2 rounded-full bg-site-cta animate-pulse" />
-          Sélection mise à jour chaque semaine
-        </div>
-        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-3 leading-tight text-white whitespace-normal sm:whitespace-nowrap">
-          Les meilleurs produits <span className="text-site-cta">du moment</span>
-        </h1>
-        <p className="text-base sm:text-lg text-white/70 max-w-2xl mb-6">
-          Nous analysons les meilleures ventes en ligne pour vous présenter
-          uniquement les produits qui valent vraiment votre attention — avec une
-          fiche complète pour chaque article.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            href="/produits"
-            className="bg-site-cta hover:bg-site-cta-hover transition-colors px-7 py-3.5 rounded-lg font-semibold text-base text-white shadow-sm"
-          >
-            Découvrir les produits →
-          </Link>
-          <Link
-            href="/top-ventes"
-            className="text-white/70 hover:text-white transition-colors text-sm underline underline-offset-4"
-          >
-            Voir le Top Ventes
-          </Link>
-        </div>
-      </section>
+      {/* Hero — remplacé le 03/10 par un carrousel (demande Jerome, après
+          revue de 10 propositions de bannières) : 4 angles retenus
+          (bannières 1/3/6/10 de la proposition), décor fixe repris de la
+          bannière 5, seul le texte change en fondu. Voir
+          components/landing/HeroCarousel.tsx pour le détail et le
+          raisonnement. */}
+      <HeroCarousel />
 
       {/* Top Ventes — design bleu validé (Design.html) : onglets par plateforme
           + grille de vrais produits (pas de notes/étoiles ni badges fictifs :
