@@ -13,9 +13,14 @@ function categoryName(c: Category, market: Market): string {
   return c.name_fr;
 }
 
-// Footer — design validé (Design.html) : fond navy, 4 colonnes, newsletter,
-// mentions légales en bas. Repris tel quel sur toutes les pages du site
-// (30/09) au lieu d'un footer simplifié différent par page.
+// Footer — design validé (Design.html) : fond navy, newsletter, mentions
+// légales en bas. Repris tel quel sur toutes les pages du site (30/09) au
+// lieu d'un footer simplifié différent par page.
+//
+// Ajustement du 02/10 (demande Jerome) : la maquette ne montre que 3
+// catégories à titre d'exemple, mais Tendpick en a 8 — on les affiche
+// toutes (sur 2 colonnes pour rester lisible), colonne élargie en
+// conséquence (grille 5 colonnes au lieu de 4 en desktop).
 //
 // Écarts assumés vs la maquette : la maquette liste "CGV / Livraison /
 // Contact" dans la colonne "Aide" — CGV et Livraison n'existent pas encore
@@ -25,25 +30,25 @@ function categoryName(c: Category, market: Market): string {
 // utilisé ailleurs sur le site). Le formulaire newsletter est visuel pour
 // l'instant (pas encore branché à /api/leads) — à connecter ensuite.
 export default function SiteFooter({ categories, market }: Props) {
-  const footerCategories = categories.slice(0, 3);
-
   return (
     <footer className="bg-site-primary text-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 flex flex-col gap-8">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
           <div className="flex flex-col gap-2 col-span-2 sm:col-span-1">
             <span className="font-extrabold text-lg lowercase">tendpick</span>
             <span className="text-xs text-white/60">Le comparateur des produits tendance, tous marchés.</span>
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 col-span-2 sm:col-span-2">
             <span className="text-xs font-bold text-white">Catégories</span>
-            {footerCategories.length > 0 ? (
-              footerCategories.map((c) => (
-                <Link key={c.id} href={`/c/${c.slug}`} className="text-xs text-white/60 hover:text-white transition-colors">
-                  {categoryName(c, market)}
-                </Link>
-              ))
+            {categories.length > 0 ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                {categories.map((c) => (
+                  <Link key={c.id} href={`/c/${c.slug}`} className="text-xs text-white/60 hover:text-white transition-colors">
+                    {categoryName(c, market)}
+                  </Link>
+                ))}
+              </div>
             ) : (
               <Link href="/produits" className="text-xs text-white/60 hover:text-white transition-colors">
                 Tout le catalogue

@@ -51,26 +51,9 @@ export default async function CategoryPage({ params }: Props) {
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteHeader categories={allCategories} market={market} />
 
-      {allCategories.length > 1 && (
-        <div className="border-b border-site-border bg-white">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-2">
-            {allCategories.map((c) => (
-              <Link
-                key={c.id}
-                href={`/c/${c.slug}`}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
-                  c.slug === category.slug
-                    ? 'bg-site-secondary/10 border-site-secondary text-site-secondary'
-                    : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
-                }`}
-              >
-                {c.icon ? `${c.icon} ` : ''}
-                {categoryName(c, market)}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* La rangée de pastilles catégories (avec icônes) sous le header a
+          été retirée (02/10, demande Jerome) : les catégories sont déjà
+          accessibles depuis le menu, doublon inutile. */}
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-10">

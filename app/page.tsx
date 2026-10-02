@@ -123,16 +123,20 @@ export default async function HomePage({ searchParams }: Props) {
 
       {/* Hero — demande Jerome du 02/10 (2 captures à l'appui) : garder le
           cadre actuel (bandeau navy plein largeur) mais y remettre le texte
-          et les CTA de l'ancienne version, centrés dans le bandeau. */}
-      <section className="bg-site-primary px-6 py-14 sm:py-20 flex flex-col items-center text-center gap-2">
-        <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm text-white/80 mb-4">
+          et les CTA de l'ancienne version, centrés dans le bandeau.
+          Ajustement du 02/10 (2e passe) : hauteur réduite (moins de
+          padding vertical) pour rester proportionnée au reste du site, et
+          taille du titre resserrée (+ sans max-width qui forçait le retour
+          à la ligne) pour tenir sur une seule ligne en desktop. */}
+      <section className="bg-site-primary px-6 py-10 sm:py-14 flex flex-col items-center text-center gap-2">
+        <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm text-white/80 mb-3">
           <span className="w-2 h-2 rounded-full bg-site-cta animate-pulse" />
           Sélection mise à jour chaque semaine
         </div>
-        <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-4 leading-tight text-white max-w-3xl">
+        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-3 leading-tight text-white whitespace-normal sm:whitespace-nowrap">
           Les meilleurs produits <span className="text-site-cta">du moment</span>
         </h1>
-        <p className="text-lg sm:text-xl text-white/70 max-w-2xl mb-8">
+        <p className="text-base sm:text-lg text-white/70 max-w-2xl mb-6">
           Nous analysons les meilleures ventes en ligne pour vous présenter
           uniquement les produits qui valent vraiment votre attention — avec une
           fiche complète pour chaque article.
@@ -160,19 +164,18 @@ export default async function HomePage({ searchParams }: Props) {
       <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
         <h2 className="text-2xl sm:text-3xl font-bold text-site-primary mb-6">Top Ventes</h2>
 
-        <div className="flex flex-wrap gap-2 mb-8">
+        <div className="flex flex-wrap gap-3 mb-8">
           {TOP_VENTES_SOURCES.map((s) => (
             <Link
               key={s.key}
               href={`/?source=${s.key}#top-ventes`}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
                 activeSource === s.key
                   ? 'bg-site-primary border-site-primary text-white'
-                  : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
+                  : 'bg-white border-site-border text-site-text hover:border-site-secondary'
               }`}
             >
-              <span>{s.icon}</span>
-              {s.label}
+              Top {s.label}
             </Link>
           ))}
         </div>

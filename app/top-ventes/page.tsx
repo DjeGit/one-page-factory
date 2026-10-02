@@ -70,13 +70,13 @@ export default async function TopVentesPage({ searchParams }: Props) {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-10">
+        <div className="flex flex-wrap gap-3 mb-10">
           <Link
             href="/top-ventes"
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
               !activeSource
                 ? 'bg-site-primary border-site-primary text-white'
-                : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
+                : 'bg-white border-site-border text-site-text hover:border-site-secondary'
             }`}
           >
             Tout
@@ -85,14 +85,13 @@ export default async function TopVentesPage({ searchParams }: Props) {
             <Link
               key={s.key}
               href={`/top-ventes?source=${s.key}`}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
                 activeSource === s.key
                   ? 'bg-site-primary border-site-primary text-white'
-                  : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
+                  : 'bg-white border-site-border text-site-text hover:border-site-secondary'
               }`}
             >
-              <span>{s.icon}</span>
-              {s.label}
+              Top {s.label}
             </Link>
           ))}
         </div>
