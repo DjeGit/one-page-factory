@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 // Carrousel hero — demande Jerome du 03/10 : parmi 10 propositions de
@@ -11,41 +10,43 @@ import { useEffect, useRef, useState } from 'react';
 // texte changent ensemble. Choix assumé : un décor fixe limite le bruit
 // visuel, évite tout flash de couleur entre slides, et simplifie beaucoup
 // l'implémentation (pas de risque de layout shift dû à un fond qui change de
-// taille/forme). Les CTA pointent vers les mêmes pages que l'ancien hero
-// statique (/produits, /top-ventes) — aucune nouvelle route n'existe pour
-// "nouveautés" ou "tendances", et /produits trie déjà par mise à jour
-// récente, donc c'est la bonne cible.
+// taille/forme).
+//
+// Révision du 03/10 (2e passe, capture à l'appui) : Jerome a demandé de
+// retirer la pastille au-dessus du titre et les boutons CTA en dessous du
+// sous-titre, d'agrandir le titre pour occuper plus de place dans la
+// bannière, de forcer la coupure en 2 lignes propres (phrase blanche /
+// phrase orange sur sa propre ligne, centrée — ex. "Les produits qui font
+// parler" / "sur les réseaux"), et d'utiliser un orange d'accent un peu
+// plus vif que celui du reste du site (site-cta, #FF6B35) sans tomber dans
+// le fluo — d'où ACCENT_ORANGE ci-dessous, utilisé seulement ici (le reste
+// du site garde site-cta). Plus de CTA dans le hero : la navigation reste
+// possible via le menu du header et la section Top Ventes juste en dessous.
+const ACCENT_ORANGE = '#FF5A1F';
+
 const SLIDES = [
   {
-    badge: 'Sélection mise à jour chaque semaine',
-    headline: 'De nouveaux produits repérés',
-    headlineAccent: 'chaque semaine',
+    headlineLine1: 'De nouveaux produits repérés',
+    headlineLine2: 'chaque semaine',
     subtitle:
       "Notre veille identifie en continu ce qui émerge sur Amazon, Rakuten et AliExpress. Chaque fiche résume l'essentiel pour décider vite.",
-    ctaPrimary: 'Voir les nouveautés →',
   },
   {
-    badge: 'Sélection passée au crible',
-    headline: 'Une sélection pensée,',
-    headlineAccent: 'pas improvisée',
+    headlineLine1: 'Une sélection pensée,',
+    headlineLine2: 'pas improvisée',
     subtitle:
       "Chaque produit référencé passe par une grille de critères avant d'apparaître ici. On privilégie la pertinence à la quantité.",
-    ctaPrimary: 'Découvrir la sélection →',
   },
   {
-    badge: 'Ce dont on parle en ligne',
-    headline: 'Les produits qui font parler',
-    headlineAccent: 'sur les réseaux',
+    headlineLine1: 'Les produits qui font parler',
+    headlineLine2: 'sur les réseaux',
     subtitle:
       'On suit les tendances qui émergent sur les réseaux sociaux et on vous présente les produits concernés, avec une fiche complète pour juger par vous-même.',
-    ctaPrimary: 'Voir les tendances →',
   },
   {
-    badge: 'Sélection vérifiée, zéro arnaque',
-    headline: 'Une sélection vérifiée,',
-    headlineAccent: 'en toute confiance',
+    headlineLine1: 'Une sélection vérifiée,',
+    headlineLine2: 'en toute confiance',
     subtitle: 'Chaque produit référencé est vérifié avant publication. Pas de fausses promesses, juste une information fiable.',
-    ctaPrimary: 'Découvrir en confiance →',
   },
 ] as const;
 
@@ -70,7 +71,7 @@ export default function HeroCarousel() {
 
   return (
     <section
-      className="relative overflow-hidden bg-site-primary px-6 py-10 sm:py-14"
+      className="relative overflow-hidden bg-site-primary px-6 py-16 sm:py-24"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
@@ -95,46 +96,29 @@ export default function HeroCarousel() {
           const isActive = i === active;
           return (
             <div
-              key={slide.headlineAccent}
-              className={`flex flex-col items-center gap-2 text-center transition-opacity duration-700 ease-in-out [grid-area:stack] ${
+              key={slide.headlineLine2}
+              className={`flex flex-col items-center text-center transition-opacity duration-700 ease-in-out [grid-area:stack] ${
                 isActive ? 'opacity-100' : 'pointer-events-none opacity-0'
               }`}
               aria-hidden={!isActive}
               aria-live={isActive ? 'polite' : undefined}
             >
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 text-sm text-white/80">
-                <span className="h-2 w-2 rounded-full bg-site-cta animate-pulse" />
-                {slide.badge}
-              </div>
-              <h1 className="mb-3 max-w-3xl text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-5xl">
-                {slide.headline} <span className="text-site-cta">{slide.headlineAccent}</span>
+              <h1 className="mb-4 text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-6xl lg:text-7xl">
+                <span className="block">{slide.headlineLine1}</span>
+                <span className="block" style={{ color: ACCENT_ORANGE }}>
+                  {slide.headlineLine2}
+                </span>
               </h1>
-              <p className="mb-6 max-w-2xl text-base text-white/70 sm:text-lg">{slide.subtitle}</p>
-              <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <Link
-                  href="/produits"
-                  className="rounded-lg bg-site-cta px-7 py-3.5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-site-cta-hover"
-                  tabIndex={isActive ? 0 : -1}
-                >
-                  {slide.ctaPrimary}
-                </Link>
-                <Link
-                  href="/top-ventes"
-                  className="text-sm text-white/70 underline underline-offset-4 transition-colors hover:text-white"
-                  tabIndex={isActive ? 0 : -1}
-                >
-                  Voir le Top Ventes
-                </Link>
-              </div>
+              <p className="max-w-2xl text-base text-white/70 sm:text-lg">{slide.subtitle}</p>
             </div>
           );
         })}
       </div>
 
-      <div className="relative z-10 mt-7 flex items-center justify-center gap-2">
+      <div className="relative z-10 mt-9 flex items-center justify-center gap-2">
         {SLIDES.map((slide, i) => (
           <button
-            key={slide.headlineAccent}
+            key={slide.headlineLine2}
             type="button"
             onClick={() => setActive(i)}
             aria-label={`Aller à la bannière ${i + 1}`}
