@@ -19,6 +19,21 @@ function categoryName(c: Category, market: Market): string {
   return c.name_fr;
 }
 
+// Logo (03/10, demande Jerome) : piste "B/02" retenue parmi les 20
+// propositions soumises en review — deux cercles qui se recoupent
+// (navy + orange), symbolisant l'intersection entre "ce qui existe" et
+// "ce qu'on retient". Volontairement plus affirmé que le reste du menu
+// (taille et poids supérieurs, seul élément bicolore du header) pour que
+// le repère de marque reste le premier point d'accroche visuel.
+function LogoMark() {
+  return (
+    <svg viewBox="0 0 48 48" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0" aria-hidden="true">
+      <circle cx="17" cy="24" r="13" className="fill-site-primary" opacity="0.94" />
+      <circle cx="31" cy="24" r="13" className="fill-site-cta" opacity="0.94" />
+    </svg>
+  );
+}
+
 export default function SiteHeader({ categories, market }: Props) {
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -62,8 +77,15 @@ export default function SiteHeader({ categories, market }: Props) {
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-site-border">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        <Link href="/" className="flex items-center font-extrabold text-xl tracking-tight text-site-primary shrink-0 lowercase">
-          tendpick
+        <Link
+          href="/"
+          aria-label="Tendpick, accueil"
+          className="flex items-center gap-2 shrink-0 -ml-1 sm:-ml-1.5"
+        >
+          <LogoMark />
+          <span className="font-extrabold text-2xl leading-none tracking-tight text-site-primary lowercase">
+            tendpick
+          </span>
         </Link>
 
         {/* Nav — design validé (Design.html) : pas d'icônes sur les liens,
