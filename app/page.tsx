@@ -12,32 +12,13 @@ import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import HeroCarousel from '@/components/landing/HeroCarousel';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
+import { SITE_COPY } from '@/lib/site-copy';
 
 export const dynamic = 'force-dynamic';
 
 interface Props {
   searchParams: { source?: string };
 }
-
-// Articles de blog (30/09) : Jerome a demandé de construire le DESIGN de la
-// section blog maintenant ("on rajoutera les liens plus tard") — le blog
-// lui-même (table blog_posts, pages /blog) n'existe pas encore, cf. Sprint 3
-// du plan. Contenu placeholder assumé, liens desactivés (href="#") tant que
-// les vraies pages n'existent pas — pas de lien mort affiché comme réel.
-const BLOG_PLACEHOLDER = [
-  {
-    title: '5 accessoires tech qui changent le quotidien',
-    excerpt: 'Sélection testée et comparée, avec nos coups de cœur du mois.',
-  },
-  {
-    title: 'Aménager un coin bien-être chez soi',
-    excerpt: 'Idées déco et petit budget pour un espace calme.',
-  },
-  {
-    title: 'Le yoga à la maison : par où commencer',
-    excerpt: 'Le matériel essentiel pour débuter sans se ruiner.',
-  },
-];
 
 async function getFeaturedProducts(market: Market): Promise<Product[]> {
   try {
@@ -77,6 +58,7 @@ export default async function HomePage({ searchParams }: Props) {
   // Marché déduit du domaine (pas de produit ici pour le déduire autrement),
   // même logique que app/layout.tsx (lib/market-from-host.ts).
   const market = getMarketFromHost(headers().get('host'));
+  const t = SITE_COPY[market];
   const [featured, categories, topVentesPool] = await Promise.all([
     getFeaturedProducts(market),
     getActiveCategories(),
@@ -105,7 +87,7 @@ export default async function HomePage({ searchParams }: Props) {
           bannière 5, seul le texte change en fondu. Voir
           components/landing/HeroCarousel.tsx pour le détail et le
           raisonnement. */}
-      <HeroCarousel />
+      <HeroCarousel market={market} />
 
       {/* Top Ventes — design bleu validé (Design.html) : onglets par plateforme
           + grille de vrais produits (pas de notes/étoiles ni badges fictifs :
@@ -117,8 +99,8 @@ export default async function HomePage({ searchParams }: Props) {
             orange en majuscules au-dessus d'un titre navy, plus marqué que
             le simple h2 bold d'avant. */}
         <div className="mb-6 sm:mb-8">
-          <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Classement</span>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Top Ventes</h2>
+          <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.ranking}</span>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.nav.topVentes}</h2>
         </div>
 
         <div className="flex flex-wrap gap-3 mb-8">
@@ -132,13 +114,13 @@ export default async function HomePage({ searchParams }: Props) {
                   : 'bg-white border-site-border text-site-text hover:border-site-secondary'
               }`}
             >
-              Top {s.label}
+              {t.common.topPrefix} {s.label}
             </Link>
           ))}
         </div>
 
         {topVentesProducts.length === 0 ? (
-          <p className="text-site-text-secondary">Sélection en cours de préparation pour cette plateforme.</p>
+          <p className="text-site-text-secondary">{t.home.emptyPlatform}</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
             {topVentesProducts.map(({ product: p, source }) => {
@@ -180,7 +162,7 @@ export default async function HomePage({ searchParams }: Props) {
                   {p.price ? (
                     <span className="text-site-cta font-bold text-base">{p.price.toFixed(2)} €</span>
                   ) : (
-                    <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
+                    <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
                   )}
                 </Link>
               );
@@ -190,7 +172,7 @@ export default async function HomePage({ searchParams }: Props) {
 
         <div className="text-center mt-8">
           <Link href="/top-ventes" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
-            Voir tout le Top Ventes →
+            {t.home.seeFullTopVentes}
           </Link>
         </div>
       </section>
@@ -204,8 +186,8 @@ export default async function HomePage({ searchParams }: Props) {
       {featured.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
           <div className="mb-6 sm:mb-8">
-            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Fraîchement ajouté</span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Sélection du moment</h2>
+            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.freshlyAdded}</span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.momentSelection}</h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
             {featured.map((p) => {
@@ -242,7 +224,7 @@ export default async function HomePage({ searchParams }: Props) {
                   {p.price ? (
                     <span className="text-site-cta font-bold text-base">{p.price.toFixed(2)} €</span>
                   ) : (
-                    <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
+                    <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
                   )}
                 </Link>
               );
@@ -250,7 +232,7 @@ export default async function HomePage({ searchParams }: Props) {
           </div>
           <div className="text-center mt-8">
             <Link href="/produits" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
-              Voir tous les produits →
+              {t.home.seeAllProducts}
             </Link>
           </div>
         </section>
@@ -265,19 +247,19 @@ export default async function HomePage({ searchParams }: Props) {
       <section className="bg-white border-y border-site-border px-4 sm:px-6 py-16">
         <div className="max-w-6xl mx-auto flex flex-col gap-6">
           <div>
-            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Nos conseils</span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Depuis le blog</h2>
+            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.ourAdvice}</span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.fromBlog}</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {BLOG_PLACEHOLDER.map((post) => (
+            {t.home.blog.map((post) => (
               <div key={post.title} className="flex flex-col gap-2">
                 <div className="h-36 bg-site-bg border border-site-border rounded-lg flex items-center justify-center text-site-text-secondary text-sm">
-                  Image article
+                  {t.home.blogImageAlt}
                 </div>
                 <span className="text-base font-bold text-site-text">{post.title}</span>
                 <span className="text-[13px] text-site-text-secondary">{post.excerpt}</span>
                 <span className="text-[13px] font-semibold text-site-text-secondary cursor-default">
-                  Lire l&apos;article → <span className="italic font-normal">(bientôt)</span>
+                  {t.home.readArticle} <span className="italic font-normal">{t.home.soon}</span>
                 </span>
               </div>
             ))}
@@ -288,13 +270,9 @@ export default async function HomePage({ searchParams }: Props) {
       {/* Comment ça marche */}
       <section id="comment" className="py-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
-          <h2 className="text-2xl sm:text-3xl font-bold mb-12 text-site-primary">Comment ça marche</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-12 text-site-primary">{t.home.howItWorks}</h2>
           <div className="grid sm:grid-cols-3 gap-8">
-            {[
-              { emoji: '🔍', title: 'On analyse', desc: 'Chaque semaine, nous passons en revue les meilleures ventes en ligne pour trouver les produits les plus populaires et les mieux notés.' },
-              { emoji: '✍️', title: 'On rédige', desc: 'Pour chaque produit, nous créons une fiche complète : avantages clés, FAQ, avis clients et conseils d\'achat pour vous aider à décider.' },
-              { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement chez le marchand, en toute sécurité, au meilleur prix disponible.' },
-            ].map((s) => (
+            {t.home.steps.map((s) => (
               <div key={s.title} className="flex flex-col items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-site-bg border border-site-border flex items-center justify-center text-3xl">
                   {s.emoji}

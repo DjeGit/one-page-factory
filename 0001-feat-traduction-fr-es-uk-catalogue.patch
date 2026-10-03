@@ -1,0 +1,1375 @@
+From 9a086d5f11a234c2c688947b53f566b5cbd0cb6e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 3 Oct 2026 02:08:31 +0200
+Subject: [PATCH] =?UTF-8?q?feat:=20traduit=20le=20chrome=20du=20catalogue?=
+ =?UTF-8?q?=20(header,=20banni=C3=A8re,=20pages)=20en=20fr/es/uk?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Nouveau lib/site-copy.ts : dictionnaire centralisé fr/es/uk pour tout le
+  texte du catalogue hors cookies/disclosure (déjà localisés dans
+  lib/consent-copy.ts) : header, footer, bannière hero, accueil, page
+  catégorie, page produits, page top-ventes, page bio, métadonnées globales.
+- SiteHeader : le bouton "Top Ventes" (seule chaîne non localisée du menu,
+  le reste venait déjà de la DB par marché) + placeholder recherche, aria
+  labels, panier, "Catégories" mobile.
+- HeroCarousel : les 4 phrases de bannière étaient 100% figées en français
+  quel que soit le marché — traduites et le composant prend maintenant une
+  prop `market`.
+- app/page.tsx, app/c/[slug], app/produits, app/top-ventes, app/bio :
+  titres de section, états vides, boutons ("Voir →", "Prix chez le
+  marchand", "Voir tout le catalogue"...), contenu du bloc blog placeholder
+  et de "Comment ça marche".
+- app/produits, app/top-ventes, app/layout : metadata title/description
+  convertis en generateMetadata (async) pour pouvoir dépendre du host/marché
+  au lieu d'être figés en français.
+
+Hors périmètre (noté pour une prochaine passe) : les one-pages produit
+générées par IA (app/[slug]/page.tsx et ses sections HeroSection/
+ProductShowcase/Benefits/PainPoints/Testimonials/FAQ) ont leur propre
+système i18n partiel (CTA_I18N) — système séparé du catalogue, pas traité
+ici. mentions-legales et politique-confidentialite restent en français
+uniquement (contenu juridique, à traiter à part).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ app/bio/page.tsx                    |  10 +-
+ app/c/[slug]/page.tsx               |  16 +-
+ app/layout.tsx                      |  25 +-
+ app/page.tsx                        |  62 ++--
+ app/produits/page.tsx               |  36 +-
+ app/top-ventes/page.tsx             |  32 +-
+ components/landing/HeroCarousel.tsx |  47 +--
+ components/layout/SiteFooter.tsx    |  30 +-
+ components/layout/SiteHeader.tsx    |  34 +-
+ lib/site-copy.ts                    | 500 ++++++++++++++++++++++++++++
+ 10 files changed, 645 insertions(+), 147 deletions(-)
+ create mode 100644 lib/site-copy.ts
+
+diff --git a/app/bio/page.tsx b/app/bio/page.tsx
+index 04c88a4..ccaf632 100644
+--- a/app/bio/page.tsx
++++ b/app/bio/page.tsx
+@@ -3,6 +3,7 @@ import Image from 'next/image';
+ import { headers } from 'next/headers';
+ import { getMarketFromHost } from '@/lib/market-from-host';
+ import type { Metadata } from 'next';
++import { SITE_COPY } from '@/lib/site-copy';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+@@ -21,6 +22,7 @@ export default async function BioPage() {
+   // middleware.ts — même détection canonique partagée.
+   const host = headers().get('host') ?? '';
+   const market = getMarketFromHost(host);
++  const t = SITE_COPY[market].bio;
+   const allProducts = await getAllProducts(market);
+   const active = allProducts.filter((p) => p.active);
+ 
+@@ -65,7 +67,7 @@ export default async function BioPage() {
+             letterSpacing: '-0.02em',
+           }}
+         >
+-          Nos sélections
++          {t.title}
+         </h1>
+         <p
+           style={{
+@@ -74,7 +76,7 @@ export default async function BioPage() {
+             margin: 0,
+           }}
+         >
+-          {active.length} produit{active.length !== 1 ? 's' : ''} soigneusement sélectionnés
++          {t.productCount(active.length)}
+         </p>
+       </div>
+ 
+@@ -100,7 +102,7 @@ export default async function BioPage() {
+               fontSize: 14,
+             }}
+           >
+-            Aucun produit disponible pour le moment.
++            {t.noProduct}
+           </div>
+         ) : (
+           active.map((product) => (
+@@ -224,7 +226,7 @@ export default async function BioPage() {
+           textAlign: 'center',
+         }}
+       >
+-        Liens d&apos;affiliation · © {new Date().getFullYear()}
++        {t.affiliateFooter} © {new Date().getFullYear()}
+       </p>
+     </main>
+   );
+diff --git a/app/c/[slug]/page.tsx b/app/c/[slug]/page.tsx
+index 082749e..278b5fc 100644
+--- a/app/c/[slug]/page.tsx
++++ b/app/c/[slug]/page.tsx
+@@ -9,6 +9,7 @@ import type { Metadata } from 'next';
+ import SiteHeader from '@/components/layout/SiteHeader';
+ import SiteFooter from '@/components/layout/SiteFooter';
+ import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
++import { SITE_COPY } from '@/lib/site-copy';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
+   const name = categoryName(category, market);
+   return {
+     title: `${name} — Tendpick`,
+-    description: `Découvrez notre sélection ${name} sur Tendpick.`,
++    description: SITE_COPY[market].category.metaDescription(name),
+   };
+ }
+ 
+@@ -46,6 +47,7 @@ export default async function CategoryPage({ params }: Props) {
+   ]);
+ 
+   const name = categoryName(category, market);
++  const t = SITE_COPY[market];
+ 
+   return (
+     <div className="min-h-screen bg-site-bg text-site-text">
+@@ -61,17 +63,15 @@ export default async function CategoryPage({ params }: Props) {
+               "enlève tous les icônes à côté des titres"). */}
+           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{name}</h1>
+           <p className="text-site-text-secondary">
+-            {products.length > 0
+-              ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''}`
+-              : 'Nouveaux produits bientôt disponibles dans cette catégorie'}
++            {products.length > 0 ? t.category.productCount(products.length) : t.category.newSoon}
+           </p>
+         </div>
+ 
+         {products.length === 0 ? (
+           <div className="text-center py-24 text-site-text-secondary">
+             <div className="text-5xl mb-4">{category.icon || '📦'}</div>
+-            <p className="text-lg">Sélection en cours de préparation…</p>
+-            <p className="text-sm mt-2">Revenez dans quelques jours !</p>
++            <p className="text-lg">{t.category.preparing}</p>
++            <p className="text-sm mt-2">{t.category.comeBackDays}</p>
+           </div>
+         ) : (
+           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+@@ -114,10 +114,10 @@ export default async function CategoryPage({ params }: Props) {
+                       {p.price ? (
+                         <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
+                       ) : (
+-                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
++                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                       )}
+                       <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
+-                        Voir →
++                        {t.common.seeArrow}
+                       </span>
+                     </div>
+                   </div>
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 038a039..4a19e67 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -1,16 +1,25 @@
+ import type { Metadata } from 'next';
+ import { headers } from 'next/headers';
+ import { getMarketFromHost } from '@/lib/market-from-host';
++import { SITE_COPY } from '@/lib/site-copy';
+ import './globals.css';
+ 
+-export const metadata: Metadata = {
+-  title: {
+-    default: 'Tendpick — Les meilleurs produits du moment',
+-    template: '%s | Tendpick',
+-  },
+-  description: 'Tendpick sélectionne les meilleurs produits Amazon pour vous. Fiches détaillées, avis, et prix mis à jour.',
+-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://tendpick.com'),
+-};
++// Métadonnées par défaut par marché (03/10, demande Jerome) : était figé en
++// français avant ce correctif — s'applique comme repli sur toute page qui
++// ne fournit pas son propre <title>/description. `metadata` (objet statique)
++// ne peut pas lire le host ; converti en generateMetadata (async), comme
++// app/c/[slug], app/produits et app/top-ventes.
++export async function generateMetadata(): Promise<Metadata> {
++  const market = getMarketFromHost(headers().get('host'));
++  return {
++    title: {
++      default: SITE_COPY[market].global.siteTitleDefault,
++      template: '%s | Tendpick',
++    },
++    description: SITE_COPY[market].global.siteDescription,
++    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://tendpick.com'),
++  };
++}
+ 
+ // `lang` codé en dur en "fr" avant ce correctif (22/09) — faux pour tout
+ // visiteur es/uk. Le layout racine (seul endroit où <html> se rend) n'a pas
+diff --git a/app/page.tsx b/app/page.tsx
+index 41af301..8ffcf1d 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -12,6 +12,7 @@ import SiteHeader from '@/components/layout/SiteHeader';
+ import SiteFooter from '@/components/layout/SiteFooter';
+ import HeroCarousel from '@/components/landing/HeroCarousel';
+ import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
++import { SITE_COPY } from '@/lib/site-copy';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+@@ -19,26 +20,6 @@ interface Props {
+   searchParams: { source?: string };
+ }
+ 
+-// Articles de blog (30/09) : Jerome a demandé de construire le DESIGN de la
+-// section blog maintenant ("on rajoutera les liens plus tard") — le blog
+-// lui-même (table blog_posts, pages /blog) n'existe pas encore, cf. Sprint 3
+-// du plan. Contenu placeholder assumé, liens desactivés (href="#") tant que
+-// les vraies pages n'existent pas — pas de lien mort affiché comme réel.
+-const BLOG_PLACEHOLDER = [
+-  {
+-    title: '5 accessoires tech qui changent le quotidien',
+-    excerpt: 'Sélection testée et comparée, avec nos coups de cœur du mois.',
+-  },
+-  {
+-    title: 'Aménager un coin bien-être chez soi',
+-    excerpt: 'Idées déco et petit budget pour un espace calme.',
+-  },
+-  {
+-    title: 'Le yoga à la maison : par où commencer',
+-    excerpt: 'Le matériel essentiel pour débuter sans se ruiner.',
+-  },
+-];
+-
+ async function getFeaturedProducts(market: Market): Promise<Product[]> {
+   try {
+     const sb = getSupabaseAdmin();
+@@ -77,6 +58,7 @@ export default async function HomePage({ searchParams }: Props) {
+   // Marché déduit du domaine (pas de produit ici pour le déduire autrement),
+   // même logique que app/layout.tsx (lib/market-from-host.ts).
+   const market = getMarketFromHost(headers().get('host'));
++  const t = SITE_COPY[market];
+   const [featured, categories, topVentesPool] = await Promise.all([
+     getFeaturedProducts(market),
+     getActiveCategories(),
+@@ -105,7 +87,7 @@ export default async function HomePage({ searchParams }: Props) {
+           bannière 5, seul le texte change en fondu. Voir
+           components/landing/HeroCarousel.tsx pour le détail et le
+           raisonnement. */}
+-      <HeroCarousel />
++      <HeroCarousel market={market} />
+ 
+       {/* Top Ventes — design bleu validé (Design.html) : onglets par plateforme
+           + grille de vrais produits (pas de notes/étoiles ni badges fictifs :
+@@ -117,8 +99,8 @@ export default async function HomePage({ searchParams }: Props) {
+             orange en majuscules au-dessus d'un titre navy, plus marqué que
+             le simple h2 bold d'avant. */}
+         <div className="mb-6 sm:mb-8">
+-          <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Classement</span>
+-          <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Top Ventes</h2>
++          <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.ranking}</span>
++          <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.nav.topVentes}</h2>
+         </div>
+ 
+         <div className="flex flex-wrap gap-3 mb-8">
+@@ -132,13 +114,13 @@ export default async function HomePage({ searchParams }: Props) {
+                   : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+               }`}
+             >
+-              Top {s.label}
++              {t.common.topPrefix} {s.label}
+             </Link>
+           ))}
+         </div>
+ 
+         {topVentesProducts.length === 0 ? (
+-          <p className="text-site-text-secondary">Sélection en cours de préparation pour cette plateforme.</p>
++          <p className="text-site-text-secondary">{t.home.emptyPlatform}</p>
+         ) : (
+           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+             {topVentesProducts.map(({ product: p, source }) => {
+@@ -180,7 +162,7 @@ export default async function HomePage({ searchParams }: Props) {
+                   {p.price ? (
+                     <span className="text-site-cta font-bold text-base">{p.price.toFixed(2)} €</span>
+                   ) : (
+-                    <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
++                    <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                   )}
+                 </Link>
+               );
+@@ -190,7 +172,7 @@ export default async function HomePage({ searchParams }: Props) {
+ 
+         <div className="text-center mt-8">
+           <Link href="/top-ventes" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
+-            Voir tout le Top Ventes →
++            {t.home.seeFullTopVentes}
+           </Link>
+         </div>
+       </section>
+@@ -204,8 +186,8 @@ export default async function HomePage({ searchParams }: Props) {
+       {featured.length > 0 && (
+         <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+           <div className="mb-6 sm:mb-8">
+-            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Fraîchement ajouté</span>
+-            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Sélection du moment</h2>
++            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.freshlyAdded}</span>
++            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.momentSelection}</h2>
+           </div>
+           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+             {featured.map((p) => {
+@@ -242,7 +224,7 @@ export default async function HomePage({ searchParams }: Props) {
+                   {p.price ? (
+                     <span className="text-site-cta font-bold text-base">{p.price.toFixed(2)} €</span>
+                   ) : (
+-                    <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
++                    <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                   )}
+                 </Link>
+               );
+@@ -250,7 +232,7 @@ export default async function HomePage({ searchParams }: Props) {
+           </div>
+           <div className="text-center mt-8">
+             <Link href="/produits" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
+-              Voir tous les produits →
++              {t.home.seeAllProducts}
+             </Link>
+           </div>
+         </section>
+@@ -265,19 +247,19 @@ export default async function HomePage({ searchParams }: Props) {
+       <section className="bg-white border-y border-site-border px-4 sm:px-6 py-16">
+         <div className="max-w-6xl mx-auto flex flex-col gap-6">
+           <div>
+-            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">Nos conseils</span>
+-            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">Depuis le blog</h2>
++            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.ourAdvice}</span>
++            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.fromBlog}</h2>
+           </div>
+           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+-            {BLOG_PLACEHOLDER.map((post) => (
++            {t.home.blog.map((post) => (
+               <div key={post.title} className="flex flex-col gap-2">
+                 <div className="h-36 bg-site-bg border border-site-border rounded-lg flex items-center justify-center text-site-text-secondary text-sm">
+-                  Image article
++                  {t.home.blogImageAlt}
+                 </div>
+                 <span className="text-base font-bold text-site-text">{post.title}</span>
+                 <span className="text-[13px] text-site-text-secondary">{post.excerpt}</span>
+                 <span className="text-[13px] font-semibold text-site-text-secondary cursor-default">
+-                  Lire l&apos;article → <span className="italic font-normal">(bientôt)</span>
++                  {t.home.readArticle} <span className="italic font-normal">{t.home.soon}</span>
+                 </span>
+               </div>
+             ))}
+@@ -288,13 +270,9 @@ export default async function HomePage({ searchParams }: Props) {
+       {/* Comment ça marche */}
+       <section id="comment" className="py-20">
+         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
+-          <h2 className="text-2xl sm:text-3xl font-bold mb-12 text-site-primary">Comment ça marche</h2>
++          <h2 className="text-2xl sm:text-3xl font-bold mb-12 text-site-primary">{t.home.howItWorks}</h2>
+           <div className="grid sm:grid-cols-3 gap-8">
+-            {[
+-              { emoji: '🔍', title: 'On analyse', desc: 'Chaque semaine, nous passons en revue les meilleures ventes en ligne pour trouver les produits les plus populaires et les mieux notés.' },
+-              { emoji: '✍️', title: 'On rédige', desc: 'Pour chaque produit, nous créons une fiche complète : avantages clés, FAQ, avis clients et conseils d\'achat pour vous aider à décider.' },
+-              { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement chez le marchand, en toute sécurité, au meilleur prix disponible.' },
+-            ].map((s) => (
++            {t.home.steps.map((s) => (
+               <div key={s.title} className="flex flex-col items-center gap-4">
+                 <div className="w-16 h-16 rounded-2xl bg-site-bg border border-site-border flex items-center justify-center text-3xl">
+                   {s.emoji}
+diff --git a/app/produits/page.tsx b/app/produits/page.tsx
+index 982037b..f8be0c1 100644
+--- a/app/produits/page.tsx
++++ b/app/produits/page.tsx
+@@ -12,13 +12,20 @@ import PixelInjector from '@/components/landing/PixelInjector';
+ import SiteHeader from '@/components/layout/SiteHeader';
+ import SiteFooter from '@/components/layout/SiteFooter';
+ import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
++import { SITE_COPY } from '@/lib/site-copy';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+-export const metadata: Metadata = {
+-  title: 'Catalogue produits — Tendpick',
+-  description: 'Découvrez tous les produits sélectionnés par Tendpick : les meilleures ventes en ligne avec des fiches détaillées.',
+-};
++// Metadata par marché (03/10, demande Jerome) : était figée en français
++// avant ce correctif — convertie en generateMetadata (comme app/c/[slug])
++// pour pouvoir lire le host et donc le marché du visiteur.
++export async function generateMetadata(): Promise<Metadata> {
++  const market = getMarketFromHost(headers().get('host'));
++  return {
++    title: SITE_COPY[market].products.metaTitle,
++    description: SITE_COPY[market].products.metaDescription,
++  };
++}
+ 
+ interface Props {
+   searchParams: { q?: string };
+@@ -56,6 +63,7 @@ export default async function ProduitsPage({ searchParams }: Props) {
+   const market = getMarketFromHost(headers().get('host'));
+   const query = searchParams.q?.trim() || undefined;
+   const [products, categories] = await Promise.all([getAllActive(market, query), getActiveCategories()]);
++  const t = SITE_COPY[market];
+ 
+   return (
+     <div className="min-h-screen bg-site-bg text-site-text">
+@@ -68,18 +76,18 @@ export default async function ProduitsPage({ searchParams }: Props) {
+       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+         <div className="mb-10">
+           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">
+-            {query ? `Résultats pour « ${query} »` : 'Notre sélection'}
++            {query ? t.products.resultsFor(query) : t.products.ourSelection}
+           </h1>
+           <p className="text-site-text-secondary">
+             {products.length > 0
+-              ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''} — mis à jour chaque semaine`
++              ? t.products.productCountUpdated(products.length)
+               : query
+-              ? 'Aucun produit ne correspond à cette recherche'
+-              : 'Nouveaux produits bientôt disponibles'}
++              ? t.products.noResultsQuery
++              : t.products.newSoon}
+           </p>
+           {query && (
+             <Link href="/produits" className="inline-block mt-2 text-sm text-site-secondary hover:text-site-primary transition-colors">
+-              ← Voir tout le catalogue
++              {t.products.backToCatalog}
+             </Link>
+           )}
+         </div>
+@@ -88,11 +96,11 @@ export default async function ProduitsPage({ searchParams }: Props) {
+           <div className="text-center py-24 text-site-text-secondary">
+             <div className="text-5xl mb-4">📦</div>
+             {query ? (
+-              <p className="text-lg">Rien ne correspond à « {query} ».</p>
++              <p className="text-lg">{t.products.nothingFor(query)}</p>
+             ) : (
+               <>
+-                <p className="text-lg">Première sélection en cours de préparation…</p>
+-                <p className="text-sm mt-2">Revenez dans quelques heures !</p>
++                <p className="text-lg">{t.products.firstSelectionPreparing}</p>
++                <p className="text-sm mt-2">{t.products.comeBackHours}</p>
+               </>
+             )}
+           </div>
+@@ -137,10 +145,10 @@ export default async function ProduitsPage({ searchParams }: Props) {
+                       {p.price ? (
+                         <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
+                       ) : (
+-                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
++                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                       )}
+                       <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
+-                        Voir →
++                        {t.common.seeArrow}
+                       </span>
+                     </div>
+                   </div>
+diff --git a/app/top-ventes/page.tsx b/app/top-ventes/page.tsx
+index 364f959..ee1f60a 100644
+--- a/app/top-ventes/page.tsx
++++ b/app/top-ventes/page.tsx
+@@ -10,13 +10,20 @@ import type { Metadata } from 'next';
+ import SiteHeader from '@/components/layout/SiteHeader';
+ import SiteFooter from '@/components/layout/SiteFooter';
+ import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
++import { SITE_COPY } from '@/lib/site-copy';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+-export const metadata: Metadata = {
+-  title: 'Top Ventes — Tendpick',
+-  description: 'Les produits les plus populaires, classés par plateforme : Amazon, Rakuten, AliExpress.',
+-};
++// Metadata par marché (03/10, demande Jerome) : convertie en
++// generateMetadata (comme app/c/[slug] et app/produits) pour refléter le
++// marché du visiteur au lieu d'un titre/description figés en français.
++export async function generateMetadata(): Promise<Metadata> {
++  const market = getMarketFromHost(headers().get('host'));
++  return {
++    title: SITE_COPY[market].topVentesPage.metaTitle,
++    description: SITE_COPY[market].topVentesPage.metaDescription,
++  };
++}
+ 
+ interface Props {
+   searchParams: { source?: string };
+@@ -39,6 +46,7 @@ async function getActiveProducts(market: Market): Promise<Product[]> {
+ 
+ export default async function TopVentesPage({ searchParams }: Props) {
+   const market = getMarketFromHost(headers().get('host'));
++  const t = SITE_COPY[market];
+   const [allProducts, categories] = await Promise.all([
+     getActiveProducts(market),
+     getActiveCategories(),
+@@ -62,11 +70,9 @@ export default async function TopVentesPage({ searchParams }: Props) {
+ 
+       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+         <div className="mb-8">
+-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">Top Ventes</h1>
++          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{t.nav.topVentes}</h1>
+           <p className="text-site-text-secondary">
+-            {filtered.length > 0
+-              ? `${filtered.length} produit${filtered.length > 1 ? 's' : ''} parmi les plus populaires`
+-              : 'Sélection en cours de préparation'}
++            {filtered.length > 0 ? t.topVentesPage.productCountAmong(filtered.length) : t.topVentesPage.preparing}
+           </p>
+         </div>
+ 
+@@ -79,7 +85,7 @@ export default async function TopVentesPage({ searchParams }: Props) {
+                 : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+             }`}
+           >
+-            Tout
++            {t.topVentesPage.all}
+           </Link>
+           {TOP_VENTES_SOURCES.map((s) => (
+             <Link
+@@ -91,7 +97,7 @@ export default async function TopVentesPage({ searchParams }: Props) {
+                   : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+               }`}
+             >
+-              Top {s.label}
++              {t.common.topPrefix} {s.label}
+             </Link>
+           ))}
+         </div>
+@@ -99,7 +105,7 @@ export default async function TopVentesPage({ searchParams }: Props) {
+         {filtered.length === 0 ? (
+           <div className="text-center py-24 text-site-text-secondary">
+             <div className="text-5xl mb-4">📦</div>
+-            <p className="text-lg">Aucun produit pour le moment sur cette plateforme.</p>
++            <p className="text-lg">{t.topVentesPage.nonePlatform}</p>
+           </div>
+         ) : (
+           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+@@ -142,10 +148,10 @@ export default async function TopVentesPage({ searchParams }: Props) {
+                       {p.price ? (
+                         <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
+                       ) : (
+-                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
++                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                       )}
+                       <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
+-                        Voir →
++                        {t.common.seeArrow}
+                       </span>
+                     </div>
+                   </div>
+diff --git a/components/landing/HeroCarousel.tsx b/components/landing/HeroCarousel.tsx
+index 3db0f37..62623e0 100644
+--- a/components/landing/HeroCarousel.tsx
++++ b/components/landing/HeroCarousel.tsx
+@@ -1,6 +1,12 @@
+ 'use client';
+ 
+ import { useEffect, useRef, useState } from 'react';
++import type { Market } from '@/lib/market';
++import { SITE_COPY } from '@/lib/site-copy';
++
++interface Props {
++  market: Market;
++}
+ 
+ // Carrousel hero — demande Jerome du 03/10 : parmi 10 propositions de
+ // bannières (texte + décor) soumises en review, il a retenu 4 angles
+@@ -24,35 +30,16 @@ import { useEffect, useRef, useState } from 'react';
+ // possible via le menu du header et la section Top Ventes juste en dessous.
+ const ACCENT_ORANGE = '#FF5A1F';
+ 
+-const SLIDES = [
+-  {
+-    headlineLine1: 'De nouveaux produits repérés',
+-    headlineLine2: 'chaque semaine',
+-    subtitle:
+-      "Notre veille identifie en continu ce qui émerge sur Amazon, Rakuten et AliExpress. Chaque fiche résume l'essentiel pour décider vite.",
+-  },
+-  {
+-    headlineLine1: 'Une sélection pensée,',
+-    headlineLine2: 'pas improvisée',
+-    subtitle:
+-      "Chaque produit référencé passe par une grille de critères avant d'apparaître ici. On privilégie la pertinence à la quantité.",
+-  },
+-  {
+-    headlineLine1: 'Les produits qui font parler',
+-    headlineLine2: 'sur les réseaux',
+-    subtitle:
+-      'On suit les tendances qui émergent sur les réseaux sociaux et on vous présente les produits concernés, avec une fiche complète pour juger par vous-même.',
+-  },
+-  {
+-    headlineLine1: 'Une sélection vérifiée,',
+-    headlineLine2: 'en toute confiance',
+-    subtitle: 'Chaque produit référencé est vérifié avant publication. Pas de fausses promesses, juste une information fiable.',
+-  },
+-] as const;
+-
+ const ROTATE_MS = 6500;
+ 
+-export default function HeroCarousel() {
++export default function HeroCarousel({ market }: Props) {
++  // Phrases de bannière traduites par marché (03/10, demande Jerome :
++  // "traduis tous les textes des 3 sites" + "vérifie les phrases dans la
++  // bannière") — avant ce correctif les 4 slides étaient 100% en français,
++  // y compris sur tendpick.es et tendpick.com (marché uk/anglophone). Voir
++  // lib/site-copy.ts pour les traductions.
++  const SLIDES = SITE_COPY[market].hero.slides;
++  const slideAria = SITE_COPY[market].hero.slideAria;
+   const [active, setActive] = useState(0);
+   const [paused, setPaused] = useState(false);
+   const reducedMotionRef = useRef(false);
+@@ -96,7 +83,7 @@ export default function HeroCarousel() {
+           const isActive = i === active;
+           return (
+             <div
+-              key={slide.headlineLine2}
++              key={i}
+               className={`flex flex-col items-center text-center transition-opacity duration-700 ease-in-out [grid-area:stack] ${
+                 isActive ? 'opacity-100' : 'pointer-events-none opacity-0'
+               }`}
+@@ -118,10 +105,10 @@ export default function HeroCarousel() {
+       <div className="relative z-10 mt-9 flex items-center justify-center gap-2">
+         {SLIDES.map((slide, i) => (
+           <button
+-            key={slide.headlineLine2}
++            key={i}
+             type="button"
+             onClick={() => setActive(i)}
+-            aria-label={`Aller à la bannière ${i + 1}`}
++            aria-label={slideAria(i + 1)}
+             aria-current={i === active}
+             className={`h-2 rounded-full transition-all ${
+               i === active ? 'w-6 bg-site-cta' : 'w-2 bg-white/30 hover:bg-white/50'
+diff --git a/components/layout/SiteFooter.tsx b/components/layout/SiteFooter.tsx
+index 38a7b36..d80f94d 100644
+--- a/components/layout/SiteFooter.tsx
++++ b/components/layout/SiteFooter.tsx
+@@ -1,6 +1,7 @@
+ import Link from 'next/link';
+ import type { Category } from '@/types';
+ import type { Market } from '@/lib/market';
++import { SITE_COPY } from '@/lib/site-copy';
+ 
+ interface Props {
+   categories: Category[];
+@@ -30,17 +31,18 @@ function categoryName(c: Category, market: Market): string {
+ // utilisé ailleurs sur le site). Le formulaire newsletter est visuel pour
+ // l'instant (pas encore branché à /api/leads) — à connecter ensuite.
+ export default function SiteFooter({ categories, market }: Props) {
++  const t = SITE_COPY[market].footer;
+   return (
+     <footer className="bg-site-primary text-white">
+       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 flex flex-col gap-8">
+         <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
+           <div className="flex flex-col gap-2 col-span-2 sm:col-span-1">
+             <span className="font-extrabold text-lg lowercase">tendpick</span>
+-            <span className="text-xs text-white/60">Le comparateur des produits tendance, tous marchés.</span>
++            <span className="text-xs text-white/60">{t.tagline}</span>
+           </div>
+ 
+           <div className="flex flex-col gap-2 col-span-2 sm:col-span-2">
+-            <span className="text-xs font-bold text-white">Catégories</span>
++            <span className="text-xs font-bold text-white">{t.categoriesLabel}</span>
+             {categories.length > 0 ? (
+               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                 {categories.map((c) => (
+@@ -51,51 +53,51 @@ export default function SiteFooter({ categories, market }: Props) {
+               </div>
+             ) : (
+               <Link href="/produits" className="text-xs text-white/60 hover:text-white transition-colors">
+-                Tout le catalogue
++                {t.allCatalog}
+               </Link>
+             )}
+           </div>
+ 
+           <div className="flex flex-col gap-2">
+-            <span className="text-xs font-bold text-white">Aide</span>
++            <span className="text-xs font-bold text-white">{t.help}</span>
+             <Link href="/mentions-legales" className="text-xs text-white/60 hover:text-white transition-colors">
+-              Mentions légales
++              {t.legalMentions}
+             </Link>
+             <Link href="/politique-confidentialite" className="text-xs text-white/60 hover:text-white transition-colors">
+-              Confidentialité
++              {t.privacy}
+             </Link>
+             <a href="mailto:contact@tendpick.com" className="text-xs text-white/60 hover:text-white transition-colors">
+-              Contact
++              {t.contact}
+             </a>
+           </div>
+ 
+           <div className="flex flex-col gap-2">
+-            <span className="text-xs font-bold text-white">Newsletter</span>
++            <span className="text-xs font-bold text-white">{t.newsletter}</span>
+             <label htmlFor="footer-newsletter-email" className="text-xs text-white/60">
+-              Les meilleures trouvailles, une fois par semaine
++              {t.newsletterSub}
+             </label>
+             <div className="flex gap-2">
+               <input
+                 id="footer-newsletter-email"
+                 type="email"
+-                placeholder="votre@email.com"
++                placeholder={t.emailPlaceholder}
+                 className="flex-1 min-w-0 rounded-md border-none px-2.5 py-2 text-xs text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary"
+               />
+               <button
+                 type="button"
+-                title="Newsletter — bientôt disponible"
++                title={t.newsletterButtonTitle}
+                 className="bg-site-cta hover:bg-site-cta-hover transition-colors rounded-md px-3 py-2 text-xs font-semibold text-white shrink-0"
+               >
+-                OK
++                {t.ok}
+               </button>
+             </div>
+           </div>
+         </div>
+ 
+         <div className="border-t border-white/15 pt-4 text-xs text-white/50">
+-          © {new Date().getFullYear()} Tendpick — Sélection affiliée,{' '}
++          © {new Date().getFullYear()} Tendpick — {t.copyrightPrefix}{' '}
+           <Link href="/mentions-legales" className="underline hover:text-white/80 transition-colors">
+-            voir notre politique de transparence
++            {t.transparencyLink}
+           </Link>
+         </div>
+       </div>
+diff --git a/components/layout/SiteHeader.tsx b/components/layout/SiteHeader.tsx
+index ea4e950..f4092bf 100644
+--- a/components/layout/SiteHeader.tsx
++++ b/components/layout/SiteHeader.tsx
+@@ -7,6 +7,7 @@ import { Menu, X, Search, ShoppingCart } from 'lucide-react';
+ import type { Category } from '@/types';
+ import type { Market } from '@/lib/market';
+ import { TOP_VENTES_SOURCES } from '@/lib/top-ventes';
++import { SITE_COPY } from '@/lib/site-copy';
+ 
+ interface Props {
+   categories: Category[];
+@@ -35,6 +36,11 @@ function LogoMark() {
+ }
+ 
+ export default function SiteHeader({ categories, market }: Props) {
++  // Traduction du chrome header (03/10, demande Jerome : "le menu Top
++  // Ventes doit être modifié" — c'était la seule chaîne du header non
++  // localisée, le reste (noms de catégories) vient déjà de la DB par
++  // marché). Voir lib/site-copy.ts pour le dictionnaire complet.
++  const t = SITE_COPY[market];
+   const router = useRouter();
+   const [mobileOpen, setMobileOpen] = useState(false);
+   const [topVentesOpen, setTopVentesOpen] = useState(false);
+@@ -79,7 +85,7 @@ export default function SiteHeader({ categories, market }: Props) {
+       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+         <Link
+           href="/"
+-          aria-label="Tendpick, accueil"
++          aria-label={t.nav.homeAria}
+           className="flex items-center gap-2 shrink-0 -ml-1 sm:-ml-1.5"
+         >
+           <LogoMark />
+@@ -98,7 +104,7 @@ export default function SiteHeader({ categories, market }: Props) {
+               aria-expanded={topVentesOpen}
+               className="text-[15px] font-semibold text-site-primary hover:text-site-secondary transition-colors whitespace-nowrap"
+             >
+-              Top Ventes
++              {t.nav.topVentes}
+             </button>
+             {topVentesOpen && (
+               <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-56 z-50">
+@@ -108,7 +114,7 @@ export default function SiteHeader({ categories, market }: Props) {
+                     onClick={() => setTopVentesOpen(false)}
+                     className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-site-text hover:bg-site-bg transition-colors"
+                   >
+-                    Tout voir
++                    {t.nav.seeAll}
+                   </Link>
+                   <div className="my-1 border-t border-site-border" />
+                   {TOP_VENTES_SOURCES.map((s) => (
+@@ -146,7 +152,7 @@ export default function SiteHeader({ categories, market }: Props) {
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+                 onBlur={() => !searchQuery && setSearchOpen(false)}
+-                placeholder="Rechercher un produit…"
++                placeholder={t.nav.searchPlaceholder}
+                 className="w-52 border border-site-border rounded-lg px-3 py-2 text-sm text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary/40"
+               />
+             </form>
+@@ -155,7 +161,7 @@ export default function SiteHeader({ categories, market }: Props) {
+               type="button"
+               onClick={() => setSearchOpen(true)}
+               className="text-site-text hover:text-site-primary transition-colors"
+-              aria-label="Rechercher"
++              aria-label={t.nav.searchAria}
+             >
+               <Search className="w-5 h-5" />
+             </button>
+@@ -167,9 +173,9 @@ export default function SiteHeader({ categories, market }: Props) {
+               que des produits en mode "direct" une fois ce mode activé. */}
+           <button
+             type="button"
+-            aria-label="Panier, 0 article"
++            aria-label={t.nav.cartAria(0)}
+             className="relative text-site-text hover:text-site-primary transition-colors"
+-            title="Panier — bientôt disponible"
++            title={t.nav.cartTitle}
+           >
+             <ShoppingCart className="w-5 h-5" />
+             <span className="absolute -top-1.5 -right-2 bg-site-cta text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+@@ -182,7 +188,7 @@ export default function SiteHeader({ categories, market }: Props) {
+           type="button"
+           onClick={() => setMobileOpen((v) => !v)}
+           className="md:hidden p-2 -mr-2 text-site-text"
+-          aria-label="Menu"
++          aria-label={t.nav.menuAria}
+         >
+           {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+         </button>
+@@ -203,13 +209,13 @@ export default function SiteHeader({ categories, market }: Props) {
+                 type="text"
+                 value={searchQuery}
+                 onChange={(e) => setSearchQuery(e.target.value)}
+-                placeholder="Rechercher un produit…"
++                placeholder={t.nav.searchPlaceholder}
+                 className="w-full border border-site-border rounded-lg pl-9 pr-3 py-2.5 text-sm text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary/40"
+               />
+             </form>
+-            <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">Top Ventes</p>
++            <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">{t.nav.topVentes}</p>
+             <Link href="/top-ventes" onClick={() => setMobileOpen(false)} className="px-2 py-2.5 text-sm font-medium text-site-text rounded-lg hover:bg-site-bg">
+-              Tout voir
++              {t.nav.seeAll}
+             </Link>
+             {TOP_VENTES_SOURCES.map((s) => (
+               <Link
+@@ -223,7 +229,7 @@ export default function SiteHeader({ categories, market }: Props) {
+             ))}
+ 
+             <div className="mt-2 pt-2 border-t border-site-border">
+-              <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">Catégories</p>
++              <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">{t.nav.categoriesLabel}</p>
+               {categories.map((c) => (
+                 <Link
+                   key={c.id}
+@@ -239,9 +245,9 @@ export default function SiteHeader({ categories, market }: Props) {
+             <div className="mt-2 pt-2 border-t border-site-border flex items-center justify-between px-2 py-2.5 text-sm text-site-text-secondary">
+               <span className="flex items-center gap-2">
+                 <ShoppingCart className="w-4 h-4" />
+-                Panier
++                {t.nav.cartLabel}
+               </span>
+-              <span>0 article</span>
++              <span>{t.nav.itemCount(0)}</span>
+             </div>
+           </div>
+         </div>
+diff --git a/lib/site-copy.ts b/lib/site-copy.ts
+new file mode 100644
+index 0000000..d254b82
+--- /dev/null
++++ b/lib/site-copy.ts
+@@ -0,0 +1,500 @@
++/**
++ * Copie centralisée fr/es/uk pour le CHROME du site catalogue Tendpick
++ * (header, footer, bannière hero, pages catalogue/catégorie/top-ventes,
++ * page bio, métadonnées globales).
++ *
++ * Point d'entrée unique — les composants piochent ici plutôt que de
++ * dupliquer des chaînes en dur. Complète lib/consent-copy.ts (cookies /
++ * disclosure, déjà localisé séparément) sans le dupliquer.
++ *
++ * Hors périmètre volontairement (03/10, demande Jerome "traduis tous les
++ * textes des 3 sites" scopée au catalogue après clarification) : les
++ * one-pages produit générées par IA (app/[slug]/page.tsx et ses sections
++ * HeroSection/ProductShowcase/Benefits/PainPoints/Testimonials/FAQ) sont un
++ * système séparé avec son propre i18n partiel (CTA_I18N dans
++ * app/[slug]/page.tsx) — à traiter à part si besoin.
++ */
++
++import type { Market } from '@/lib/market';
++
++function plural(n: number, fr = 's'): string {
++  return n > 1 ? fr : '';
++}
++
++interface SiteCopy {
++  nav: {
++    homeAria: string;
++    topVentes: string;
++    seeAll: string;
++    searchPlaceholder: string;
++    searchAria: string;
++    cartAria: (count: number) => string;
++    cartTitle: string;
++    menuAria: string;
++    categoriesLabel: string;
++    cartLabel: string;
++    itemCount: (count: number) => string;
++  };
++  footer: {
++    tagline: string;
++    categoriesLabel: string;
++    allCatalog: string;
++    help: string;
++    legalMentions: string;
++    privacy: string;
++    contact: string;
++    newsletter: string;
++    newsletterSub: string;
++    emailPlaceholder: string;
++    newsletterButtonTitle: string;
++    ok: string;
++    copyrightPrefix: string;
++    transparencyLink: string;
++  };
++  hero: {
++    slides: { headlineLine1: string; headlineLine2: string; subtitle: string }[];
++    slideAria: (i: number) => string;
++  };
++  common: {
++    priceAtMerchant: string;
++    seeArrow: string;
++    topPrefix: string;
++  };
++  home: {
++    ranking: string;
++    emptyPlatform: string;
++    seeFullTopVentes: string;
++    freshlyAdded: string;
++    momentSelection: string;
++    seeAllProducts: string;
++    ourAdvice: string;
++    fromBlog: string;
++    blogImageAlt: string;
++    readArticle: string;
++    soon: string;
++    howItWorks: string;
++    steps: { emoji: string; title: string; desc: string }[];
++    blog: { title: string; excerpt: string }[];
++  };
++  category: {
++    metaDescription: (name: string) => string;
++    productCount: (n: number) => string;
++    newSoon: string;
++    preparing: string;
++    comeBackDays: string;
++  };
++  products: {
++    metaTitle: string;
++    metaDescription: string;
++    resultsFor: (q: string) => string;
++    ourSelection: string;
++    productCountUpdated: (n: number) => string;
++    noResultsQuery: string;
++    newSoon: string;
++    backToCatalog: string;
++    nothingFor: (q: string) => string;
++    firstSelectionPreparing: string;
++    comeBackHours: string;
++  };
++  topVentesPage: {
++    metaTitle: string;
++    metaDescription: string;
++    productCountAmong: (n: number) => string;
++    preparing: string;
++    all: string;
++    nonePlatform: string;
++  };
++  bio: {
++    title: string;
++    productCount: (n: number) => string;
++    noProduct: string;
++    affiliateFooter: string;
++  };
++  global: {
++    siteTitleDefault: string;
++    siteDescription: string;
++  };
++}
++
++export const SITE_COPY: Record<Market, SiteCopy> = {
++  fr: {
++    nav: {
++      homeAria: 'Tendpick, accueil',
++      topVentes: 'Top Ventes',
++      seeAll: 'Tout voir',
++      searchPlaceholder: 'Rechercher un produit…',
++      searchAria: 'Rechercher',
++      cartAria: (n) => `Panier, ${n} article${plural(n)}`,
++      cartTitle: 'Panier — bientôt disponible',
++      menuAria: 'Menu',
++      categoriesLabel: 'Catégories',
++      cartLabel: 'Panier',
++      itemCount: (n) => `${n} article${plural(n)}`,
++    },
++    footer: {
++      tagline: 'Le comparateur des produits tendance, tous marchés.',
++      categoriesLabel: 'Catégories',
++      allCatalog: 'Tout le catalogue',
++      help: 'Aide',
++      legalMentions: 'Mentions légales',
++      privacy: 'Confidentialité',
++      contact: 'Contact',
++      newsletter: 'Newsletter',
++      newsletterSub: 'Les meilleures trouvailles, une fois par semaine',
++      emailPlaceholder: 'votre@email.com',
++      newsletterButtonTitle: 'Newsletter — bientôt disponible',
++      ok: 'OK',
++      copyrightPrefix: 'Sélection affiliée,',
++      transparencyLink: 'voir notre politique de transparence',
++    },
++    hero: {
++      slides: [
++        {
++          headlineLine1: 'De nouveaux produits repérés',
++          headlineLine2: 'chaque semaine',
++          subtitle:
++            "Notre veille identifie en continu ce qui émerge sur Amazon, Rakuten et AliExpress. Chaque fiche résume l'essentiel pour décider vite.",
++        },
++        {
++          headlineLine1: 'Une sélection pensée,',
++          headlineLine2: 'pas improvisée',
++          subtitle:
++            "Chaque produit référencé passe par une grille de critères avant d'apparaître ici. On privilégie la pertinence à la quantité.",
++        },
++        {
++          headlineLine1: 'Les produits qui font parler',
++          headlineLine2: 'sur les réseaux',
++          subtitle:
++            'On suit les tendances qui émergent sur les réseaux sociaux et on vous présente les produits concernés, avec une fiche complète pour juger par vous-même.',
++        },
++        {
++          headlineLine1: 'Une sélection vérifiée,',
++          headlineLine2: 'en toute confiance',
++          subtitle: 'Chaque produit référencé est vérifié avant publication. Pas de fausses promesses, juste une information fiable.',
++        },
++      ],
++      slideAria: (i) => `Aller à la bannière ${i}`,
++    },
++    common: {
++      priceAtMerchant: 'Prix chez le marchand',
++      seeArrow: 'Voir →',
++      topPrefix: 'Top',
++    },
++    home: {
++      ranking: 'Classement',
++      emptyPlatform: 'Sélection en cours de préparation pour cette plateforme.',
++      seeFullTopVentes: 'Voir tout le Top Ventes →',
++      freshlyAdded: 'Fraîchement ajouté',
++      momentSelection: 'Sélection du moment',
++      seeAllProducts: 'Voir tous les produits →',
++      ourAdvice: 'Nos conseils',
++      fromBlog: 'Depuis le blog',
++      blogImageAlt: 'Image article',
++      readArticle: "Lire l'article →",
++      soon: '(bientôt)',
++      howItWorks: 'Comment ça marche',
++      steps: [
++        { emoji: '🔍', title: 'On analyse', desc: 'Chaque semaine, nous passons en revue les meilleures ventes en ligne pour trouver les produits les plus populaires et les mieux notés.' },
++        { emoji: '✍️', title: 'On rédige', desc: "Pour chaque produit, nous créons une fiche complète : avantages clés, FAQ, avis clients et conseils d'achat pour vous aider à décider." },
++        { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement chez le marchand, en toute sécurité, au meilleur prix disponible.' },
++      ],
++      blog: [
++        { title: '5 accessoires tech qui changent le quotidien', excerpt: 'Sélection testée et comparée, avec nos coups de cœur du mois.' },
++        { title: 'Aménager un coin bien-être chez soi', excerpt: 'Idées déco et petit budget pour un espace calme.' },
++        { title: 'Le yoga à la maison : par où commencer', excerpt: 'Le matériel essentiel pour débuter sans se ruiner.' },
++      ],
++    },
++    category: {
++      metaDescription: (name) => `Découvrez notre sélection ${name} sur Tendpick.`,
++      productCount: (n) => `${n} produit${plural(n)} sélectionné${plural(n)}`,
++      newSoon: 'Nouveaux produits bientôt disponibles dans cette catégorie',
++      preparing: 'Sélection en cours de préparation…',
++      comeBackDays: 'Revenez dans quelques jours !',
++    },
++    products: {
++      metaTitle: 'Catalogue produits — Tendpick',
++      metaDescription: 'Découvrez tous les produits sélectionnés par Tendpick : les meilleures ventes en ligne avec des fiches détaillées.',
++      resultsFor: (q) => `Résultats pour « ${q} »`,
++      ourSelection: 'Notre sélection',
++      productCountUpdated: (n) => `${n} produit${plural(n)} sélectionné${plural(n)} — mis à jour chaque semaine`,
++      noResultsQuery: 'Aucun produit ne correspond à cette recherche',
++      newSoon: 'Nouveaux produits bientôt disponibles',
++      backToCatalog: '← Voir tout le catalogue',
++      nothingFor: (q) => `Rien ne correspond à « ${q} ».`,
++      firstSelectionPreparing: 'Première sélection en cours de préparation…',
++      comeBackHours: 'Revenez dans quelques heures !',
++    },
++    topVentesPage: {
++      metaTitle: 'Top Ventes — Tendpick',
++      metaDescription: 'Les produits les plus populaires, classés par plateforme : Amazon, Rakuten, AliExpress.',
++      productCountAmong: (n) => `${n} produit${plural(n)} parmi les plus populaires`,
++      preparing: 'Sélection en cours de préparation',
++      all: 'Tout',
++      nonePlatform: 'Aucun produit pour le moment sur cette plateforme.',
++    },
++    bio: {
++      title: 'Nos sélections',
++      productCount: (n) => `${n} produit${n !== 1 ? 's' : ''} soigneusement sélectionnés`,
++      noProduct: 'Aucun produit disponible pour le moment.',
++      affiliateFooter: "Liens d'affiliation ·",
++    },
++    global: {
++      siteTitleDefault: 'Tendpick — Les meilleurs produits du moment',
++      siteDescription: 'Tendpick sélectionne les meilleurs produits Amazon pour vous. Fiches détaillées, avis, et prix mis à jour.',
++    },
++  },
++
++  es: {
++    nav: {
++      homeAria: 'Tendpick, inicio',
++      topVentes: 'Más vendidos',
++      seeAll: 'Ver todo',
++      searchPlaceholder: 'Buscar un producto…',
++      searchAria: 'Buscar',
++      cartAria: (n) => `Carrito, ${n} artículo${plural(n)}`,
++      cartTitle: 'Carrito — próximamente disponible',
++      menuAria: 'Menú',
++      categoriesLabel: 'Categorías',
++      cartLabel: 'Carrito',
++      itemCount: (n) => `${n} artículo${plural(n)}`,
++    },
++    footer: {
++      tagline: 'El comparador de los productos de moda, todos los mercados.',
++      categoriesLabel: 'Categorías',
++      allCatalog: 'Todo el catálogo',
++      help: 'Ayuda',
++      legalMentions: 'Aviso legal',
++      privacy: 'Privacidad',
++      contact: 'Contacto',
++      newsletter: 'Newsletter',
++      newsletterSub: 'Los mejores hallazgos, una vez por semana',
++      emailPlaceholder: 'tu@email.com',
++      newsletterButtonTitle: 'Newsletter — próximamente disponible',
++      ok: 'OK',
++      copyrightPrefix: 'Selección de afiliados,',
++      transparencyLink: 'ver nuestra política de transparencia',
++    },
++    hero: {
++      slides: [
++        {
++          headlineLine1: 'Nuevos productos detectados',
++          headlineLine2: 'cada semana',
++          subtitle:
++            'Nuestra vigilancia identifica continuamente lo que surge en Amazon, Rakuten y AliExpress. Cada ficha resume lo esencial para decidir rápido.',
++        },
++        {
++          headlineLine1: 'Una selección pensada,',
++          headlineLine2: 'no improvisada',
++          subtitle:
++            'Cada producto referenciado pasa por una serie de criterios antes de aparecer aquí. Priorizamos la relevancia sobre la cantidad.',
++        },
++        {
++          headlineLine1: 'Los productos de los que se habla',
++          headlineLine2: 'en redes sociales',
++          subtitle:
++            'Seguimos las tendencias que surgen en redes sociales y te presentamos los productos relacionados, con una ficha completa para que juzgues por ti mismo.',
++        },
++        {
++          headlineLine1: 'Una selección verificada,',
++          headlineLine2: 'con toda confianza',
++          subtitle: 'Cada producto referenciado se verifica antes de su publicación. Sin falsas promesas, solo información fiable.',
++        },
++      ],
++      slideAria: (i) => `Ir al banner ${i}`,
++    },
++    common: {
++      priceAtMerchant: 'Precio en la tienda',
++      seeArrow: 'Ver →',
++      topPrefix: 'Top',
++    },
++    home: {
++      ranking: 'Clasificación',
++      emptyPlatform: 'Selección en preparación para esta plataforma.',
++      seeFullTopVentes: 'Ver todo lo más vendido →',
++      freshlyAdded: 'Recién añadido',
++      momentSelection: 'Selección del momento',
++      seeAllProducts: 'Ver todos los productos →',
++      ourAdvice: 'Nuestros consejos',
++      fromBlog: 'Desde el blog',
++      blogImageAlt: 'Imagen del artículo',
++      readArticle: 'Leer el artículo →',
++      soon: '(próximamente)',
++      howItWorks: 'Cómo funciona',
++      steps: [
++        { emoji: '🔍', title: 'Analizamos', desc: 'Cada semana revisamos los más vendidos online para encontrar los productos más populares y mejor valorados.' },
++        { emoji: '✍️', title: 'Redactamos', desc: 'Para cada producto creamos una ficha completa: ventajas clave, preguntas frecuentes, opiniones de clientes y consejos de compra para ayudarte a decidir.' },
++        { emoji: '🛒', title: 'Tú compras', desc: 'Un clic en el botón te lleva directamente a la tienda, de forma segura, al mejor precio disponible.' },
++      ],
++      blog: [
++        { title: '5 accesorios tecnológicos que cambian el día a día', excerpt: 'Selección probada y comparada, con nuestros favoritos del mes.' },
++        { title: 'Crear un rincón de bienestar en casa', excerpt: 'Ideas de decoración y bajo presupuesto para un espacio tranquilo.' },
++        { title: 'Yoga en casa: por dónde empezar', excerpt: 'El material esencial para empezar sin gastar de más.' },
++      ],
++    },
++    category: {
++      metaDescription: (name) => `Descubre nuestra selección ${name} en Tendpick.`,
++      productCount: (n) => `${n} producto${plural(n)} seleccionado${plural(n)}`,
++      newSoon: 'Nuevos productos disponibles próximamente en esta categoría',
++      preparing: 'Selección en preparación…',
++      comeBackDays: '¡Vuelve en unos días!',
++    },
++    products: {
++      metaTitle: 'Catálogo de productos — Tendpick',
++      metaDescription: 'Descubre todos los productos seleccionados por Tendpick: los más vendidos online con fichas detalladas.',
++      resultsFor: (q) => `Resultados para «${q}»`,
++      ourSelection: 'Nuestra selección',
++      productCountUpdated: (n) => `${n} producto${plural(n)} seleccionado${plural(n)} — actualizado cada semana`,
++      noResultsQuery: 'Ningún producto coincide con esta búsqueda',
++      newSoon: 'Nuevos productos disponibles próximamente',
++      backToCatalog: '← Ver todo el catálogo',
++      nothingFor: (q) => `Nada coincide con «${q}».`,
++      firstSelectionPreparing: 'Primera selección en preparación…',
++      comeBackHours: '¡Vuelve en unas horas!',
++    },
++    topVentesPage: {
++      metaTitle: 'Más vendidos — Tendpick',
++      metaDescription: 'Los productos más populares, clasificados por plataforma: Amazon, Rakuten, AliExpress.',
++      productCountAmong: (n) => `${n} producto${plural(n)} entre los más populares`,
++      preparing: 'Selección en preparación',
++      all: 'Todo',
++      nonePlatform: 'Ningún producto por ahora en esta plataforma.',
++    },
++    bio: {
++      title: 'Nuestras selecciones',
++      productCount: (n) => `${n} producto${n !== 1 ? 's' : ''} cuidadosamente seleccionados`,
++      noProduct: 'Ningún producto disponible por el momento.',
++      affiliateFooter: 'Enlaces de afiliados ·',
++    },
++    global: {
++      siteTitleDefault: 'Tendpick — Los mejores productos del momento',
++      siteDescription: 'Tendpick selecciona los mejores productos de Amazon para ti. Fichas detalladas, opiniones y precios actualizados.',
++    },
++  },
++
++  uk: {
++    nav: {
++      homeAria: 'Tendpick, home',
++      topVentes: 'Best Sellers',
++      seeAll: 'See all',
++      searchPlaceholder: 'Search for a product…',
++      searchAria: 'Search',
++      cartAria: (n) => `Cart, ${n} item${plural(n)}`,
++      cartTitle: 'Cart — coming soon',
++      menuAria: 'Menu',
++      categoriesLabel: 'Categories',
++      cartLabel: 'Cart',
++      itemCount: (n) => `${n} item${plural(n)}`,
++    },
++    footer: {
++      tagline: 'The trending products comparison site, every market.',
++      categoriesLabel: 'Categories',
++      allCatalog: 'Full catalogue',
++      help: 'Help',
++      legalMentions: 'Legal notice',
++      privacy: 'Privacy',
++      contact: 'Contact',
++      newsletter: 'Newsletter',
++      newsletterSub: 'The best finds, once a week',
++      emailPlaceholder: 'you@email.com',
++      newsletterButtonTitle: 'Newsletter — coming soon',
++      ok: 'OK',
++      copyrightPrefix: 'Affiliate selection,',
++      transparencyLink: 'see our transparency policy',
++    },
++    hero: {
++      slides: [
++        {
++          headlineLine1: 'New products spotted',
++          headlineLine2: 'every week',
++          subtitle:
++            "Our tracking continuously identifies what's emerging on Amazon, Rakuten and AliExpress. Each listing sums up what matters so you can decide fast.",
++        },
++        {
++          headlineLine1: "A selection that's considered,",
++          headlineLine2: 'never improvised',
++          subtitle:
++            "Every product listed here goes through a set of criteria before it's added. We prioritise relevance over quantity.",
++        },
++        {
++          headlineLine1: "The products everyone's talking about",
++          headlineLine2: 'on social media',
++          subtitle:
++            'We track trends emerging on social media and show you the products behind them, with a full listing so you can judge for yourself.',
++        },
++        {
++          headlineLine1: 'A verified selection,',
++          headlineLine2: 'you can trust',
++          subtitle: 'Every product listed is checked before publishing. No false promises — just reliable information.',
++        },
++      ],
++      slideAria: (i) => `Go to banner ${i}`,
++    },
++    common: {
++      priceAtMerchant: 'Price at merchant',
++      seeArrow: 'View →',
++      topPrefix: 'Top',
++    },
++    home: {
++      ranking: 'Ranking',
++      emptyPlatform: 'Selection coming soon for this platform.',
++      seeFullTopVentes: 'See all Best Sellers →',
++      freshlyAdded: 'Freshly added',
++      momentSelection: 'Picked right now',
++      seeAllProducts: 'See all products →',
++      ourAdvice: 'Our advice',
++      fromBlog: 'From the blog',
++      blogImageAlt: 'Article image',
++      readArticle: 'Read the article →',
++      soon: '(coming soon)',
++      howItWorks: 'How it works',
++      steps: [
++        { emoji: '🔍', title: 'We research', desc: "Every week we review the best-selling products online to find what's most popular and best rated." },
++        { emoji: '✍️', title: 'We write it up', desc: 'For every product we build a full listing: key benefits, FAQ, customer reviews and buying advice to help you decide.' },
++        { emoji: '🛒', title: 'You buy', desc: 'One click takes you straight to the merchant, safely, at the best price available.' },
++      ],
++      blog: [
++        { title: 'Five tech accessories that change your daily routine', excerpt: 'Tested and compared picks, with our favourites of the month.' },
++        { title: 'Setting up a wellness corner at home', excerpt: 'Decor ideas on a small budget for a calm space.' },
++        { title: 'Yoga at home: where to start', excerpt: 'The essential kit to get started without overspending.' },
++      ],
++    },
++    category: {
++      metaDescription: (name) => `Discover our ${name} selection on Tendpick.`,
++      productCount: (n) => `${n} product${plural(n)} selected`,
++      newSoon: 'New products coming soon to this category',
++      preparing: 'Selection coming together…',
++      comeBackDays: 'Check back in a few days!',
++    },
++    products: {
++      metaTitle: 'Product catalogue — Tendpick',
++      metaDescription: 'Discover every product selected by Tendpick: the best online sellers with detailed listings.',
++      resultsFor: (q) => `Results for "${q}"`,
++      ourSelection: 'Our selection',
++      productCountUpdated: (n) => `${n} product${plural(n)} selected — updated weekly`,
++      noResultsQuery: 'No products match this search',
++      newSoon: 'New products coming soon',
++      backToCatalog: '← See the full catalogue',
++      nothingFor: (q) => `Nothing matches "${q}".`,
++      firstSelectionPreparing: 'Our first selection is coming together…',
++      comeBackHours: 'Check back in a few hours!',
++    },
++    topVentesPage: {
++      metaTitle: 'Best Sellers — Tendpick',
++      metaDescription: 'The most popular products, ranked by platform: Amazon, Rakuten, AliExpress.',
++      productCountAmong: (n) => `${n} product${plural(n)} among the most popular`,
++      preparing: 'Selection coming soon',
++      all: 'All',
++      nonePlatform: 'No products yet on this platform.',
++    },
++    bio: {
++      title: 'Our picks',
++      productCount: (n) => `${n} carefully selected product${n !== 1 ? 's' : ''}`,
++      noProduct: 'No products available right now.',
++      affiliateFooter: 'Affiliate links ·',
++    },
++    global: {
++      siteTitleDefault: 'Tendpick — The best products right now',
++      siteDescription: 'Tendpick selects the best Amazon products for you. Detailed listings, reviews, and prices kept up to date.',
++    },
++  },
++};
+-- 
+2.43.0
+

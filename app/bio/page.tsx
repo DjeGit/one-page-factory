@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { headers } from 'next/headers';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
+import { SITE_COPY } from '@/lib/site-copy';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,7 @@ export default async function BioPage() {
   // middleware.ts — même détection canonique partagée.
   const host = headers().get('host') ?? '';
   const market = getMarketFromHost(host);
+  const t = SITE_COPY[market].bio;
   const allProducts = await getAllProducts(market);
   const active = allProducts.filter((p) => p.active);
 
@@ -65,7 +67,7 @@ export default async function BioPage() {
             letterSpacing: '-0.02em',
           }}
         >
-          Nos sélections
+          {t.title}
         </h1>
         <p
           style={{
@@ -74,7 +76,7 @@ export default async function BioPage() {
             margin: 0,
           }}
         >
-          {active.length} produit{active.length !== 1 ? 's' : ''} soigneusement sélectionnés
+          {t.productCount(active.length)}
         </p>
       </div>
 
@@ -100,7 +102,7 @@ export default async function BioPage() {
               fontSize: 14,
             }}
           >
-            Aucun produit disponible pour le moment.
+            {t.noProduct}
           </div>
         ) : (
           active.map((product) => (
@@ -224,7 +226,7 @@ export default async function BioPage() {
           textAlign: 'center',
         }}
       >
-        Liens d&apos;affiliation · © {new Date().getFullYear()}
+        {t.affiliateFooter} © {new Date().getFullYear()}
       </p>
     </main>
   );

@@ -7,6 +7,7 @@ import { Menu, X, Search, ShoppingCart } from 'lucide-react';
 import type { Category } from '@/types';
 import type { Market } from '@/lib/market';
 import { TOP_VENTES_SOURCES } from '@/lib/top-ventes';
+import { SITE_COPY } from '@/lib/site-copy';
 
 interface Props {
   categories: Category[];
@@ -35,6 +36,11 @@ function LogoMark() {
 }
 
 export default function SiteHeader({ categories, market }: Props) {
+  // Traduction du chrome header (03/10, demande Jerome : "le menu Top
+  // Ventes doit être modifié" — c'était la seule chaîne du header non
+  // localisée, le reste (noms de catégories) vient déjà de la DB par
+  // marché). Voir lib/site-copy.ts pour le dictionnaire complet.
+  const t = SITE_COPY[market];
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [topVentesOpen, setTopVentesOpen] = useState(false);
@@ -79,7 +85,7 @@ export default function SiteHeader({ categories, market }: Props) {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         <Link
           href="/"
-          aria-label="Tendpick, accueil"
+          aria-label={t.nav.homeAria}
           className="flex items-center gap-2 shrink-0 -ml-1 sm:-ml-1.5"
         >
           <LogoMark />
@@ -98,7 +104,7 @@ export default function SiteHeader({ categories, market }: Props) {
               aria-expanded={topVentesOpen}
               className="text-[15px] font-semibold text-site-primary hover:text-site-secondary transition-colors whitespace-nowrap"
             >
-              Top Ventes
+              {t.nav.topVentes}
             </button>
             {topVentesOpen && (
               <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-56 z-50">
@@ -108,7 +114,7 @@ export default function SiteHeader({ categories, market }: Props) {
                     onClick={() => setTopVentesOpen(false)}
                     className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-site-text hover:bg-site-bg transition-colors"
                   >
-                    Tout voir
+                    {t.nav.seeAll}
                   </Link>
                   <div className="my-1 border-t border-site-border" />
                   {TOP_VENTES_SOURCES.map((s) => (
@@ -146,7 +152,7 @@ export default function SiteHeader({ categories, market }: Props) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onBlur={() => !searchQuery && setSearchOpen(false)}
-                placeholder="Rechercher un produit…"
+                placeholder={t.nav.searchPlaceholder}
                 className="w-52 border border-site-border rounded-lg px-3 py-2 text-sm text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary/40"
               />
             </form>
@@ -155,7 +161,7 @@ export default function SiteHeader({ categories, market }: Props) {
               type="button"
               onClick={() => setSearchOpen(true)}
               className="text-site-text hover:text-site-primary transition-colors"
-              aria-label="Rechercher"
+              aria-label={t.nav.searchAria}
             >
               <Search className="w-5 h-5" />
             </button>
@@ -167,9 +173,9 @@ export default function SiteHeader({ categories, market }: Props) {
               que des produits en mode "direct" une fois ce mode activé. */}
           <button
             type="button"
-            aria-label="Panier, 0 article"
+            aria-label={t.nav.cartAria(0)}
             className="relative text-site-text hover:text-site-primary transition-colors"
-            title="Panier — bientôt disponible"
+            title={t.nav.cartTitle}
           >
             <ShoppingCart className="w-5 h-5" />
             <span className="absolute -top-1.5 -right-2 bg-site-cta text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
@@ -182,7 +188,7 @@ export default function SiteHeader({ categories, market }: Props) {
           type="button"
           onClick={() => setMobileOpen((v) => !v)}
           className="md:hidden p-2 -mr-2 text-site-text"
-          aria-label="Menu"
+          aria-label={t.nav.menuAria}
         >
           {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -203,13 +209,13 @@ export default function SiteHeader({ categories, market }: Props) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher un produit…"
+                placeholder={t.nav.searchPlaceholder}
                 className="w-full border border-site-border rounded-lg pl-9 pr-3 py-2.5 text-sm text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary/40"
               />
             </form>
-            <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">Top Ventes</p>
+            <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">{t.nav.topVentes}</p>
             <Link href="/top-ventes" onClick={() => setMobileOpen(false)} className="px-2 py-2.5 text-sm font-medium text-site-text rounded-lg hover:bg-site-bg">
-              Tout voir
+              {t.nav.seeAll}
             </Link>
             {TOP_VENTES_SOURCES.map((s) => (
               <Link
@@ -223,7 +229,7 @@ export default function SiteHeader({ categories, market }: Props) {
             ))}
 
             <div className="mt-2 pt-2 border-t border-site-border">
-              <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">Catégories</p>
+              <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">{t.nav.categoriesLabel}</p>
               {categories.map((c) => (
                 <Link
                   key={c.id}
@@ -239,9 +245,9 @@ export default function SiteHeader({ categories, market }: Props) {
             <div className="mt-2 pt-2 border-t border-site-border flex items-center justify-between px-2 py-2.5 text-sm text-site-text-secondary">
               <span className="flex items-center gap-2">
                 <ShoppingCart className="w-4 h-4" />
-                Panier
+                {t.nav.cartLabel}
               </span>
-              <span>0 article</span>
+              <span>{t.nav.itemCount(0)}</span>
             </div>
           </div>
         </div>

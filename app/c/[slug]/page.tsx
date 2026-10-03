@@ -9,6 +9,7 @@ import type { Metadata } from 'next';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
+import { SITE_COPY } from '@/lib/site-copy';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = categoryName(category, market);
   return {
     title: `${name} — Tendpick`,
-    description: `Découvrez notre sélection ${name} sur Tendpick.`,
+    description: SITE_COPY[market].category.metaDescription(name),
   };
 }
 
@@ -46,6 +47,7 @@ export default async function CategoryPage({ params }: Props) {
   ]);
 
   const name = categoryName(category, market);
+  const t = SITE_COPY[market];
 
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
@@ -61,17 +63,15 @@ export default async function CategoryPage({ params }: Props) {
               "enlève tous les icônes à côté des titres"). */}
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{name}</h1>
           <p className="text-site-text-secondary">
-            {products.length > 0
-              ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''}`
-              : 'Nouveaux produits bientôt disponibles dans cette catégorie'}
+            {products.length > 0 ? t.category.productCount(products.length) : t.category.newSoon}
           </p>
         </div>
 
         {products.length === 0 ? (
           <div className="text-center py-24 text-site-text-secondary">
             <div className="text-5xl mb-4">{category.icon || '📦'}</div>
-            <p className="text-lg">Sélection en cours de préparation…</p>
-            <p className="text-sm mt-2">Revenez dans quelques jours !</p>
+            <p className="text-lg">{t.category.preparing}</p>
+            <p className="text-sm mt-2">{t.category.comeBackDays}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -114,10 +114,10 @@ export default async function CategoryPage({ params }: Props) {
                       {p.price ? (
                         <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
                       ) : (
-                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
+                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
                       )}
                       <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
-                        Voir →
+                        {t.common.seeArrow}
                       </span>
                     </div>
                   </div>

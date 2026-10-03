@@ -12,13 +12,20 @@ import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
+import { SITE_COPY } from '@/lib/site-copy';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Catalogue produits — Tendpick',
-  description: 'Découvrez tous les produits sélectionnés par Tendpick : les meilleures ventes en ligne avec des fiches détaillées.',
-};
+// Metadata par marché (03/10, demande Jerome) : était figée en français
+// avant ce correctif — convertie en generateMetadata (comme app/c/[slug])
+// pour pouvoir lire le host et donc le marché du visiteur.
+export async function generateMetadata(): Promise<Metadata> {
+  const market = getMarketFromHost(headers().get('host'));
+  return {
+    title: SITE_COPY[market].products.metaTitle,
+    description: SITE_COPY[market].products.metaDescription,
+  };
+}
 
 interface Props {
   searchParams: { q?: string };
@@ -56,6 +63,7 @@ export default async function ProduitsPage({ searchParams }: Props) {
   const market = getMarketFromHost(headers().get('host'));
   const query = searchParams.q?.trim() || undefined;
   const [products, categories] = await Promise.all([getAllActive(market, query), getActiveCategories()]);
+  const t = SITE_COPY[market];
 
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
@@ -68,18 +76,18 @@ export default async function ProduitsPage({ searchParams }: Props) {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-10">
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">
-            {query ? `Résultats pour « ${query} »` : 'Notre sélection'}
+            {query ? t.products.resultsFor(query) : t.products.ourSelection}
           </h1>
           <p className="text-site-text-secondary">
             {products.length > 0
-              ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''} — mis à jour chaque semaine`
+              ? t.products.productCountUpdated(products.length)
               : query
-              ? 'Aucun produit ne correspond à cette recherche'
-              : 'Nouveaux produits bientôt disponibles'}
+              ? t.products.noResultsQuery
+              : t.products.newSoon}
           </p>
           {query && (
             <Link href="/produits" className="inline-block mt-2 text-sm text-site-secondary hover:text-site-primary transition-colors">
-              ← Voir tout le catalogue
+              {t.products.backToCatalog}
             </Link>
           )}
         </div>
@@ -88,11 +96,11 @@ export default async function ProduitsPage({ searchParams }: Props) {
           <div className="text-center py-24 text-site-text-secondary">
             <div className="text-5xl mb-4">📦</div>
             {query ? (
-              <p className="text-lg">Rien ne correspond à « {query} ».</p>
+              <p className="text-lg">{t.products.nothingFor(query)}</p>
             ) : (
               <>
-                <p className="text-lg">Première sélection en cours de préparation…</p>
-                <p className="text-sm mt-2">Revenez dans quelques heures !</p>
+                <p className="text-lg">{t.products.firstSelectionPreparing}</p>
+                <p className="text-sm mt-2">{t.products.comeBackHours}</p>
               </>
             )}
           </div>
@@ -137,10 +145,10 @@ export default async function ProduitsPage({ searchParams }: Props) {
                       {p.price ? (
                         <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
                       ) : (
-                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
+                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
                       )}
                       <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
-                        Voir →
+                        {t.common.seeArrow}
                       </span>
                     </div>
                   </div>

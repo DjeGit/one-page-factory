@@ -10,13 +10,20 @@ import type { Metadata } from 'next';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
+import { SITE_COPY } from '@/lib/site-copy';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Top Ventes — Tendpick',
-  description: 'Les produits les plus populaires, classés par plateforme : Amazon, Rakuten, AliExpress.',
-};
+// Metadata par marché (03/10, demande Jerome) : convertie en
+// generateMetadata (comme app/c/[slug] et app/produits) pour refléter le
+// marché du visiteur au lieu d'un titre/description figés en français.
+export async function generateMetadata(): Promise<Metadata> {
+  const market = getMarketFromHost(headers().get('host'));
+  return {
+    title: SITE_COPY[market].topVentesPage.metaTitle,
+    description: SITE_COPY[market].topVentesPage.metaDescription,
+  };
+}
 
 interface Props {
   searchParams: { source?: string };
@@ -39,6 +46,7 @@ async function getActiveProducts(market: Market): Promise<Product[]> {
 
 export default async function TopVentesPage({ searchParams }: Props) {
   const market = getMarketFromHost(headers().get('host'));
+  const t = SITE_COPY[market];
   const [allProducts, categories] = await Promise.all([
     getActiveProducts(market),
     getActiveCategories(),
@@ -62,11 +70,9 @@ export default async function TopVentesPage({ searchParams }: Props) {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">Top Ventes</h1>
+          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{t.nav.topVentes}</h1>
           <p className="text-site-text-secondary">
-            {filtered.length > 0
-              ? `${filtered.length} produit${filtered.length > 1 ? 's' : ''} parmi les plus populaires`
-              : 'Sélection en cours de préparation'}
+            {filtered.length > 0 ? t.topVentesPage.productCountAmong(filtered.length) : t.topVentesPage.preparing}
           </p>
         </div>
 
@@ -79,7 +85,7 @@ export default async function TopVentesPage({ searchParams }: Props) {
                 : 'bg-white border-site-border text-site-text hover:border-site-secondary'
             }`}
           >
-            Tout
+            {t.topVentesPage.all}
           </Link>
           {TOP_VENTES_SOURCES.map((s) => (
             <Link
@@ -91,7 +97,7 @@ export default async function TopVentesPage({ searchParams }: Props) {
                   : 'bg-white border-site-border text-site-text hover:border-site-secondary'
               }`}
             >
-              Top {s.label}
+              {t.common.topPrefix} {s.label}
             </Link>
           ))}
         </div>
@@ -99,7 +105,7 @@ export default async function TopVentesPage({ searchParams }: Props) {
         {filtered.length === 0 ? (
           <div className="text-center py-24 text-site-text-secondary">
             <div className="text-5xl mb-4">📦</div>
-            <p className="text-lg">Aucun produit pour le moment sur cette plateforme.</p>
+            <p className="text-lg">{t.topVentesPage.nonePlatform}</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -142,10 +148,10 @@ export default async function TopVentesPage({ searchParams }: Props) {
                       {p.price ? (
                         <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
                       ) : (
-                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
+                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
                       )}
                       <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
-                        Voir →
+                        {t.common.seeArrow}
                       </span>
                     </div>
                   </div>

@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { Market } from '@/lib/market';
+import { SITE_COPY } from '@/lib/site-copy';
+
+interface Props {
+  market: Market;
+}
 
 // Carrousel hero — demande Jerome du 03/10 : parmi 10 propositions de
 // bannières (texte + décor) soumises en review, il a retenu 4 angles
@@ -24,35 +30,16 @@ import { useEffect, useRef, useState } from 'react';
 // possible via le menu du header et la section Top Ventes juste en dessous.
 const ACCENT_ORANGE = '#FF5A1F';
 
-const SLIDES = [
-  {
-    headlineLine1: 'De nouveaux produits repérés',
-    headlineLine2: 'chaque semaine',
-    subtitle:
-      "Notre veille identifie en continu ce qui émerge sur Amazon, Rakuten et AliExpress. Chaque fiche résume l'essentiel pour décider vite.",
-  },
-  {
-    headlineLine1: 'Une sélection pensée,',
-    headlineLine2: 'pas improvisée',
-    subtitle:
-      "Chaque produit référencé passe par une grille de critères avant d'apparaître ici. On privilégie la pertinence à la quantité.",
-  },
-  {
-    headlineLine1: 'Les produits qui font parler',
-    headlineLine2: 'sur les réseaux',
-    subtitle:
-      'On suit les tendances qui émergent sur les réseaux sociaux et on vous présente les produits concernés, avec une fiche complète pour juger par vous-même.',
-  },
-  {
-    headlineLine1: 'Une sélection vérifiée,',
-    headlineLine2: 'en toute confiance',
-    subtitle: 'Chaque produit référencé est vérifié avant publication. Pas de fausses promesses, juste une information fiable.',
-  },
-] as const;
-
 const ROTATE_MS = 6500;
 
-export default function HeroCarousel() {
+export default function HeroCarousel({ market }: Props) {
+  // Phrases de bannière traduites par marché (03/10, demande Jerome :
+  // "traduis tous les textes des 3 sites" + "vérifie les phrases dans la
+  // bannière") — avant ce correctif les 4 slides étaient 100% en français,
+  // y compris sur tendpick.es et tendpick.com (marché uk/anglophone). Voir
+  // lib/site-copy.ts pour les traductions.
+  const SLIDES = SITE_COPY[market].hero.slides;
+  const slideAria = SITE_COPY[market].hero.slideAria;
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const reducedMotionRef = useRef(false);
@@ -96,7 +83,7 @@ export default function HeroCarousel() {
           const isActive = i === active;
           return (
             <div
-              key={slide.headlineLine2}
+              key={i}
               className={`flex flex-col items-center text-center transition-opacity duration-700 ease-in-out [grid-area:stack] ${
                 isActive ? 'opacity-100' : 'pointer-events-none opacity-0'
               }`}
@@ -118,10 +105,10 @@ export default function HeroCarousel() {
       <div className="relative z-10 mt-9 flex items-center justify-center gap-2">
         {SLIDES.map((slide, i) => (
           <button
-            key={slide.headlineLine2}
+            key={i}
             type="button"
             onClick={() => setActive(i)}
-            aria-label={`Aller à la bannière ${i + 1}`}
+            aria-label={slideAria(i + 1)}
             aria-current={i === active}
             className={`h-2 rounded-full transition-all ${
               i === active ? 'w-6 bg-site-cta' : 'w-2 bg-white/30 hover:bg-white/50'
