@@ -102,7 +102,7 @@ export default function SiteHeader({ categories, market }: Props) {
               type="button"
               onClick={() => setTopVentesOpen((v) => !v)}
               aria-expanded={topVentesOpen}
-              className="text-[15px] font-semibold text-site-primary hover:text-site-secondary transition-colors whitespace-nowrap"
+              className="text-[15px] font-semibold text-site-primary hover:text-site-cta transition-colors whitespace-nowrap"
             >
               {t.nav.topVentes}
             </button>
@@ -136,7 +136,7 @@ export default function SiteHeader({ categories, market }: Props) {
             <Link
               key={c.id}
               href={`/c/${c.slug}`}
-              className="text-[15px] text-site-text hover:text-site-primary transition-colors whitespace-nowrap shrink-0"
+              className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
             >
               {categoryName(c, market)}
             </Link>
@@ -144,7 +144,7 @@ export default function SiteHeader({ categories, market }: Props) {
 
           <Link
             href="/blog"
-            className="text-[15px] text-site-text hover:text-site-primary transition-colors whitespace-nowrap shrink-0"
+            className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
           >
             {t.nav.blog}
           </Link>

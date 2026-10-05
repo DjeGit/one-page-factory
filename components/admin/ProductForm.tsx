@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import GenerateButton from './GenerateButton';
 import type { Product, GeneratedContent, Category } from '@/types';
 import { TEMPLATES } from '@/lib/templates';
+import { getCloudinaryUrl } from '@/lib/cloudinary';
 
 interface ProductFormProps {
   product?: Product;
@@ -62,6 +63,35 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
   const handleToggle = (field: string) => {
     setForm((prev) => ({ ...prev, [field]: !prev[field as keyof typeof prev] }));
+  };
+
+  // Upload direct d'image (05/10, demande Jerome : pouvoir ajouter une
+  // image sans passer par un outil tiers). Le format/recadrage uniforme
+  // (carré 1200x1200) et l'optimisation qualité/format sont gérés côté
+  // Cloudinary par app/api/upload — voir ce fichier pour le détail.
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/upload', { method: 'POST', body });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Erreur lors de l'upload");
+      }
+      const data = await res.json();
+      handleChange('image_url', data.public_id || data.url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleChange = (field: string, value: string | boolean) => {
@@ -346,15 +376,47 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           </div>
 
           <div>
-            <label className={labelClass}>URL de l&apos;image</label>
-            <input
-              type="text"
-              value={form.image_url}
-              onChange={(e) => handleChange('image_url', e.target.value)}
-              className={inputClass}
-              placeholder="https://res.cloudinary.com/... ou URL directe"
-            />
-            <p className="text-xs text-gray-400 mt-1">Cloudinary public ID ou URL complète</p>
+            <label className={labelClass}>Image du produit</label>
+            <div className="flex items-start gap-4">
+              {form.image_url && (
+                <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 bg-gray-50">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={getCloudinaryUrl(form.image_url, { width: 160, height: 160, crop: 'fill', format: 'auto', quality: 'auto' })}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              <div className="flex-1 space-y-2">
+                <input
+                  type="text"
+                  value={form.image_url}
+                  onChange={(e) => handleChange('image_url', e.target.value)}
+                  className={inputClass}
+                  placeholder="https://res.cloudinary.com/... ou URL directe"
+                />
+                <div className="flex items-center gap-3">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileUpload(file);
+                    }}
+                    className="text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 file:cursor-pointer disabled:opacity-60"
+                  />
+                  {uploading && <span className="text-xs text-gray-400">Envoi en cours...</span>}
+                </div>
+                {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+                <p className="text-xs text-gray-400">
+                  Importer un fichier recadre automatiquement l&apos;image en carré et optimise son
+                  format/poids à l&apos;affichage — ou colle directement un Cloudinary public ID / une URL.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

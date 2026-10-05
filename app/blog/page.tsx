@@ -69,14 +69,16 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                 <Link
                   key={cat.id}
                   href={href}
-                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border inline-flex items-center gap-1.5 ${
+                  // Même format que les autres pastilles de filtre du site
+                  // (Tout, Top Ventes) — demande Jerome du 05/10 : pas
+                  // d'icône, pas de couleur par catégorie, juste le même
+                  // style navy/blanc partout.
+                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
                     active
-                      ? 'text-white'
+                      ? 'bg-site-primary border-site-primary text-white'
                       : 'bg-white border-site-border text-site-text hover:border-site-secondary'
                   }`}
-                  style={active ? { backgroundColor: cat.color || '#1B2A4A', borderColor: cat.color || '#1B2A4A' } : undefined}
                 >
-                  {cat.icon && <span>{cat.icon}</span>}
                   {cat.name_fr}
                 </Link>
               );

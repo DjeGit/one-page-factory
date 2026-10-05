@@ -62,12 +62,12 @@ interface SiteCopy {
     topPrefix: string;
   };
   home: {
-    ranking: string;
     emptyPlatform: string;
     seeFullTopVentes: string;
-    freshlyAdded: string;
     momentSelection: string;
     seeAllProducts: string;
+    exploreByCategory: string;
+    exploreCategoryDesc: string;
     ourAdvice: string;
     fromBlog: string;
     blogImageAlt: string;
@@ -188,12 +188,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       topPrefix: 'Top',
     },
     home: {
-      ranking: 'Classement',
       emptyPlatform: 'Sélection en cours de préparation pour cette plateforme.',
       seeFullTopVentes: 'Voir tout le Top Ventes →',
-      freshlyAdded: 'Fraîchement ajouté',
       momentSelection: 'Sélection du moment',
       seeAllProducts: 'Voir tous les produits →',
+      exploreByCategory: 'Explorer par catégorie',
+      exploreCategoryDesc: 'Nos articles dans cette catégorie',
       ourAdvice: 'Nos conseils',
       fromBlog: 'Depuis le blog',
       blogImageAlt: 'Image article',
@@ -317,12 +317,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       topPrefix: 'Top',
     },
     home: {
-      ranking: 'Clasificación',
       emptyPlatform: 'Selección en preparación para esta plataforma.',
       seeFullTopVentes: 'Ver todo lo más vendido →',
-      freshlyAdded: 'Recién añadido',
       momentSelection: 'Selección del momento',
       seeAllProducts: 'Ver todos los productos →',
+      exploreByCategory: 'Explorar por categoría',
+      exploreCategoryDesc: 'Nuestros artículos en esta categoría',
       ourAdvice: 'Nuestros consejos',
       fromBlog: 'Desde el blog',
       blogImageAlt: 'Imagen del artículo',
@@ -446,12 +446,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       topPrefix: 'Top',
     },
     home: {
-      ranking: 'Ranking',
       emptyPlatform: 'Selection coming soon for this platform.',
       seeFullTopVentes: 'See all Best Sellers →',
-      freshlyAdded: 'Freshly added',
       momentSelection: 'Picked right now',
       seeAllProducts: 'See all products →',
+      exploreByCategory: 'Explore by category',
+      exploreCategoryDesc: 'Our articles in this category',
       ourAdvice: 'Our advice',
       fromBlog: 'From the blog',
       blogImageAlt: 'Article image',

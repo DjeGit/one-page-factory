@@ -13,7 +13,7 @@ import SiteFooter from '@/components/layout/SiteFooter';
 import HeroCarousel from '@/components/landing/HeroCarousel';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
-import { getLatestPublishedBlogPosts } from '@/lib/blog';
+import { getLatestPublishedBlogPosts, getBlogCategories } from '@/lib/blog';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,11 +60,12 @@ export default async function HomePage({ searchParams }: Props) {
   // même logique que app/layout.tsx (lib/market-from-host.ts).
   const market = getMarketFromHost(headers().get('host'));
   const t = SITE_COPY[market];
-  const [featured, categories, topVentesPool, latestBlogPosts] = await Promise.all([
+  const [featured, categories, topVentesPool, latestBlogPosts, blogCategories] = await Promise.all([
     getFeaturedProducts(market),
     getActiveCategories(),
     getTopVentesPool(market),
     getLatestPublishedBlogPosts(market, 3),
+    getBlogCategories(),
   ]);
 
   const topVentesWithSource = topVentesPool
@@ -96,12 +97,10 @@ export default async function HomePage({ searchParams }: Props) {
           aucun champ de note existe sur Product, cf. précédent du code qui a
           justement retiré ces signaux de confiance factices ailleurs). */}
       <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
-        {/* Titres de section (03/10, demande Jerome) : même format/taille sur
-            Top Ventes, Sélection du moment et Depuis le blog — petit kicker
-            orange en majuscules au-dessus d'un titre navy, plus marqué que
-            le simple h2 bold d'avant. */}
+        {/* Titre de section (05/10, demande Jerome : retire le kicker
+            "Classement" au-dessus du titre) — le wrapper garde les mêmes
+            marges mb-6/mb-8 qu'avant pour ne pas resserrer la mise en page. */}
         <div className="mb-6 sm:mb-8">
-          <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.ranking}</span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.nav.topVentes}</h2>
         </div>
 
@@ -173,7 +172,7 @@ export default async function HomePage({ searchParams }: Props) {
         )}
 
         <div className="text-center mt-8">
-          <Link href="/top-ventes" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
+          <Link href="/top-ventes" className="text-site-primary hover:text-site-cta font-medium transition-colors">
             {t.home.seeFullTopVentes}
           </Link>
         </div>
@@ -188,7 +187,6 @@ export default async function HomePage({ searchParams }: Props) {
       {featured.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
           <div className="mb-6 sm:mb-8">
-            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.freshlyAdded}</span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.momentSelection}</h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
@@ -233,9 +231,45 @@ export default async function HomePage({ searchParams }: Props) {
             })}
           </div>
           <div className="text-center mt-8">
-            <Link href="/produits" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
+            <Link href="/produits" className="text-site-primary hover:text-site-cta font-medium transition-colors">
               {t.home.seeAllProducts}
             </Link>
+          </div>
+        </section>
+      )}
+
+      {/* Explorer par catégorie (05/10, demande Jerome) : remet en place
+          l'ancienne section "Explorer par catégorie" (catégories produit,
+          retirée le 03/10 car doublon du menu) mais repointée vers le blog
+          par catégorie — chaque tuile mène aux articles de la catégorie,
+          pas aux pages produit. Même esprit visuel que l'ancienne version
+          (pastille pleine couleur, carte claire) en reprenant la couleur et
+          l'icône propres à chaque catégorie de blog. */}
+      {blogCategories.length > 0 && (
+        <section className="bg-white px-4 sm:px-16 py-16 flex flex-col gap-6">
+          <h2 className="max-w-6xl mx-auto w-full text-2xl sm:text-[28px] font-bold text-site-text">
+            {t.home.exploreByCategory}
+          </h2>
+          <div className="max-w-6xl mx-auto w-full grid grid-cols-2 sm:grid-cols-4 gap-6">
+            {blogCategories.map((c) => (
+              <Link
+                key={c.id}
+                href={`/blog?category=${encodeURIComponent(c.slug)}`}
+                className="bg-[#EAF2FB] rounded-2xl p-8 flex flex-col gap-3 hover:shadow-md transition-shadow"
+              >
+                {/* Couleur propre à la catégorie, ou bleu secondaire du site
+                    par défaut si aucune n'est définie (même comportement que
+                    l'ancienne pastille unie de la section produit). */}
+                <span
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+                  style={{ backgroundColor: c.color || '#4A90D9' }}
+                >
+                  {c.icon}
+                </span>
+                <span className="text-lg font-bold text-site-text">{c.name_fr}</span>
+                <span className="text-[13px] text-site-text-secondary">{t.home.exploreCategoryDesc}</span>
+              </Link>
+            ))}
           </div>
         </section>
       )}
