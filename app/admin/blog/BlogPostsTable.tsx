@@ -46,6 +46,7 @@ export default function BlogPostsTable({ posts }: Props) {
             <tr className="border-b border-gray-200 bg-gray-50">
               <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Article</th>
               <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Marché</th>
+              <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Catégorie</th>
               <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Tags</th>
               <th className="text-center px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Statut</th>
               <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -62,6 +63,22 @@ export default function BlogPostsTable({ posts }: Props) {
                   <div className="text-xs text-gray-400">/blog/{post.slug}</div>
                 </td>
                 <td className="px-4 py-4 hidden md:table-cell text-sm text-gray-600 uppercase">{post.market}</td>
+                <td className="px-4 py-4 hidden md:table-cell text-sm text-gray-600">
+                  {post.category ? (
+                    <span
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                      style={{
+                        backgroundColor: post.category.color ? `${post.category.color}1A` : '#F3F4F6',
+                        color: post.category.color || '#4B5563',
+                      }}
+                    >
+                      {post.category.icon && <span>{post.category.icon}</span>}
+                      {post.category.name_fr}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
                 <td className="px-4 py-4 hidden md:table-cell text-sm text-gray-600">{post.tags.join(', ') || '—'}</td>
                 <td className="px-4 py-4 text-center">
                   <span

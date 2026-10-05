@@ -46,6 +46,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       cover_image_url: body.cover_image_url || '',
       status: body.status === 'published' ? 'published' : 'draft',
       tags: Array.isArray(body.tags) ? body.tags : [],
+      category_id: body.category_id || null,
       linked_product_ids: Array.isArray(body.linked_product_ids) ? body.linked_product_ids : [],
       author_name: body.author_name || '',
       meta_title: body.meta_title || '',

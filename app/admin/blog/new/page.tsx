@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import BlogPostForm from '@/components/admin/BlogPostForm';
 import { getAllProducts } from '@/lib/supabase';
+import { getBlogCategories } from '@/lib/blog';
 
 export default async function NewBlogPostPage() {
-  const products = await getAllProducts();
+  const [products, categories] = await Promise.all([getAllProducts(), getBlogCategories()]);
 
   return (
     <div className="p-8">
@@ -20,7 +21,7 @@ export default async function NewBlogPostPage() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-8">
-        <BlogPostForm mode="create" products={products} />
+        <BlogPostForm mode="create" products={products} categories={categories} />
       </div>
     </div>
   );

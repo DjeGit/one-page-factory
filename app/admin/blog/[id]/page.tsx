@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getBlogPostByIdAdmin } from '@/lib/blog';
+import { getBlogPostByIdAdmin, getBlogCategories } from '@/lib/blog';
 import { getAllProducts } from '@/lib/supabase';
 import BlogPostForm from '@/components/admin/BlogPostForm';
 
@@ -12,7 +12,7 @@ export default async function EditBlogPostPage({ params }: Props) {
   const post = await getBlogPostByIdAdmin(params.id);
   if (!post) notFound();
 
-  const products = await getAllProducts();
+  const [products, categories] = await Promise.all([getAllProducts(), getBlogCategories()]);
 
   return (
     <div className="p-8">
@@ -43,7 +43,7 @@ export default async function EditBlogPostPage({ params }: Props) {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-200 p-8">
-        <BlogPostForm mode="edit" post={post} products={products} />
+        <BlogPostForm mode="edit" post={post} products={products} categories={categories} />
       </div>
     </div>
   );

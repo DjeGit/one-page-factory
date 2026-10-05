@@ -59,7 +59,21 @@ export default async function BlogPostPage({ params }: Props) {
           ← {t.nav.blog}
         </Link>
 
-        <h1 className="text-3xl sm:text-4xl font-extrabold mt-4 mb-2 text-site-primary">{post.title}</h1>
+        {post.category && (
+          <Link
+            href={`/blog?category=${encodeURIComponent(post.category.slug)}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-4"
+            style={{
+              backgroundColor: post.category.color ? `${post.category.color}1A` : '#F3F4F6',
+              color: post.category.color || '#4B5563',
+            }}
+          >
+            {post.category.icon && <span>{post.category.icon}</span>}
+            {post.category.name_fr}
+          </Link>
+        )}
+
+        <h1 className="text-3xl sm:text-4xl font-extrabold mt-3 mb-2 text-site-primary">{post.title}</h1>
 
         <div className="flex items-center gap-3 text-sm text-site-text-secondary mb-6">
           {post.author_name && <span>{post.author_name}</span>}

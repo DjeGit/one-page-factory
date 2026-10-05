@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import '@uiw/react-md-editor/markdown-editor.css';
-import type { BlogPost, Product } from '@/types';
+import type { BlogPost, BlogCategory, Product } from '@/types';
 import type { Market } from '@/lib/market';
 import { slugifyBlogTitle } from '@/lib/slugify';
 
@@ -17,6 +17,7 @@ interface BlogPostFormProps {
   post?: BlogPost;
   mode: 'create' | 'edit';
   products: Pick<Product, 'id' | 'name' | 'slug'>[];
+  categories: BlogCategory[];
 }
 
 const MARKETS: { value: Market; label: string }[] = [
@@ -25,7 +26,7 @@ const MARKETS: { value: Market; label: string }[] = [
   { value: 'uk', label: 'International (tendpick.com)' },
 ];
 
-export default function BlogPostForm({ post, mode, products }: BlogPostFormProps) {
+export default function BlogPostForm({ post, mode, products, categories }: BlogPostFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export default function BlogPostForm({ post, mode, products }: BlogPostFormProps
     cover_image_url: post?.cover_image_url || '',
     status: post?.status || 'draft',
     tags: post?.tags?.join(', ') || '',
+    category_id: post?.category_id || ('' as string),
     linked_product_ids: post?.linked_product_ids || ([] as string[]),
     author_name: post?.author_name || 'Jerome',
     meta_title: post?.meta_title || '',
@@ -128,6 +130,7 @@ export default function BlogPostForm({ post, mode, products }: BlogPostFormProps
         cover_image_url: form.cover_image_url,
         status: form.status,
         tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        category_id: form.category_id || null,
         linked_product_ids: form.linked_product_ids,
         author_name: form.author_name,
         meta_title: form.meta_title,
@@ -258,6 +261,28 @@ export default function BlogPostForm({ post, mode, products }: BlogPostFormProps
             <option value="published">Publié</option>
           </select>
         </div>
+      </div>
+
+      <div>
+        <label className={labelClass}>Catégorie</label>
+        <select
+          value={form.category_id}
+          onChange={(e) => handleChange('category_id', e.target.value)}
+          className={inputClass}
+        >
+          <option value="">— Aucune catégorie —</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.icon ? `${c.icon} ` : ''}{c.name_fr}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-500 mt-1">
+          Le rayon principal de l&apos;article (un seul) — sert à trier/filtrer le blog. Gérer les catégories depuis{' '}
+          <a href="/admin/blog/categories" target="_blank" className="underline hover:text-primary-600">
+            /admin/blog/categories
+          </a>.
+        </p>
       </div>
 
       <div>

@@ -271,12 +271,33 @@ export interface BlogDraftContent {
 }
 
 /**
+ * Categorie de blog (05/10, demande Jerome) — rayon editorial principal
+ * d'un article (un seul par article), distincte des `categories` produit
+ * (logique merchandising differente) et des tags (etiquettes libres,
+ * plusieurs par article). `color` est un simple accent visuel (badge),
+ * point d'accroche pour un futur design different par categorie.
+ */
+export interface BlogCategory {
+  id: string;
+  slug: string;
+  name_fr: string;
+  name_es: string;
+  name_uk: string;
+  icon: string | null;
+  color: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+/**
  * Article de blog (04/10, chantier "Blog + Vente directe"). `content` est
  * du markdown brut (editeur @uiw/react-md-editor, rendu public via
  * react-markdown — voir Sprint 2/4). `linked_product_ids` est une
  * reference "molle" (pas de contrainte FK sur les elements d'un uuid[]),
  * validee cote API a l'ecriture. Lance en 'fr' uniquement mais `market`
- * existe deja pour ouvrir ES/UK sans nouvelle migration.
+ * existe deja pour ouvrir ES/UK sans nouvelle migration. `category_id`
+ * (05/10) est le rayon principal (optionnel) ; `category` est la version
+ * jointe, renvoyee uniquement par les getters publics qui en ont besoin.
  */
 export interface BlogPost {
   id: string;
@@ -288,6 +309,7 @@ export interface BlogPost {
   cover_image_url: string | null;
   status: BlogPostStatus;
   tags: string[];
+  category_id: string | null;
   linked_product_ids: string[];
   author_name: string | null;
   meta_title: string | null;
@@ -296,6 +318,7 @@ export interface BlogPost {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  category?: BlogCategory | null;
 }
 
 /** Donnees du formulaire admin (creation/edition) — id/timestamps gérés côté serveur. */
@@ -308,6 +331,7 @@ export interface BlogPostFormData {
   cover_image_url: string;
   status: BlogPostStatus;
   tags: string[];
+  category_id: string | null;
   linked_product_ids: string[];
   author_name: string;
   meta_title: string;

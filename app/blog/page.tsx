@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import { getMarketFromHost } from '@/lib/market-from-host';
-import { getPublishedBlogPosts } from '@/lib/blog';
+import { getPublishedBlogPosts, getBlogCategories } from '@/lib/blog';
 import { getActiveCategories } from '@/lib/supabase';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import SiteHeader from '@/components/layout/SiteHeader';
@@ -22,17 +22,19 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 interface Props {
-  searchParams: { tag?: string };
+  searchParams: { tag?: string; category?: string };
 }
 
 export default async function BlogIndexPage({ searchParams }: Props) {
   const market = getMarketFromHost(headers().get('host'));
   const t = SITE_COPY[market];
   const tag = searchParams.tag?.trim() || undefined;
+  const categorySlug = searchParams.category?.trim() || undefined;
 
-  const [posts, categories] = await Promise.all([
-    getPublishedBlogPosts(market, { tag }),
+  const [posts, categories, blogCategories] = await Promise.all([
+    getPublishedBlogPosts(market, { tag, categorySlug }),
     getActiveCategories(),
+    getBlogCategories(),
   ]);
 
   // Tags disponibles calculés sur la page courante (volume faible au
@@ -48,31 +50,58 @@ export default async function BlogIndexPage({ searchParams }: Props) {
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{t.nav.blog}</h1>
         </div>
 
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap gap-3 mb-10">
+        {blogCategories.length > 0 && (
+          <div className="flex flex-wrap gap-3 mb-6">
             <Link
-              href="/blog"
+              href={tag ? `/blog?tag=${encodeURIComponent(tag)}` : '/blog'}
               className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
-                !tag
+                !categorySlug
                   ? 'bg-site-primary border-site-primary text-white'
                   : 'bg-white border-site-border text-site-text hover:border-site-secondary'
               }`}
             >
               {t.blogPage.all}
             </Link>
-            {allTags.map((tg) => (
-              <Link
-                key={tg}
-                href={`/blog?tag=${encodeURIComponent(tg)}`}
-                className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
-                  tag === tg
-                    ? 'bg-site-primary border-site-primary text-white'
-                    : 'bg-white border-site-border text-site-text hover:border-site-secondary'
-                }`}
-              >
-                {tg}
-              </Link>
-            ))}
+            {blogCategories.map((cat) => {
+              const href = `/blog?category=${encodeURIComponent(cat.slug)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`;
+              const active = categorySlug === cat.slug;
+              return (
+                <Link
+                  key={cat.id}
+                  href={href}
+                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border inline-flex items-center gap-1.5 ${
+                    active
+                      ? 'text-white'
+                      : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+                  }`}
+                  style={active ? { backgroundColor: cat.color || '#1B2A4A', borderColor: cat.color || '#1B2A4A' } : undefined}
+                >
+                  {cat.icon && <span>{cat.icon}</span>}
+                  {cat.name_fr}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        {allTags.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-10">
+            {allTags.map((tg) => {
+              const href = `/blog?tag=${encodeURIComponent(tg)}${categorySlug ? `&category=${encodeURIComponent(categorySlug)}` : ''}`;
+              return (
+                <Link
+                  key={tg}
+                  href={href}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
+                    tag === tg
+                      ? 'bg-site-secondary border-site-secondary text-white'
+                      : 'bg-white border-site-border text-site-text-secondary hover:border-site-secondary'
+                  }`}
+                >
+                  #{tg}
+                </Link>
+              );
+            })}
           </div>
         )}
 
@@ -108,6 +137,18 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                     )}
                   </div>
                   <div className="p-4 flex flex-col gap-1.5 flex-1">
+                    {post.category && (
+                      <span
+                        className="self-start inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold mb-0.5"
+                        style={{
+                          backgroundColor: post.category.color ? `${post.category.color}1A` : '#F3F4F6',
+                          color: post.category.color || '#4B5563',
+                        }}
+                      >
+                        {post.category.icon && <span>{post.category.icon}</span>}
+                        {post.category.name_fr}
+                      </span>
+                    )}
                     <p className="text-base font-bold text-site-text group-hover:text-site-primary transition-colors leading-snug">
                       {post.title}
                     </p>
