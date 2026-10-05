@@ -25,6 +25,7 @@ interface SiteCopy {
   nav: {
     homeAria: string;
     topVentes: string;
+    blog: string;
     seeAll: string;
     searchPlaceholder: string;
     searchAria: string;
@@ -71,10 +72,9 @@ interface SiteCopy {
     fromBlog: string;
     blogImageAlt: string;
     readArticle: string;
-    soon: string;
+    seeAllBlog: string;
     howItWorks: string;
     steps: { emoji: string; title: string; desc: string }[];
-    blog: { title: string; excerpt: string }[];
   };
   category: {
     metaDescription: (name: string) => string;
@@ -104,6 +104,12 @@ interface SiteCopy {
     all: string;
     nonePlatform: string;
   };
+  blogPage: {
+    metaTitle: string;
+    metaDescription: string;
+    all: string;
+    noArticles: string;
+  };
   bio: {
     title: string;
     productCount: (n: number) => string;
@@ -121,6 +127,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     nav: {
       homeAria: 'Tendpick, accueil',
       topVentes: 'Top Ventes',
+      blog: 'Blog',
       seeAll: 'Tout voir',
       searchPlaceholder: 'Rechercher un produit…',
       searchAria: 'Rechercher',
@@ -191,17 +198,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       fromBlog: 'Depuis le blog',
       blogImageAlt: 'Image article',
       readArticle: "Lire l'article →",
-      soon: '(bientôt)',
+      seeAllBlog: 'Voir tous les articles →',
       howItWorks: 'Comment ça marche',
       steps: [
         { emoji: '🔍', title: 'On analyse', desc: 'Chaque semaine, nous passons en revue les meilleures ventes en ligne pour trouver les produits les plus populaires et les mieux notés.' },
         { emoji: '✍️', title: 'On rédige', desc: "Pour chaque produit, nous créons une fiche complète : avantages clés, FAQ, avis clients et conseils d'achat pour vous aider à décider." },
         { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement chez le marchand, en toute sécurité, au meilleur prix disponible.' },
-      ],
-      blog: [
-        { title: '5 accessoires tech qui changent le quotidien', excerpt: 'Sélection testée et comparée, avec nos coups de cœur du mois.' },
-        { title: 'Aménager un coin bien-être chez soi', excerpt: 'Idées déco et petit budget pour un espace calme.' },
-        { title: 'Le yoga à la maison : par où commencer', excerpt: 'Le matériel essentiel pour débuter sans se ruiner.' },
       ],
     },
     category: {
@@ -232,6 +234,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       all: 'Tout',
       nonePlatform: 'Aucun produit pour le moment sur cette plateforme.',
     },
+    blogPage: {
+      metaTitle: 'Blog — Tendpick',
+      metaDescription: 'Nos articles sur les produits tendance et le high-tech.',
+      all: 'Tout',
+      noArticles: 'Aucun article pour le moment — revenez bientôt !',
+    },
     bio: {
       title: 'Nos sélections',
       productCount: (n) => `${n} produit${n !== 1 ? 's' : ''} soigneusement sélectionnés`,
@@ -248,6 +256,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     nav: {
       homeAria: 'Tendpick, inicio',
       topVentes: 'Más vendidos',
+      blog: 'Blog',
       seeAll: 'Ver todo',
       searchPlaceholder: 'Buscar un producto…',
       searchAria: 'Buscar',
@@ -318,17 +327,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       fromBlog: 'Desde el blog',
       blogImageAlt: 'Imagen del artículo',
       readArticle: 'Leer el artículo →',
-      soon: '(próximamente)',
+      seeAllBlog: 'Ver todos los artículos →',
       howItWorks: 'Cómo funciona',
       steps: [
         { emoji: '🔍', title: 'Analizamos', desc: 'Cada semana revisamos los más vendidos online para encontrar los productos más populares y mejor valorados.' },
         { emoji: '✍️', title: 'Redactamos', desc: 'Para cada producto creamos una ficha completa: ventajas clave, preguntas frecuentes, opiniones de clientes y consejos de compra para ayudarte a decidir.' },
         { emoji: '🛒', title: 'Tú compras', desc: 'Un clic en el botón te lleva directamente a la tienda, de forma segura, al mejor precio disponible.' },
-      ],
-      blog: [
-        { title: '5 accesorios tecnológicos que cambian el día a día', excerpt: 'Selección probada y comparada, con nuestros favoritos del mes.' },
-        { title: 'Crear un rincón de bienestar en casa', excerpt: 'Ideas de decoración y bajo presupuesto para un espacio tranquilo.' },
-        { title: 'Yoga en casa: por dónde empezar', excerpt: 'El material esencial para empezar sin gastar de más.' },
       ],
     },
     category: {
@@ -359,6 +363,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       all: 'Todo',
       nonePlatform: 'Ningún producto por ahora en esta plataforma.',
     },
+    blogPage: {
+      metaTitle: 'Blog — Tendpick',
+      metaDescription: 'Nuestros artículos sobre productos de tendencia y tecnología.',
+      all: 'Todo',
+      noArticles: 'Ningún artículo por ahora — ¡vuelve pronto!',
+    },
     bio: {
       title: 'Nuestras selecciones',
       productCount: (n) => `${n} producto${n !== 1 ? 's' : ''} cuidadosamente seleccionados`,
@@ -375,6 +385,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     nav: {
       homeAria: 'Tendpick, home',
       topVentes: 'Best Sellers',
+      blog: 'Blog',
       seeAll: 'See all',
       searchPlaceholder: 'Search for a product…',
       searchAria: 'Search',
@@ -445,17 +456,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       fromBlog: 'From the blog',
       blogImageAlt: 'Article image',
       readArticle: 'Read the article →',
-      soon: '(coming soon)',
+      seeAllBlog: 'See all articles →',
       howItWorks: 'How it works',
       steps: [
         { emoji: '🔍', title: 'We research', desc: "Every week we review the best-selling products online to find what's most popular and best rated." },
         { emoji: '✍️', title: 'We write it up', desc: 'For every product we build a full listing: key benefits, FAQ, customer reviews and buying advice to help you decide.' },
         { emoji: '🛒', title: 'You buy', desc: 'One click takes you straight to the merchant, safely, at the best price available.' },
-      ],
-      blog: [
-        { title: 'Five tech accessories that change your daily routine', excerpt: 'Tested and compared picks, with our favourites of the month.' },
-        { title: 'Setting up a wellness corner at home', excerpt: 'Decor ideas on a small budget for a calm space.' },
-        { title: 'Yoga at home: where to start', excerpt: 'The essential kit to get started without overspending.' },
       ],
     },
     category: {
@@ -485,6 +491,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       preparing: 'Selection coming soon',
       all: 'All',
       nonePlatform: 'No products yet on this platform.',
+    },
+    blogPage: {
+      metaTitle: 'Blog — Tendpick',
+      metaDescription: 'Our articles on trending products and tech.',
+      all: 'All',
+      noArticles: 'No articles yet — check back soon!',
     },
     bio: {
       title: 'Our picks',

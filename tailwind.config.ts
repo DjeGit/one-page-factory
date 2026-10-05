@@ -67,7 +67,10 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  // Typography (04/10, chantier blog) : utilisée UNIQUEMENT pour le rendu
+  // du markdown d'un article (app/blog/[slug]/page.tsx, classe `prose`) —
+  // n'affecte aucune autre page, pas de régression visuelle ailleurs.
+  plugins: [require('@tailwindcss/typography')],
 };
 
 export default config;

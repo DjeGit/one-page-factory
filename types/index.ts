@@ -258,6 +258,63 @@ export interface Invoice {
   contact?: Pick<Contact, 'id' | 'first_name' | 'last_name' | 'company' | 'email' | 'contact_type'> | null;
 }
 
+export type BlogPostStatus = 'draft' | 'published';
+
+/** Sortie brute de generateBlogDraft() (lib/ai.ts) — toujours un brouillon à relire, jamais sauvegardé directement. */
+export interface BlogDraftContent {
+  title: string;
+  excerpt: string;
+  content: string;
+  meta_title: string;
+  meta_description: string;
+  tags: string[];
+}
+
+/**
+ * Article de blog (04/10, chantier "Blog + Vente directe"). `content` est
+ * du markdown brut (editeur @uiw/react-md-editor, rendu public via
+ * react-markdown — voir Sprint 2/4). `linked_product_ids` est une
+ * reference "molle" (pas de contrainte FK sur les elements d'un uuid[]),
+ * validee cote API a l'ecriture. Lance en 'fr' uniquement mais `market`
+ * existe deja pour ouvrir ES/UK sans nouvelle migration.
+ */
+export interface BlogPost {
+  id: string;
+  slug: string;
+  market: Market;
+  title: string;
+  excerpt: string | null;
+  content: string;
+  cover_image_url: string | null;
+  status: BlogPostStatus;
+  tags: string[];
+  linked_product_ids: string[];
+  author_name: string | null;
+  meta_title: string | null;
+  meta_description: string | null;
+  generated_by_ai: boolean;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Donnees du formulaire admin (creation/edition) — id/timestamps gérés côté serveur. */
+export interface BlogPostFormData {
+  slug: string;
+  market: Market;
+  title: string;
+  excerpt: string;
+  content: string;
+  cover_image_url: string;
+  status: BlogPostStatus;
+  tags: string[];
+  linked_product_ids: string[];
+  author_name: string;
+  meta_title: string;
+  meta_description: string;
+  generated_by_ai: boolean;
+}
+
 export interface ABTest {
   id: string;
   product_id: string;

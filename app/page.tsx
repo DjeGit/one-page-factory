@@ -13,6 +13,7 @@ import SiteFooter from '@/components/layout/SiteFooter';
 import HeroCarousel from '@/components/landing/HeroCarousel';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
+import { getLatestPublishedBlogPosts } from '@/lib/blog';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,10 +60,11 @@ export default async function HomePage({ searchParams }: Props) {
   // même logique que app/layout.tsx (lib/market-from-host.ts).
   const market = getMarketFromHost(headers().get('host'));
   const t = SITE_COPY[market];
-  const [featured, categories, topVentesPool] = await Promise.all([
+  const [featured, categories, topVentesPool, latestBlogPosts] = await Promise.all([
     getFeaturedProducts(market),
     getActiveCategories(),
     getTopVentesPool(market),
+    getLatestPublishedBlogPosts(market, 3),
   ]);
 
   const topVentesWithSource = topVentesPool
@@ -240,32 +242,41 @@ export default async function HomePage({ searchParams }: Props) {
 
       {/* Depuis le blog — déplacée ici (03/10, demande Jerome) : prend la
           place de l'ancienne section "Explorer par catégorie" (retirée,
-          doublon du menu), juste après les deux sections produits. Contenu
-          et liens réels à brancher au Sprint 3 (cf. plan de refonte) ; les
-          cartes ne sont volontairement pas cliquables ("Lire l'article" n'a
-          pas de href) tant que les pages n'existent pas vraiment. */}
-      <section className="bg-white border-y border-site-border px-4 sm:px-6 py-16">
-        <div className="max-w-6xl mx-auto flex flex-col gap-6">
-          <div>
-            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.ourAdvice}</span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.fromBlog}</h2>
+          doublon du menu), juste après les deux sections produits. Branchée
+          sur de vrais articles publiés (Sprint 4, 04/10) — la section
+          n'existe plus du tout tant qu'aucun article n'est publié pour ce
+          marché, plutôt que d'afficher un état cassé/vide. */}
+      {latestBlogPosts.length > 0 && (
+        <section className="bg-white border-y border-site-border px-4 sm:px-6 py-16">
+          <div className="max-w-6xl mx-auto flex flex-col gap-6">
+            <div>
+              <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.ourAdvice}</span>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.fromBlog}</h2>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              {latestBlogPosts.map((post) => (
+                <Link key={post.id} href={`/blog/${post.slug}`} className="flex flex-col gap-2 group">
+                  <div className="h-36 bg-site-bg border border-site-border rounded-lg overflow-hidden flex items-center justify-center text-site-text-secondary text-sm relative">
+                    {post.cover_image_url ? (
+                      <Image src={post.cover_image_url} alt={t.home.blogImageAlt} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      t.home.blogImageAlt
+                    )}
+                  </div>
+                  <span className="text-base font-bold text-site-text group-hover:text-site-primary transition-colors">{post.title}</span>
+                  <span className="text-[13px] text-site-text-secondary">{post.excerpt}</span>
+                  <span className="text-[13px] font-semibold text-site-secondary">{t.home.readArticle}</span>
+                </Link>
+              ))}
+            </div>
+            <div className="text-center mt-2">
+              <Link href="/blog" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
+                {t.home.seeAllBlog}
+              </Link>
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {t.home.blog.map((post) => (
-              <div key={post.title} className="flex flex-col gap-2">
-                <div className="h-36 bg-site-bg border border-site-border rounded-lg flex items-center justify-center text-site-text-secondary text-sm">
-                  {t.home.blogImageAlt}
-                </div>
-                <span className="text-base font-bold text-site-text">{post.title}</span>
-                <span className="text-[13px] text-site-text-secondary">{post.excerpt}</span>
-                <span className="text-[13px] font-semibold text-site-text-secondary cursor-default">
-                  {t.home.readArticle} <span className="italic font-normal">{t.home.soon}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Comment ça marche */}
       <section id="comment" className="py-20">

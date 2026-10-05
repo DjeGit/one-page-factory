@@ -131,6 +131,26 @@ export async function getProductById(id: string): Promise<Product | null> {
   return data as Product;
 }
 
+/**
+ * Produits actifs par liste d'ids, dans un ordre quelconque (le call site
+ * réordonne si besoin) — utilisé par /blog/[slug] pour afficher les
+ * produits liés à un article (blog_posts.linked_product_ids). Ignore
+ * silencieusement les ids inconnus/inactifs plutôt que d'échouer : un
+ * produit désactivé après la publication de l'article ne doit pas casser
+ * la page, juste disparaître de la liste affichée.
+ */
+export async function getProductsByIds(ids: string[]): Promise<Product[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabaseAdmin
+    .from('products')
+    .select('*')
+    .in('id', ids)
+    .eq('active', true);
+
+  if (error || !data) return [];
+  return data as Product[];
+}
+
 export async function getProductByCode(code: string): Promise<Product | null> {
   const { data, error } = await supabaseAdmin
     .from('products')

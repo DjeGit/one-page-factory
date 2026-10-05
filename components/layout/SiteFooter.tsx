@@ -60,6 +60,9 @@ export default function SiteFooter({ categories, market }: Props) {
 
           <div className="flex flex-col gap-2">
             <span className="text-xs font-bold text-white">{t.help}</span>
+            <Link href="/blog" className="text-xs text-white/60 hover:text-white transition-colors">
+              {SITE_COPY[market].nav.blog}
+            </Link>
             <Link href="/mentions-legales" className="text-xs text-white/60 hover:text-white transition-colors">
               {t.legalMentions}
             </Link>

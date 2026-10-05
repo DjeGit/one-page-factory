@@ -71,6 +71,16 @@ const navSections: NavSection[] = [
         exact: false,
       },
       {
+        href: '/admin/blog',
+        label: 'Blog',
+        icon: (
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v10a2 2 0 01-2 2zM9 13h6M9 17h6M9 9h1" />
+          </svg>
+        ),
+        exact: false,
+      },
+      {
         href: '/admin/design',
         label: 'Design',
         icon: (

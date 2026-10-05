@@ -6,7 +6,7 @@
  * Claude uses Anthropic's OpenAI-compatible endpoint.
  */
 import OpenAI from 'openai';
-import type { GeneratedContent } from '@/types';
+import type { GeneratedContent, BlogDraftContent } from '@/types';
 import type { Market } from '@/lib/market';
 
 // ─── Shared prompt ───────────────────────────────────────────────────────────
@@ -290,6 +290,99 @@ export async function generateProductContent(
     }
 
     throw err; // all providers failed
+  }
+}
+
+// ─── Blog draft generation (Sprint 3, chantier "Blog + Vente directe") ───────
+// Reutilise generateWithProvider/getActiveProvider ci-dessus (meme fallback
+// Gemini -> Claude -> OpenAI que generateProductContent) — aucun nouveau
+// provider IA introduit pour le blog.
+
+function buildBlogContentPrompt(subject: string, angle: string, market: Market = 'fr'): string {
+  const lang = LANGUAGE_LABELS[market] || LANGUAGE_LABELS.fr;
+  const angleContext = angle ? `Angle demande : ${angle}.` : '';
+  return `Tu es un redacteur specialise dans les produits tendance et le high-tech pour un blog e-commerce grand public (Tendpick).
+Redige un article de blog en ${lang} sur le sujet suivant.
+
+Sujet : ${subject}
+${angleContext}
+
+Contraintes :
+- Ton engageant et accessible, pas de jargon technique inutile.
+- Contenu en MARKDOWN (titres ##, listes, gras si utile) — pas de HTML.
+- Longueur : 500 a 800 mots.
+- Ne jamais inventer de chiffres, de marques ou de tests que tu n'as pas faits ; reste general et honnete si tu n'as pas d'information verifiee.
+
+Genere un JSON avec exactement cette structure (tout en ${lang}) :
+
+{
+  "title": "Titre accrocheur de l'article (max 70 caracteres)",
+  "excerpt": "Resume en 1-2 phrases, affiche dans les listes d'articles",
+  "content": "Le corps de l'article en MARKDOWN, 500-800 mots",
+  "meta_title": "Titre SEO (max 60 caracteres)",
+  "meta_description": "Description meta SEO (max 155 caracteres)",
+  "tags": ["2 a 4 tags courts, ex: high-tech, produits tendance"]
+}
+
+IMPORTANT: Retourne uniquement le JSON valide, sans markdown ni texte supplementaire autour (le markdown va UNIQUEMENT dans le champ "content").`;
+}
+
+function parseAndValidateBlogDraft(content: string, subject: string): BlogDraftContent {
+  let cleaned = content.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (jsonMatch) cleaned = jsonMatch[0];
+
+  let parsed: Partial<BlogDraftContent> = {};
+  try {
+    parsed = JSON.parse(cleaned) as BlogDraftContent;
+  } catch {
+    try {
+      const fixed = cleaned
+        .replace(/([{,]\s*)'([^']+)'(\s*:)/g, '$1"$2"$3')
+        .replace(/,(\s*[}\]])/g, '$1');
+      parsed = JSON.parse(fixed) as BlogDraftContent;
+    } catch {
+      console.warn('[ai] Echec du parsing JSON du brouillon de blog, contenu vide en fallback.');
+      parsed = {};
+    }
+  }
+
+  return {
+    title: parsed.title || subject,
+    excerpt: parsed.excerpt || '',
+    content: parsed.content || '',
+    meta_title: parsed.meta_title || parsed.title || subject,
+    meta_description: parsed.meta_description || parsed.excerpt || '',
+    tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 4) : [],
+  };
+}
+
+export async function generateBlogDraft(
+  subject: string,
+  angle: string,
+  market: Market = 'fr'
+): Promise<BlogDraftContent> {
+  const prompt = buildBlogContentPrompt(subject, angle, market);
+  const provider = getActiveProvider();
+
+  try {
+    const raw = await generateWithProvider(prompt, provider);
+    return parseAndValidateBlogDraft(raw, subject);
+  } catch (err) {
+    const fallbacks: Provider[] = ['gemini', 'claude', 'openai'].filter((p) => p !== provider) as Provider[];
+    for (const fallback of fallbacks) {
+      const key = fallback === 'gemini' ? process.env.GEMINI_API_KEY
+        : fallback === 'claude' ? process.env.ANTHROPIC_API_KEY
+        : process.env.OPENAI_API_KEY;
+      if (!key) continue;
+      try {
+        const raw = await generateWithProvider(prompt, fallback);
+        return parseAndValidateBlogDraft(raw, subject);
+      } catch {
+        continue;
+      }
+    }
+    throw err;
   }
 }
 

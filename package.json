@@ -13,6 +13,7 @@
   "dependencies": {
     "@react-pdf/renderer": "^4.9.0",
     "@supabase/supabase-js": "^2.45.0",
+    "@uiw/react-md-editor": "^4.1.2",
     "cheerio": "^1.2.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.400.0",
@@ -21,11 +22,14 @@
     "pg": "^8.22.0",
     "react": "^18",
     "react-dom": "^18",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "sharp": "^0.35.1",
     "tailwind-merge": "^2.4.0",
     "typescript": "^5"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.20",
     "@types/node": "^20",
     "@types/pg": "^8.20.0",
     "@types/react": "^18",

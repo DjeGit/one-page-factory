@@ -141,6 +141,13 @@ export default function SiteHeader({ categories, market }: Props) {
               {categoryName(c, market)}
             </Link>
           ))}
+
+          <Link
+            href="/blog"
+            className="text-[15px] text-site-text hover:text-site-primary transition-colors whitespace-nowrap shrink-0"
+          >
+            {t.nav.blog}
+          </Link>
         </nav>
 
         <div className="hidden md:flex items-center gap-5 shrink-0 relative">
@@ -241,6 +248,14 @@ export default function SiteHeader({ categories, market }: Props) {
                 </Link>
               ))}
             </div>
+
+            <Link
+              href="/blog"
+              onClick={() => setMobileOpen(false)}
+              className="mt-2 pt-2 border-t border-site-border block px-2 py-2.5 text-sm font-semibold text-site-text rounded-lg hover:bg-site-bg"
+            >
+              {t.nav.blog}
+            </Link>
 
             <div className="mt-2 pt-2 border-t border-site-border flex items-center justify-between px-2 py-2.5 text-sm text-site-text-secondary">
               <span className="flex items-center gap-2">
