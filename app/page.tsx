@@ -96,10 +96,13 @@ export default async function HomePage({ searchParams }: Props) {
           + grille de vrais produits (pas de notes/étoiles ni badges fictifs :
           aucun champ de note existe sur Product, cf. précédent du code qui a
           justement retiré ces signaux de confiance factices ailleurs). */}
-      <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+      <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-20">
         {/* Titre de section (05/10, demande Jerome : retire le kicker
             "Classement" au-dessus du titre) — le wrapper garde les mêmes
-            marges mb-6/mb-8 qu'avant pour ne pas resserrer la mise en page. */}
+            marges mb-6/mb-8 qu'avant pour ne pas resserrer la mise en page.
+            pt-12/16 ajouté (05/10, suite) : sans kicker au-dessus, le titre
+            touchait directement le bloc hero navy — même échelle que les
+            py-16/py-20 des autres sections pleine page plus bas. */}
         <div className="mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.nav.topVentes}</h2>
         </div>
@@ -244,11 +247,14 @@ export default async function HomePage({ searchParams }: Props) {
           par catégorie — chaque tuile mène aux articles de la catégorie,
           pas aux pages produit. Même esprit visuel que l'ancienne version
           (pastille pleine couleur, carte claire) en reprenant la couleur et
-          l'icône propres à chaque catégorie de blog. */}
+          l'icône propres à chaque catégorie de blog.
+          Titre renommé "Visiter notre blog" (05/10, suite) : Jerome trouvait
+          "Explorer par catégorie" trop générique pour une section qui pointe
+          en réalité vers le blog. */}
       {blogCategories.length > 0 && (
         <section className="bg-white px-4 sm:px-16 py-16 flex flex-col gap-6">
           <h2 className="max-w-6xl mx-auto w-full text-2xl sm:text-[28px] font-bold text-site-text">
-            {t.home.exploreByCategory}
+            {t.home.blogTeaserTitle}
           </h2>
           <div className="max-w-6xl mx-auto w-full grid grid-cols-2 sm:grid-cols-4 gap-6">
             {blogCategories.map((c) => (

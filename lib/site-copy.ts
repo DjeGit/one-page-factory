@@ -66,7 +66,7 @@ interface SiteCopy {
     seeFullTopVentes: string;
     momentSelection: string;
     seeAllProducts: string;
-    exploreByCategory: string;
+    blogTeaserTitle: string;
     exploreCategoryDesc: string;
     ourAdvice: string;
     fromBlog: string;
@@ -192,7 +192,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       seeFullTopVentes: 'Voir tout le Top Ventes →',
       momentSelection: 'Sélection du moment',
       seeAllProducts: 'Voir tous les produits →',
-      exploreByCategory: 'Explorer par catégorie',
+      blogTeaserTitle: 'Visiter notre blog',
       exploreCategoryDesc: 'Nos articles dans cette catégorie',
       ourAdvice: 'Nos conseils',
       fromBlog: 'Depuis le blog',
@@ -321,7 +321,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       seeFullTopVentes: 'Ver todo lo más vendido →',
       momentSelection: 'Selección del momento',
       seeAllProducts: 'Ver todos los productos →',
-      exploreByCategory: 'Explorar por categoría',
+      blogTeaserTitle: 'Visita nuestro blog',
       exploreCategoryDesc: 'Nuestros artículos en esta categoría',
       ourAdvice: 'Nuestros consejos',
       fromBlog: 'Desde el blog',
@@ -450,7 +450,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       seeFullTopVentes: 'See all Best Sellers →',
       momentSelection: 'Picked right now',
       seeAllProducts: 'See all products →',
-      exploreByCategory: 'Explore by category',
+      blogTeaserTitle: 'Visit our blog',
       exploreCategoryDesc: 'Our articles in this category',
       ourAdvice: 'Our advice',
       fromBlog: 'From the blog',
