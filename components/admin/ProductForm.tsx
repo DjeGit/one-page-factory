@@ -35,7 +35,6 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
     ad_spend_allocated: product?.ad_spend_allocated?.toString() || '',
     commission_rate: product?.commission_rate != null ? String(Math.round(product.commission_rate * 1000) / 10) : '',
     affiliate_url: product?.affiliate_url || '',
-    image_url: product?.image_url || '',
     active: product?.active ?? true,
     slug: product?.slug || '',
     category_id: product?.category_id || '',
@@ -65,33 +64,89 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
     setForm((prev) => ({ ...prev, [field]: !prev[field as keyof typeof prev] }));
   };
 
-  // Upload direct d'image (05/10, demande Jerome : pouvoir ajouter une
-  // image sans passer par un outil tiers). Le format/recadrage uniforme
-  // (carré 1200x1200) et l'optimisation qualité/format sont gérés côté
-  // Cloudinary par app/api/upload — voir ce fichier pour le détail.
+  // Galerie d'images (06/10, demande Jerome : "3 photos ou plus" par
+  // produit). Liste ordonnée : la 1re image est la couverture (copiée dans
+  // image_url à l'enregistrement, pour que cartes/catalogue/Open Graph —
+  // qui lisent toutes image_url — continuent de fonctionner sans changement).
+  // Rétrocompatible : un produit sans `images` démarre avec son image_url.
+  const [images, setImages] = useState<string[]>(
+    product?.images && product.images.length > 0
+      ? product.images
+      : product?.image_url
+        ? [product.image_url]
+        : []
+  );
+  const [imageUrlInput, setImageUrlInput] = useState('');
+
+  // Upload direct (05/10, demande Jerome : sans outil tiers). Le recadrage
+  // carré 1200x1200 uniforme et l'optimisation format/qualité sont gérés
+  // côté Cloudinary par app/api/upload — voir ce fichier pour le détail.
+  // Plusieurs fichiers d'un coup : envoyés un par un (ordre conservé).
+  const MAX_IMAGES = 8;
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = async (file: File) => {
+  const handleFilesUpload = async (files: FileList) => {
+    const room = MAX_IMAGES - images.length;
+    const selected = Array.from(files).slice(0, Math.max(room, 0));
+    if (selected.length === 0) {
+      setUploadError(`Maximum ${MAX_IMAGES} images par produit.`);
+      return;
+    }
     setUploading(true);
     setUploadError(null);
+    const added: string[] = [];
     try {
-      const body = new FormData();
-      body.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body });
-      if (!res.ok) {
+      for (const file of selected) {
+        const body = new FormData();
+        body.append('file', file);
+        const res = await fetch('/api/upload', { method: 'POST', body });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Erreur lors de l'upload");
+        }
         const data = await res.json();
-        throw new Error(data.error || "Erreur lors de l'upload");
+        added.push(data.public_id || data.url);
       }
-      const data = await res.json();
-      handleChange('image_url', data.public_id || data.url);
+      if (files.length > selected.length) {
+        setUploadError(`Seules les ${selected.length} premières images ont été ajoutées (maximum ${MAX_IMAGES}).`);
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Erreur inconnue');
     } finally {
+      // Les images déjà envoyées avec succès sont conservées même si une
+      // suivante échoue — évite de perdre un upload déjà payé en bande passante.
+      if (added.length > 0) setImages((prev) => [...prev, ...added]);
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const addImageByUrl = () => {
+    const v = imageUrlInput.trim();
+    if (!v) return;
+    if (images.length >= MAX_IMAGES) {
+      setUploadError(`Maximum ${MAX_IMAGES} images par produit.`);
+      return;
+    }
+    setImages((prev) => [...prev, v]);
+    setImageUrlInput('');
+    setUploadError(null);
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const moveImage = (index: number, delta: -1 | 1) => {
+    setImages((prev) => {
+      const target = index + delta;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   };
 
   const handleChange = (field: string, value: string | boolean) => {
@@ -140,7 +195,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
         ad_spend_allocated: form.ad_spend_allocated ? parseFloat(form.ad_spend_allocated) : null,
         commission_rate: form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
         affiliate_url: form.affiliate_url,
-        image_url: form.image_url || null,
+        // images[0] = couverture, recopiée dans image_url (voir plus haut).
+        image_url: images[0] || null,
+        images,
         active: form.active,
         slug: form.slug || undefined,
         category_id: form.category_id || null,
@@ -376,46 +433,103 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           </div>
 
           <div>
-            <label className={labelClass}>Image du produit</label>
-            <div className="flex items-start gap-4">
-              {form.image_url && (
-                <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 bg-gray-50">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={getCloudinaryUrl(form.image_url, { width: 160, height: 160, crop: 'fill', format: 'auto', quality: 'auto' })}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-              <div className="flex-1 space-y-2">
+            <label className={labelClass}>
+              Photos du produit ({images.length}/{MAX_IMAGES})
+            </label>
+
+            {images.length > 0 && (
+              <ul className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                {images.map((img, i) => (
+                  <li key={`${img}-${i}`} className="border border-gray-200 rounded-xl p-2 bg-white">
+                    <div className="relative aspect-square rounded-lg overflow-hidden bg-gray-50">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getCloudinaryUrl(img, { width: 240, height: 240, crop: 'fill', format: 'auto', quality: 'auto' })}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                      {i === 0 && (
+                        <span className="absolute left-1.5 top-1.5 bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          Couverture
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between mt-2 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moveImage(i, -1)}
+                        disabled={i === 0}
+                        aria-label="Déplacer vers la gauche"
+                        className="px-2 py-1 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeImage(i)}
+                        className="px-2 py-1 text-xs rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        Retirer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveImage(i, 1)}
+                        disabled={i === images.length - 1}
+                        aria-label="Déplacer vers la droite"
+                        className="px-2 py-1 text-xs rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        →
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={uploading || images.length >= MAX_IMAGES}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) handleFilesUpload(e.target.files);
+                  }}
+                  className="text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 file:cursor-pointer disabled:opacity-60"
+                />
+                {uploading && <span className="text-xs text-gray-400">Envoi en cours...</span>}
+              </div>
+              <div className="flex gap-2">
                 <input
                   type="text"
-                  value={form.image_url}
-                  onChange={(e) => handleChange('image_url', e.target.value)}
+                  value={imageUrlInput}
+                  onChange={(e) => setImageUrlInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addImageByUrl();
+                    }
+                  }}
                   className={inputClass}
-                  placeholder="https://res.cloudinary.com/... ou URL directe"
+                  placeholder="Ou colle une URL / un Cloudinary public ID, puis Ajouter"
                 />
-                <div className="flex items-center gap-3">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    disabled={uploading}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileUpload(file);
-                    }}
-                    className="text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 file:cursor-pointer disabled:opacity-60"
-                  />
-                  {uploading && <span className="text-xs text-gray-400">Envoi en cours...</span>}
-                </div>
-                {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
-                <p className="text-xs text-gray-400">
-                  Importer un fichier recadre automatiquement l&apos;image en carré et optimise son
-                  format/poids à l&apos;affichage — ou colle directement un Cloudinary public ID / une URL.
-                </p>
+                <button
+                  type="button"
+                  onClick={addImageByUrl}
+                  className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+                >
+                  Ajouter
+                </button>
               </div>
+              {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+              <p className="text-xs text-gray-400">
+                Sélectionne plusieurs fichiers d&apos;un coup. Chaque image est recadrée en carré
+                automatiquement et son format/poids est optimisé à l&apos;affichage. La première
+                photo est la couverture (cartes, catalogue, partage) — utilise les flèches pour
+                changer l&apos;ordre.
+              </p>
             </div>
           </div>
 

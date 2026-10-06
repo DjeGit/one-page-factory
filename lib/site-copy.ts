@@ -110,6 +110,38 @@ interface SiteCopy {
     all: string;
     noArticles: string;
   };
+  // Page produit (06/10, maquette A validée par Jerome). Remplace les
+  // chaînes en dur de l'ancienne one-page (CTA_I18N dans app/[slug]).
+  // Le CONTENU du produit (titre, description, points forts, FAQ) vient de
+  // la DB dans la langue du marché du produit — seul le chrome est ici.
+  product: {
+    locale: string;
+    breadcrumbAria: string;
+    breadcrumbHome: string;
+    availableOn: (source: string) => string;
+    seeOffer: (source: string | null) => string;
+    seeOfferShort: string;
+    redirectNote: string;
+    securePayment: string;
+    deliveryMerchant: string;
+    tabDescription: string;
+    tabPoints: string;
+    tabFaq: string;
+    whyChosen: string;
+    inBrief: string;
+    briefMarket: string;
+    briefSoldBy: string;
+    briefCategory: string;
+    pointsTitle: string;
+    faqTitle: string;
+    relatedTitle: string;
+    photoAria: (n: number, total: number) => string;
+    prevPhoto: string;
+    nextPhoto: string;
+    zoomHint: string;
+    noPhoto: string;
+    galleryAria: string;
+  };
   bio: {
     title: string;
     productCount: (n: number) => string;
@@ -240,6 +272,35 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       all: 'Tout',
       noArticles: 'Aucun article pour le moment — revenez bientôt !',
     },
+    product: {
+      locale: 'fr-FR',
+      breadcrumbAria: "Fil d'Ariane",
+      breadcrumbHome: 'Accueil',
+      availableOn: (s) => `Disponible sur ${s}`,
+      seeOffer: (s) => (s ? `Voir l'offre sur ${s}` : "Voir l'offre"),
+      seeOfferShort: "Voir l'offre",
+      redirectNote:
+        "Vous serez redirigé vers le site du marchand. Tendpick peut percevoir une commission, sans surcoût pour vous.",
+      securePayment: 'Paiement sécurisé par le marchand',
+      deliveryMerchant: 'Livraison par le marchand',
+      tabDescription: 'Description',
+      tabPoints: 'Points forts',
+      tabFaq: 'Questions fréquentes',
+      whyChosen: "Pourquoi on l'a retenu",
+      inBrief: 'En bref',
+      briefMarket: 'Marché',
+      briefSoldBy: 'Vendu par',
+      briefCategory: 'Catégorie',
+      pointsTitle: 'Points forts',
+      faqTitle: 'Questions fréquentes',
+      relatedTitle: 'Vous aimerez aussi',
+      photoAria: (n, total) => `Afficher la photo ${n} sur ${total}`,
+      prevPhoto: 'Photo précédente',
+      nextPhoto: 'Photo suivante',
+      zoomHint: 'Survolez pour zoomer',
+      noPhoto: 'Photo à venir',
+      galleryAria: 'Photos du produit',
+    },
     bio: {
       title: 'Nos sélections',
       productCount: (n) => `${n} produit${n !== 1 ? 's' : ''} soigneusement sélectionnés`,
@@ -369,6 +430,35 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       all: 'Todo',
       noArticles: 'Ningún artículo por ahora — ¡vuelve pronto!',
     },
+    product: {
+      locale: 'es-ES',
+      breadcrumbAria: 'Ruta de navegación',
+      breadcrumbHome: 'Inicio',
+      availableOn: (s) => `Disponible en ${s}`,
+      seeOffer: (s) => (s ? `Ver la oferta en ${s}` : 'Ver la oferta'),
+      seeOfferShort: 'Ver la oferta',
+      redirectNote:
+        'Serás redirigido al sitio del vendedor. Tendpick puede recibir una comisión, sin coste adicional para ti.',
+      securePayment: 'Pago seguro gestionado por el vendedor',
+      deliveryMerchant: 'Envío gestionado por el vendedor',
+      tabDescription: 'Descripción',
+      tabPoints: 'Puntos fuertes',
+      tabFaq: 'Preguntas frecuentes',
+      whyChosen: 'Por qué lo hemos elegido',
+      inBrief: 'En resumen',
+      briefMarket: 'Mercado',
+      briefSoldBy: 'Vendido por',
+      briefCategory: 'Categoría',
+      pointsTitle: 'Puntos fuertes',
+      faqTitle: 'Preguntas frecuentes',
+      relatedTitle: 'También te puede gustar',
+      photoAria: (n, total) => `Mostrar la foto ${n} de ${total}`,
+      prevPhoto: 'Foto anterior',
+      nextPhoto: 'Foto siguiente',
+      zoomHint: 'Pasa el ratón para ampliar',
+      noPhoto: 'Foto próximamente',
+      galleryAria: 'Fotos del producto',
+    },
     bio: {
       title: 'Nuestras selecciones',
       productCount: (n) => `${n} producto${n !== 1 ? 's' : ''} cuidadosamente seleccionados`,
@@ -497,6 +587,35 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       metaDescription: 'Our articles on trending products and tech.',
       all: 'All',
       noArticles: 'No articles yet — check back soon!',
+    },
+    product: {
+      locale: 'en-GB',
+      breadcrumbAria: 'Breadcrumb',
+      breadcrumbHome: 'Home',
+      availableOn: (s) => `Available on ${s}`,
+      seeOffer: (s) => (s ? `See the offer on ${s}` : 'See the offer'),
+      seeOfferShort: 'See the offer',
+      redirectNote:
+        "You'll be redirected to the merchant's site. Tendpick may earn a commission at no extra cost to you.",
+      securePayment: 'Secure payment handled by the merchant',
+      deliveryMerchant: 'Delivery by the merchant',
+      tabDescription: 'Description',
+      tabPoints: 'Key features',
+      tabFaq: 'FAQ',
+      whyChosen: 'Why we picked it',
+      inBrief: 'At a glance',
+      briefMarket: 'Market',
+      briefSoldBy: 'Sold by',
+      briefCategory: 'Category',
+      pointsTitle: 'Key features',
+      faqTitle: 'Frequently asked questions',
+      relatedTitle: 'You might also like',
+      photoAria: (n, total) => `Show photo ${n} of ${total}`,
+      prevPhoto: 'Previous photo',
+      nextPhoto: 'Next photo',
+      zoomHint: 'Hover to zoom',
+      noPhoto: 'Photo coming soon',
+      galleryAria: 'Product photos',
     },
     bio: {
       title: 'Our picks',

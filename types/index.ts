@@ -48,6 +48,8 @@ export interface Product {
   affiliate_url: string;
   redirect_code: string;
   image_url: string | null;
+  // Galerie (06/10) : liste ordonnée, la 1re = couverture = image_url.
+  images?: string[];
   active: boolean;
 
   // AI-generated content

@@ -1,5 +1,7 @@
 import type { Product } from '@/types';
 import { getCurrencyForMarket } from '@/lib/market';
+import { getCloudinaryUrl } from '@/lib/cloudinary';
+import { getProductGallery } from '@/lib/product-images';
 
 interface ProductStructuredDataProps {
   product: Product;
@@ -28,12 +30,19 @@ interface ProductStructuredDataProps {
 export default function ProductStructuredData({ product }: ProductStructuredDataProps) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
+  // Toutes les photos de la galerie (06/10), en URL absolue : un simple
+  // public ID Cloudinary n'est pas exploitable par Google. Aucune photo =
+  // champ omis (undefined n'est pas sérialisé par JSON.stringify).
+  const images = getProductGallery(product).map((img) =>
+    getCloudinaryUrl(img, { width: 1200, height: 1200, crop: 'fill', format: 'auto', quality: 'auto' })
+  );
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.name,
     description: product.description ?? undefined,
-    image: product.image_url ?? undefined,
+    image: images.length > 0 ? images : undefined,
     brand: {
       '@type': 'Brand',
       name: 'Tendpick',
