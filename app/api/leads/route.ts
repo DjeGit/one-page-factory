@@ -32,7 +32,7 @@ async function sendWelcomeEmail(email: string, market: string): Promise<void> {
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: [{ email }],
-        sender: { name: 'Tendpick', email: 'hello@tendpick.fr' },
+        sender: { name: 'Tendpick', email: 'contact@tendpick.com' },
         subject,
         htmlContent: html,
       }),
@@ -195,10 +195,10 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   // Sync CRM (non bloquant, échec silencieux). Note : sendWelcomeEmail()
-  // existe mais n'est délibérément pas appelée ici, comme sur le serveur —
-  // l'e-mail de bienvenue est probablement déjà géré par une automatisation
-  // Brevo déclenchée à l'ajout en liste. Ne pas l'activer sans vérifier
-  // d'abord avec Jerome qu'il n'y a pas de double envoi.
+  // existe mais n'est pas appelée ici. Vérifié le 07/10 dans Brevo : il n'y
+  // a AUCUNE automatisation ni template, donc aucun e-mail de bienvenue
+  // n'est envoyé aujourd'hui. L'expéditeur de la fonction est maintenant
+  // contact@tendpick.com (vérifié) ; l'activer = décision de Jerome.
   syncToBrevo(email, market, body.productName).catch(() => {});
 
   return NextResponse.json({ success: true, data });

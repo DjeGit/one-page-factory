@@ -141,7 +141,7 @@ async function sendBrevoEmail(
   apiKey: string
 ): Promise<void> {
   const payload = {
-    sender: { name: 'Tendpick Alerts', email: 'contact@tendpick.fr' },
+    sender: { name: 'Tendpick Alerts', email: 'contact@tendpick.com' },
     to: [{ email: to }],
     subject,
     htmlContent: html,
