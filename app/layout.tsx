@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { getMarketFromHost } from '@/lib/market-from-host';
+import { getRequestMarket, getRequestOrigin } from '@/lib/site-url';
 import { SITE_COPY } from '@/lib/site-copy';
 import './globals.css';
 
@@ -10,16 +10,39 @@ import './globals.css';
 // ne peut pas lire le host ; converti en generateMetadata (async), comme
 // app/c/[slug], app/produits et app/top-ventes.
 export async function generateMetadata(): Promise<Metadata> {
-  const market = getMarketFromHost(headers().get('host'));
+  const h = headers();
+  const market = getRequestMarket(h);
+  const origin = getRequestOrigin(h);
+  const copy = SITE_COPY[market].global;
   return {
     title: {
-      default: SITE_COPY[market].global.siteTitleDefault,
+      default: copy.siteTitleDefault,
+      // Les titres de page ne contiennent plus la marque (audit E3 : « Blog —
+      // Tendpick | Tendpick ») : ce gabarit l'ajoute une seule fois.
       template: '%s | Tendpick',
     },
-    description: SITE_COPY[market].global.siteDescription,
-    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://tendpick.com'),
+    description: copy.siteDescription,
+    // Audit C1 : base des URL absolues (canonical, Open Graph) = domaine du
+    // marché de la requête, plus une variable d'environnement unique.
+    metadataBase: new URL(origin),
+    // './' = l'URL de la page elle-même, sans paramètres de requête. Chaque
+    // page peut surcharger (hreflang, canonical produit) ; celles qui ne le
+    // font pas ont au moins un canonical propre (audit E1).
+    alternates: { canonical: './' },
+    // Valeurs par défaut de partage social (audit E2) ; l'image vient de
+    // app/opengraph-image.tsx, les pages produit fournissent la leur.
+    openGraph: {
+      type: 'website',
+      siteName: 'Tendpick',
+      locale: OG_LOCALE[market],
+      title: copy.siteTitleDefault,
+      description: copy.siteDescription,
+    },
+    twitter: { card: 'summary_large_image' },
   };
 }
+
+const OG_LOCALE: Record<'fr' | 'es' | 'uk', string> = { fr: 'fr_FR', es: 'es_ES', uk: 'en_GB' };
 
 // `lang` codé en dur en "fr" avant ce correctif (22/09) — faux pour tout
 // visiteur es/uk. Le layout racine (seul endroit où <html> se rend) n'a pas
@@ -35,7 +58,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const market = getMarketFromHost(headers().get('host'));
+  const market = getRequestMarket(headers());
 
   return (
     <html lang={HTML_LANG[market]}>

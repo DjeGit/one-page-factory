@@ -9,20 +9,29 @@ import { getCloudinaryUrl } from '@/lib/cloudinary';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { SITE_COPY } from '@/lib/site-copy';
+import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
 
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata(): Promise<Metadata> {
-  const market = getMarketFromHost(headers().get('host'));
+interface Props {
+  searchParams: { tag?: string; category?: string };
+}
+
+// Audit SEO du 07/10 (C2, E1) : canonical + hreflang ; les filtres ?tag= et
+// ?category= ne sont pas indexés (pages minces, doublons de la liste).
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const h = headers();
+  const market = getMarketFromHost(h.get('host'));
   const t = SITE_COPY[market];
+  // Blog vide = page mince : non indexée tant qu'aucun article n'est publié.
+  const hasPosts = (await getPublishedBlogPosts(market)).length > 0;
+  const blocked = !hasPosts || hasIndexBlockingParams(searchParams, ['tag', 'category']);
   return {
     title: t.blogPage.metaTitle,
     description: t.blogPage.metaDescription,
+    alternates: buildAlternates(h, '/blog'),
+    robots: blocked ? { index: false, follow: true } : undefined,
   };
-}
-
-interface Props {
-  searchParams: { tag?: string; category?: string };
 }
 
 export default async function BlogIndexPage({ searchParams }: Props) {

@@ -16,6 +16,11 @@ const ENV_ALLOWLIST = [
   // ─── Site & media ───────────────────────────────────────────────────────
   'NEXT_PUBLIC_SITE_URL', 'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME',
 
+  // ─── Pixels du site catalogue (accueil, catalogue) — absents de cette liste
+  //     jusqu'au 07/10 : app/page.tsx les lit via process.env mais PM2 ne les
+  //     transmettait jamais, donc les pixels du site ne partaient pas ───────
+  'SITE_PIXEL_META', 'SITE_PIXEL_TIKTOK', 'SITE_PIXEL_GTM',
+
   // ─── Sprint 2 : facturation — coordonnées légales de l'émetteur ────────
   'INVOICE_ISSUER_NAME', 'INVOICE_ISSUER_ADDRESS', 'INVOICE_ISSUER_REG_NUMBER',
   'INVOICE_ISSUER_VAT_NUMBER', 'INVOICE_ISSUER_EMAIL',

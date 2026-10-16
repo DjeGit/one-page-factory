@@ -13,6 +13,9 @@ import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import BlogStructuredData from '@/components/landing/BlogStructuredData';
 import { SITE_COPY } from '@/lib/site-copy';
+import { isValidMarket, DEFAULT_MARKET } from '@/lib/market';
+import { marketUrl } from '@/lib/site-url';
+import { redirectToMarketDomain } from '@/lib/market-redirect';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,15 +26,55 @@ interface Props {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getPublishedBlogPostBySlug(params.slug);
   if (!post) return {};
+  // Audit C1/C3 : canonical sur le domaine du marché de l'article, pas de
+  // hreflang tant que les traductions ne sont pas reliées entre elles.
+  const postMarket = isValidMarket(post.market) ? post.market : DEFAULT_MARKET;
+  const url = marketUrl(postMarket, `/blog/${post.slug}`);
+  const title = post.meta_title || post.title;
+  const description = post.meta_description || post.excerpt || undefined;
+  const image = post.cover_image_url
+    ? getCloudinaryUrl(post.cover_image_url, { width: 1200, height: 630, crop: 'fill', format: 'auto', quality: 'auto' })
+    : undefined;
   return {
-    title: post.meta_title || post.title,
-    description: post.meta_description || post.excerpt || undefined,
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: 'article',
+      siteName: 'Tendpick',
+      title,
+      description,
+      url,
+      images: image ? [image] : undefined,
+      publishedTime: post.published_at ?? undefined,
+      modifiedTime: post.updated_at,
+    },
+    twitter: { card: 'summary_large_image', title, description, images: image ? [image] : undefined },
   };
+}
+
+// Liens du corps d'article (Markdown) : les liens d'affiliation et les
+// liens externes portent rel="sponsored nofollow noopener" (consigne Google
+// pour les liens commerciaux, audit E10) ; les liens internes restent de
+// simples liens.
+function ArticleLink({ href, children }: { href?: string; children?: React.ReactNode }) {
+  if (!href) return <>{children}</>;
+  const isInternal = href.startsWith('/') && !href.startsWith('/api/go/');
+  if (isInternal) return <Link href={href}>{children}</Link>;
+  const isAffiliate = href.startsWith('/api/go/') || /^https?:\/\//i.test(href);
+  return (
+    <a href={href} rel={isAffiliate ? 'sponsored nofollow noopener' : 'noopener'} target={href.startsWith('/') ? undefined : '_blank'}>
+      {children}
+    </a>
+  );
 }
 
 export default async function BlogPostPage({ params }: Props) {
   const post = await getPublishedBlogPostBySlug(params.slug);
   if (!post) notFound();
+
+  // Audit C3 : un article ne répond que sur le domaine de son marché.
+  redirectToMarketDomain(isValidMarket(post.market) ? post.market : DEFAULT_MARKET, `/blog/${post.slug}`);
 
   const market = getMarketFromHost(headers().get('host'));
   const t = SITE_COPY[market];
@@ -93,7 +136,9 @@ export default async function BlogPostPage({ params }: Props) {
         )}
 
         <article className="prose prose-headings:text-site-primary prose-a:text-site-secondary max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{post.content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ArticleLink }}>
+            {post.content}
+          </ReactMarkdown>
         </article>
 
         {post.tags.length > 0 && (
@@ -119,42 +164,50 @@ export default async function BlogPostPage({ params }: Props) {
                   ? getCloudinaryUrl(p.image_url, { width: 300, height: 300, crop: 'fill', format: 'auto', quality: 'auto' })
                   : null;
                 return (
-                  // Lien affilié : passe par /api/go/[code] comme partout
-                  // ailleurs sur le site (tracking clic inclus), jamais un
-                  // lien direct vers le marchand.
-                  <a
+                  // Carte : le titre et l'image mènent à la FICHE produit
+                  // (lien interne, audit E10 : un article doit renforcer les
+                  // pages produit) ; le lien « offre » passe par
+                  // /api/go/[code] comme partout ailleurs sur le site
+                  // (tracking clic inclus), jamais un lien direct vers le
+                  // marchand, et porte rel="sponsored nofollow".
+                  <div
                     key={p.id}
-                    href={`/api/go/${p.redirect_code}`}
                     className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all group flex flex-col"
                   >
-                    <div className="aspect-square relative bg-site-bg flex-shrink-0">
-                      {img ? (
-                        <Image
-                          src={img}
-                          alt={p.name}
-                          fill
-                          className="object-cover group-hover:scale-105 transition-transform duration-300"
-                          unoptimized={img.includes('/fetch/')}
-                          sizes="(max-width: 640px) 50vw, 33vw"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-3xl text-site-border">📦</div>
-                      )}
-                    </div>
-                    <div className="p-3 flex flex-col gap-1">
-                      <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug">{p.hero_title || p.name}</p>
-                      <div className="flex items-center justify-between mt-1">
-                        {p.price ? (
-                          <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
+                    <Link href={`/${p.slug}`} className="flex flex-col flex-1">
+                      <div className="aspect-square relative bg-site-bg flex-shrink-0">
+                        {img ? (
+                          <Image
+                            src={img}
+                            alt={p.name}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                            unoptimized={img.includes('/fetch/')}
+                            sizes="(max-width: 640px) 50vw, 33vw"
+                          />
                         ) : (
-                          <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                          <div className="w-full h-full flex items-center justify-center text-3xl text-site-border">📦</div>
                         )}
-                        <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
-                          {t.common.seeArrow}
-                        </span>
                       </div>
+                      <div className="p-3 pb-1">
+                        <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug">{p.hero_title || p.name}</p>
+                      </div>
+                    </Link>
+                    <div className="px-3 pb-3 flex items-center justify-between gap-2">
+                      {p.price ? (
+                        <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
+                      ) : (
+                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                      )}
+                      <a
+                        href={`/api/go/${p.redirect_code}`}
+                        rel="sponsored nofollow noopener"
+                        className="text-xs font-semibold text-site-secondary hover:text-site-primary transition-colors"
+                      >
+                        {t.common.seeArrow}
+                      </a>
                     </div>
-                  </a>
+                  </div>
                 );
               })}
             </div>

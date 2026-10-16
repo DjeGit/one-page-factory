@@ -2,33 +2,50 @@ import type { Product } from '@/types';
 import { getCurrencyForMarket } from '@/lib/market';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getProductGallery } from '@/lib/product-images';
+import { serializeJsonLd } from '@/lib/json-ld';
+import { marketUrl } from '@/lib/site-url';
+import { DEFAULT_MARKET, isValidMarket } from '@/lib/market';
+import type { Market } from '@/lib/market';
 
 interface ProductStructuredDataProps {
   product: Product;
+  /** Marché de la page (domaine de référence des URL). */
+  market?: Market;
+  /** Catégorie du produit, pour le fil d'Ariane structuré. */
+  categoryName?: string | null;
+  categorySlug?: string | null;
 }
 
 /**
- * JSON-LD Product (Sprint 1). Volontairement SANS bloc Review/AggregateRating
- * (Sprint 5, rapport 18/09) : les "témoignages" affichés sur la page
- * (product.testimonials) sont entièrement générés par l'IA à la création du
- * produit (lib/ai.ts — noms fictifs, note toujours à 5), donc aucun avis
- * réel à déclarer. Les émettre en Review/AggregateRating reviendrait à
- * présenter à Google des avis fabriqués comme authentiques — exactement ce
- * que ses règles sur les structured data sanctionnent. À réactiver seulement
- * le jour où une vraie source d'avis clients existe (import Trustpilot,
- * collecte post-achat...), jamais avant.
+ * JSON-LD Product + BreadcrumbList. Volontairement SANS bloc Review/
+ * AggregateRating (Sprint 5, rapport 18/09) : les "témoignages" affichés sur
+ * la page (product.testimonials) sont entièrement générés par l'IA à la
+ * création du produit (lib/ai.ts — noms fictifs, note toujours à 5), donc
+ * aucun avis réel à déclarer. Les émettre en Review/AggregateRating
+ * reviendrait à présenter à Google des avis fabriqués comme authentiques —
+ * exactement ce que ses règles sur les structured data sanctionnent. À
+ * réactiver seulement le jour où une vraie source d'avis clients existe
+ * (import Trustpilot, collecte post-achat...), jamais avant.
  *
- * priceCurrency utilise désormais getCurrencyForMarket(product.market) au
- * lieu du 'EUR' codé en dur (toujours EUR aujourd'hui, mais retire le
- * hardcode pour le jour où ça change — cf. lib/market.ts).
- *
- * `brand` : signal E-E-A-T minimal mais honnête — Tendpick est réellement
- * l'éditeur de la page, contrairement à un avis client inventé. Pas de champ
- * "reviewedBy"/date de vérification humaine : on n'a rien de tel à déclarer
- * pour l'instant, donc on ne l'invente pas non plus.
+ * Corrections de l'audit SEO du 07/10 (E5, E5b) :
+ *  - `offers` n'est émis que si un prix existe (une Offer sans prix est
+ *    invalide pour Google) ;
+ *  - plus de `availability: InStock` codé en dur : le stock des produits
+ *    affiliés est inconnu, on ne déclare donc rien plutôt qu'un faux ;
+ *  - plus de `brand: Tendpick` : Tendpick n'est pas la marque du produit
+ *    (la marque réelle n'est pas stockée aujourd'hui) ;
+ *  - URL absolues sur le domaine du marché (plus NEXT_PUBLIC_SITE_URL) ;
+ *  - sérialisation échappée (« </script> » dans un titre) ;
+ *  - BreadcrumbList Accueil > Catégorie > Produit.
  */
-export default function ProductStructuredData({ product }: ProductStructuredDataProps) {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+export default function ProductStructuredData({
+  product,
+  market,
+  categoryName,
+  categorySlug,
+}: ProductStructuredDataProps) {
+  const m: Market = market ?? (isValidMarket(product.market) ? product.market : DEFAULT_MARKET);
+  const productUrl = marketUrl(m, `/${product.slug}`);
 
   // Toutes les photos de la galerie (06/10), en URL absolue : un simple
   // public ID Cloudinary n'est pas exploitable par Google. Aucune photo =
@@ -37,29 +54,49 @@ export default function ProductStructuredData({ product }: ProductStructuredData
     getCloudinaryUrl(img, { width: 1200, height: 1200, crop: 'fill', format: 'auto', quality: 'auto' })
   );
 
-  const jsonLd = {
-    '@context': 'https://schema.org',
+  const hasPrice = typeof product.price === 'number' && product.price > 0;
+
+  const productNode = {
     '@type': 'Product',
+    '@id': `${productUrl}#product`,
     name: product.name,
     description: product.description ?? undefined,
     image: images.length > 0 ? images : undefined,
-    brand: {
-      '@type': 'Brand',
-      name: 'Tendpick',
-    },
-    offers: {
-      '@type': 'Offer',
-      price: product.price ?? undefined,
-      priceCurrency: getCurrencyForMarket(product.market),
-      availability: 'https://schema.org/InStock',
-      url: `${siteUrl}/${product.slug}`,
-    },
+    url: productUrl,
+    offers: hasPrice
+      ? {
+          '@type': 'Offer',
+          price: product.price,
+          priceCurrency: getCurrencyForMarket(m),
+          url: productUrl,
+        }
+      : undefined,
+  };
+
+  const crumbs = [{ name: 'Tendpick', url: marketUrl(m, '/') }];
+  if (categoryName && categorySlug) crumbs.push({ name: categoryName, url: marketUrl(m, `/c/${categorySlug}`) });
+  crumbs.push({ name: product.name, url: productUrl });
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      productNode,
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: crumbs.map((c, i) => ({
+          '@type': 'ListItem',
+          position: i + 1,
+          name: c.name,
+          item: c.url,
+        })),
+      },
+    ],
   };
 
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
     />
   );
 }

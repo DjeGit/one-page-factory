@@ -19,6 +19,9 @@ import MobileBuyBar from '@/components/product/MobileBuyBar';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getProductGallery } from '@/lib/product-images';
 import { TOP_VENTES_SOURCES, getProductSource } from '@/lib/top-ventes';
+import { isBotUserAgent } from '@/lib/bot-detection';
+import { marketUrl } from '@/lib/site-url';
+import { redirectToMarketDomain } from '@/lib/market-redirect';
 import { SITE_COPY } from '@/lib/site-copy';
 import { isValidMarket, DEFAULT_MARKET, getMarketLabel, getCurrencyForMarket } from '@/lib/market';
 import type { Market } from '@/lib/market';
@@ -32,7 +35,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await getProduct(params.slug);
   if (!product) return { title: 'Produit introuvable' };
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  // Audit C1 : l'URL de référence est le domaine du MARCHÉ du produit, pas
+  // une variable d'environnement unique (qui faisait pointer le canonical de
+  // tendpick.fr vers tendpick.com). Pas d'hreflang ici : une fiche n'existe
+  // que sur le domaine de son marché.
+  const productMarket: Market = isValidMarket(product.market) ? product.market : DEFAULT_MARKET;
+  const pageUrl = marketUrl(productMarket, `/${product.slug}`);
   // Image de partage : 1re photo de la galerie, en URL absolue (un simple
   // public ID Cloudinary n'est pas une URL exploitable par Facebook/X).
   const cover = getProductGallery(product)[0];
@@ -44,10 +52,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: product.meta_title || product.name,
     description: product.meta_description || product.description || undefined,
     openGraph: {
+      type: 'website',
+      siteName: 'Tendpick',
       title: product.meta_title || product.name,
       description: product.meta_description || product.description || undefined,
       images: ogImage ? [ogImage] : [],
-      url: `${siteUrl}/${product.slug}`,
+      url: pageUrl,
     },
     twitter: {
       card: 'summary_large_image',
@@ -56,7 +66,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       images: ogImage ? [ogImage] : [],
     },
     alternates: {
-      canonical: `${siteUrl}/${product.slug}`,
+      canonical: pageUrl,
     },
   };
 }
@@ -65,6 +75,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 async function trackServerPageView(productId: string) {
   try {
     const headersList = headers();
+    // Audit E9 : ne pas compter (ni attendre) les vues des robots d'indexation
+    // et d'aperçu de lien — elles gonflaient les statistiques et ajoutaient
+    // un appel HTTP interne à chaque exploration.
+    if (isBotUserAgent(headersList.get('user-agent'))) return;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
     const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown';
 
@@ -157,6 +171,9 @@ export default async function ProductPage({ params }: Props) {
   const t = SITE_COPY[market];
   const p = t.product;
 
+  // Audit C3 : une fiche ne répond que sur le domaine de son marché.
+  redirectToMarketDomain(market, `/${product.slug}`);
+
   // Track page view (non-blocking)
   trackServerPageView(product.id);
 
@@ -224,7 +241,12 @@ export default async function ProductPage({ params }: Props) {
   return (
     <div className="min-h-screen bg-site-bg text-site-text flex flex-col">
       <PixelInjector pixelMeta={product.pixel_meta} pixelTiktok={product.pixel_tiktok} pixelGtm={product.pixel_gtm} />
-      <ProductStructuredData product={product} />
+      <ProductStructuredData
+        product={product}
+        market={market}
+        categoryName={category ? categoryName(category, market) : null}
+        categorySlug={category ? category.slug : null}
+      />
 
       <SiteHeader categories={categories} market={market} />
       <AffiliateDisclosureBanner market={market} />

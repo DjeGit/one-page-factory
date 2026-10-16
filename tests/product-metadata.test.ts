@@ -60,4 +60,18 @@ describe('generateMetadata (app/[slug]/page.tsx)', () => {
     expect(metadata.title).toBe('Produit Incomplet');
     expect(metadata.openGraph?.images).toEqual([]);
   });
+
+  it('le canonical suit le marché du produit, pas une variable d\'environnement (audit C1)', async () => {
+    process.env.NEXT_PUBLIC_SITE_URL = 'https://tendpick.com';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockGetProduct.mockResolvedValue({ ...FULL_PRODUCT, market: 'fr' } as any);
+    const fr = await generateMetadata({ params: { slug: 'produit-test' } });
+    expect(fr.alternates?.canonical).toBe('https://tendpick.fr/produit-test');
+    expect(fr.openGraph?.url).toBe('https://tendpick.fr/produit-test');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockGetProduct.mockResolvedValue({ ...FULL_PRODUCT, market: 'uk' } as any);
+    const uk = await generateMetadata({ params: { slug: 'produit-test' } });
+    expect(uk.alternates?.canonical).toBe('https://tendpick.com/produit-test');
+  });
 });

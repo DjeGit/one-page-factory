@@ -11,22 +11,28 @@ import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
+import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
 
 export const dynamic = 'force-dynamic';
 
 // Metadata par marché (03/10, demande Jerome) : convertie en
 // generateMetadata (comme app/c/[slug] et app/produits) pour refléter le
 // marché du visiteur au lieu d'un titre/description figés en français.
-export async function generateMetadata(): Promise<Metadata> {
-  const market = getMarketFromHost(headers().get('host'));
+interface Props {
+  searchParams: { source?: string };
+}
+
+// Audit SEO du 07/10 (C2, E1) : canonical + hreflang ; la variante filtrée
+// par plateforme (?source=) n'est pas indexée.
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const h = headers();
+  const market = getMarketFromHost(h.get('host'));
   return {
     title: SITE_COPY[market].topVentesPage.metaTitle,
     description: SITE_COPY[market].topVentesPage.metaDescription,
+    alternates: buildAlternates(h, '/top-ventes'),
+    robots: hasIndexBlockingParams(searchParams, ['source']) ? { index: false, follow: true } : undefined,
   };
-}
-
-interface Props {
-  searchParams: { source?: string };
 }
 
 async function getActiveProducts(market: Market): Promise<Product[]> {

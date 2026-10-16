@@ -14,11 +14,24 @@ import HeroCarousel from '@/components/landing/HeroCarousel';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
 import { getLatestPublishedBlogPosts, getBlogCategories } from '@/lib/blog';
+import type { Metadata } from 'next';
+import SiteStructuredData from '@/components/landing/SiteStructuredData';
+import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
 
 export const dynamic = 'force-dynamic';
 
 interface Props {
   searchParams: { source?: string };
+}
+
+// Audit SEO du 07/10 (C2, E1) : canonical propre + hreflang vers les trois
+// versions du site ; la variante filtrée par onglet (?source=) n'est pas
+// indexée.
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  return {
+    alternates: buildAlternates(headers(), '/'),
+    robots: hasIndexBlockingParams(searchParams, ['source']) ? { index: false, follow: true } : undefined,
+  };
 }
 
 async function getFeaturedProducts(market: Market): Promise<Product[]> {
@@ -82,6 +95,7 @@ export default async function HomePage({ searchParams }: Props) {
 
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
+      <SiteStructuredData market={market} />
       <SiteHeader categories={categories} market={market} />
 
       {/* Hero — remplacé le 03/10 par un carrousel (demande Jerome, après

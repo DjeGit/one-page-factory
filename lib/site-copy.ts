@@ -246,7 +246,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       comeBackDays: 'Revenez dans quelques jours !',
     },
     products: {
-      metaTitle: 'Catalogue produits — Tendpick',
+      metaTitle: 'Catalogue produits',
       metaDescription: 'Découvrez tous les produits sélectionnés par Tendpick : les meilleures ventes en ligne avec des fiches détaillées.',
       resultsFor: (q) => `Résultats pour « ${q} »`,
       ourSelection: 'Notre sélection',
@@ -259,7 +259,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       comeBackHours: 'Revenez dans quelques heures !',
     },
     topVentesPage: {
-      metaTitle: 'Top Ventes — Tendpick',
+      metaTitle: 'Top Ventes',
       metaDescription: 'Les produits les plus populaires, classés par plateforme : Amazon, Rakuten, AliExpress.',
       productCountAmong: (n) => `${n} produit${plural(n)} parmi les plus populaires`,
       preparing: 'Sélection en cours de préparation',
@@ -267,7 +267,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nonePlatform: 'Aucun produit pour le moment sur cette plateforme.',
     },
     blogPage: {
-      metaTitle: 'Blog — Tendpick',
+      metaTitle: 'Blog',
       metaDescription: 'Nos articles sur les produits tendance et le high-tech.',
       all: 'Tout',
       noArticles: 'Aucun article pour le moment — revenez bientôt !',
@@ -404,7 +404,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       comeBackDays: '¡Vuelve en unos días!',
     },
     products: {
-      metaTitle: 'Catálogo de productos — Tendpick',
+      metaTitle: 'Catálogo de productos',
       metaDescription: 'Descubre todos los productos seleccionados por Tendpick: los más vendidos online con fichas detalladas.',
       resultsFor: (q) => `Resultados para «${q}»`,
       ourSelection: 'Nuestra selección',
@@ -417,7 +417,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       comeBackHours: '¡Vuelve en unas horas!',
     },
     topVentesPage: {
-      metaTitle: 'Más vendidos — Tendpick',
+      metaTitle: 'Más vendidos',
       metaDescription: 'Los productos más populares, clasificados por plataforma: Amazon, Rakuten, AliExpress.',
       productCountAmong: (n) => `${n} producto${plural(n)} entre los más populares`,
       preparing: 'Selección en preparación',
@@ -425,7 +425,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nonePlatform: 'Ningún producto por ahora en esta plataforma.',
     },
     blogPage: {
-      metaTitle: 'Blog — Tendpick',
+      metaTitle: 'Blog',
       metaDescription: 'Nuestros artículos sobre productos de tendencia y tecnología.',
       all: 'Todo',
       noArticles: 'Ningún artículo por ahora — ¡vuelve pronto!',
@@ -562,7 +562,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       comeBackDays: 'Check back in a few days!',
     },
     products: {
-      metaTitle: 'Product catalogue — Tendpick',
+      metaTitle: 'Product catalogue',
       metaDescription: 'Discover every product selected by Tendpick: the best online sellers with detailed listings.',
       resultsFor: (q) => `Results for "${q}"`,
       ourSelection: 'Our selection',
@@ -575,7 +575,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       comeBackHours: 'Check back in a few hours!',
     },
     topVentesPage: {
-      metaTitle: 'Best Sellers — Tendpick',
+      metaTitle: 'Best Sellers',
       metaDescription: 'The most popular products, ranked by platform: Amazon, Rakuten, AliExpress.',
       productCountAmong: (n) => `${n} product${plural(n)} among the most popular`,
       preparing: 'Selection coming soon',
@@ -583,7 +583,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nonePlatform: 'No products yet on this platform.',
     },
     blogPage: {
-      metaTitle: 'Blog — Tendpick',
+      metaTitle: 'Blog',
       metaDescription: 'Our articles on trending products and tech.',
       all: 'All',
       noArticles: 'No articles yet — check back soon!',

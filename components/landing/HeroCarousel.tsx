@@ -90,12 +90,21 @@ export default function HeroCarousel({ market }: Props) {
               aria-hidden={!isActive}
               aria-live={isActive ? 'polite' : undefined}
             >
-              <h1 className="mb-4 text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-6xl lg:text-7xl">
-                <span className="block">{slide.headlineLine1}</span>
-                <span className="block" style={{ color: ACCENT_ORANGE }}>
-                  {slide.headlineLine2}
-                </span>
-              </h1>
+              {/* Audit E6 : un seul <h1> par page — les 4 accroches du
+                  carrousel étaient toutes des H1. La première (toujours
+                  présente dans le HTML) porte le titre de page ; les autres
+                  gardent exactement le même rendu en simple paragraphe. */}
+              {(() => {
+                const Heading = i === 0 ? 'h1' : 'p';
+                return (
+                  <Heading className="mb-4 text-4xl font-extrabold leading-[1.1] tracking-tight text-white sm:text-6xl lg:text-7xl">
+                    <span className="block">{slide.headlineLine1}</span>
+                    <span className="block" style={{ color: ACCENT_ORANGE }}>
+                      {slide.headlineLine2}
+                    </span>
+                  </Heading>
+                );
+              })()}
               <p className="max-w-2xl text-base text-white/70 sm:text-lg">{slide.subtitle}</p>
             </div>
           );

@@ -38,7 +38,10 @@ export async function GET(req: Request) {
       "      <g:price>" + price + " " + cfg.currency + "</g:price>",
       "      <g:availability>in stock</g:availability>",
       "      <g:condition>new</g:condition>",
-      "      <g:brand>Tendpick</g:brand>",
+      // Audit E5 : Tendpick n'est pas la marque du produit. La marque réelle
+      // n'est pas stockée ; on déclare donc l'absence d'identifiant plutôt
+      // qu'une marque fausse (Google Merchant accepte identifier_exists=no).
+      "      <g:identifier_exists>no</g:identifier_exists>",
       "    </item>",
     ].filter(Boolean).join("\n");
   }).join("\n");

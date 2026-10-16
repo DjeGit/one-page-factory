@@ -18,7 +18,6 @@ interface Props {
  */
 export default function MobileBuyBar({ redirectCode, productId, productName, priceLabel, ctaLabel }: Props) {
   const [visible, setVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setVisible(window.scrollY > 400);
@@ -26,16 +25,16 @@ export default function MobileBuyBar({ redirectCode, productId, productName, pri
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  function handleClick() {
-    setLoading(true);
+  function track() {
     try {
       fetch('/api/analytics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId, type: 'click' }),
+        keepalive: true,
       }).catch(() => {});
-    } finally {
-      window.location.href = `/api/go/${redirectCode}`;
+    } catch {
+      // Le suivi ne doit jamais bloquer la redirection.
     }
   }
 
@@ -48,14 +47,14 @@ export default function MobileBuyBar({ redirectCode, productId, productName, pri
           <div className="text-sm font-bold text-site-primary truncate">{productName}</div>
           {priceLabel && <div className="text-sm font-bold text-site-cta">{priceLabel}</div>}
         </div>
-        <button
-          type="button"
-          onClick={handleClick}
-          disabled={loading}
-          className="flex-shrink-0 bg-site-cta hover:bg-site-cta-hover text-white font-bold text-[15px] px-5 py-3 rounded-xl transition-colors disabled:opacity-70"
+        <a
+          href={`/api/go/${redirectCode}`}
+          rel="sponsored nofollow noopener"
+          onClick={track}
+          className="flex-shrink-0 bg-site-cta hover:bg-site-cta-hover text-white font-bold text-[15px] px-5 py-3 rounded-xl transition-colors"
         >
           {ctaLabel}
-        </button>
+        </a>
       </div>
     </div>
   );

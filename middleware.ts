@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Market } from '@/lib/market';
+import { getRequestHost, isTendpickHost } from '@/lib/site-url';
 
 function getMarket(host: string): Market {
   return getMarketFromHost(host);
@@ -31,10 +32,44 @@ function isTendpickDomain(host: string): boolean {
   return h.includes('tendpick.');
 }
 
+// Zones qui ne doivent jamais apparaître dans un moteur de recherche (audit
+// M7) : robots.txt les interdit déjà à l'exploration, mais une URL peut être
+// indexée sans être explorée si un site externe y renvoie — l'en-tête
+// X-Robots-Tag l'empêche.
+function isPrivatePath(pathname: string): boolean {
+  return (
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/preview') ||
+    pathname.startsWith('/backoffice') ||
+    pathname.startsWith('/api/')
+  );
+}
+
+function withRobots(res: NextResponse, pathname: string): NextResponse {
+  if (isPrivatePath(pathname)) res.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  return res;
+}
+
 export function middleware(request: NextRequest) {
   const host = request.headers.get('host') ?? '';
   const { pathname } = request.nextUrl;
   const market = getMarket(host);
+
+  // ── Redirection canonique www → apex (audit E8) ───────────────────────────
+  // Une seule version de chaque domaine doit répondre en 200, sinon Google
+  // voit deux sites (www et sans www). La redirection http→https n'est
+  // volontairement PAS faite ici : Next.js pose lui-même x-forwarded-proto
+  // sur la connexion qu'il reçoit (http, derrière nginx), donc la règle
+  // bouclerait à l'infini si nginx ne transmet pas le vrai schéma. Elle
+  // relève de nginx (bloc `listen 80` → `return 301 https://$host$request_uri`).
+  const publicHost = getRequestHost(request.headers);
+  if (isTendpickHost(publicHost) && publicHost.startsWith('www.')) {
+    const target = new URL(
+      request.nextUrl.pathname + request.nextUrl.search,
+      `https://${publicHost.replace(/^www\./, '')}`
+    );
+    return NextResponse.redirect(target, 308);
+  }
 
   // ── OPF back-office : bloquer les routes publiques ──────────────────────────
   if (isOPFDomain(host)) {
@@ -46,7 +81,7 @@ export function middleware(request: NextRequest) {
     ) {
       const res = NextResponse.next();
       res.headers.set('x-market', market);
-      return res;
+      return withRobots(res, pathname);
     }
     // Tout le reste → redirection dashboard admin
     return NextResponse.redirect(new URL('/admin', request.url));
@@ -59,15 +94,15 @@ export function middleware(request: NextRequest) {
     }
     const res = NextResponse.next();
     res.headers.set('x-market', market);
-    res.headers.set('x-market-locale', market === 'fr' ? 'fr-FR' : market === 'es' ? 'es-ES' : 'en-US');
+    res.headers.set('x-market-locale', market === 'fr' ? 'fr-FR' : market === 'es' ? 'es-ES' : 'en-GB');
     res.cookies.set('opf_market', market, { path: '/', maxAge: 2592000, sameSite: 'lax' });
-    return res;
+    return withRobots(res, pathname);
   }
 
   // ── Défaut (localhost / dev) : pass-through avec header marché ──────────────
   const res = NextResponse.next();
   res.headers.set('x-market', market);
-  res.headers.set('x-market-locale', market === 'fr' ? 'fr-FR' : market === 'es' ? 'es-ES' : 'en-US');
+  res.headers.set('x-market-locale', market === 'fr' ? 'fr-FR' : market === 'es' ? 'es-ES' : 'en-GB');
   return res;
 }
 

@@ -10,6 +10,7 @@ import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
+import { buildAlternates } from '@/lib/site-url';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,12 +27,18 @@ function categoryName(category: { name_fr: string; name_es: string; name_uk: str
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const category = await getCategoryBySlug(params.slug);
   if (!category) return {};
-  const host = headers().get('host');
-  const market = getMarketFromHost(host);
+  const h = headers();
+  const market = getMarketFromHost(h.get('host'));
   const name = categoryName(category, market);
+  // Audit M1 : une catégorie sans produit sur ce marché reste accessible mais
+  // n'est pas indexée (page vide = contenu mince) ; elle le redeviendra
+  // d'elle-même dès le premier produit.
+  const products = await getActiveProductsByCategory(category.id, market);
   return {
-    title: `${name} — Tendpick`,
+    title: name,
     description: SITE_COPY[market].category.metaDescription(name),
+    alternates: buildAlternates(h, `/c/${category.slug}`),
+    robots: products.length === 0 ? { index: false, follow: true } : undefined,
   };
 }
 

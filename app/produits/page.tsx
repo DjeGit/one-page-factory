@@ -13,22 +13,35 @@ import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
+import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
 
 export const dynamic = 'force-dynamic';
 
 // Metadata par marché (03/10, demande Jerome) : était figée en français
 // avant ce correctif — convertie en generateMetadata (comme app/c/[slug])
 // pour pouvoir lire le host et donc le marché du visiteur.
-export async function generateMetadata(): Promise<Metadata> {
-  const market = getMarketFromHost(headers().get('host'));
+interface Props {
+  searchParams: { q?: string };
+}
+
+// Audit SEO du 07/10 (C2, E1) : canonical + hreflang ; les résultats de
+// recherche (?q=) ne sont pas indexés.
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const h = headers();
+  const market = getMarketFromHost(h.get('host'));
   return {
     title: SITE_COPY[market].products.metaTitle,
     description: SITE_COPY[market].products.metaDescription,
+    alternates: buildAlternates(h, '/produits'),
+    robots: hasIndexBlockingParams(searchParams, ['q']) ? { index: false, follow: true } : undefined,
   };
 }
 
-interface Props {
-  searchParams: { q?: string };
+// Audit M10 : la saisie est insérée dans un filtre PostgREST (.or(...)) où
+// la virgule, les parenthèses et les jokers ont un sens. On les retire pour
+// qu'un visiteur ne puisse pas injecter ses propres opérateurs de filtre.
+function sanitizeSearchTerm(raw: string): string {
+  return raw.replace(/[,()*%\\"`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
 }
 
 function categoryName(c: { name_fr: string; name_es: string; name_uk: string }, market: Market): string {
@@ -47,8 +60,9 @@ async function getAllActive(market: Market, query?: string): Promise<Product[]> 
       .eq('market', market);
     // Recherche (icône loupe du header, 30/09) : simple ILIKE sur le nom
     // et le titre affiché, pas de moteur de recherche dédié pour l'instant.
-    if (query) {
-      q = q.or(`name.ilike.%${query}%,hero_title.ilike.%${query}%`);
+    const term = query ? sanitizeSearchTerm(query) : '';
+    if (term) {
+      q = q.or(`name.ilike.%${term}%,hero_title.ilike.%${term}%`);
     }
     const { data } = await q.order('updated_at', { ascending: false });
     return (data as Product[]) || [];
