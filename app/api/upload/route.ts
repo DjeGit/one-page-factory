@@ -53,8 +53,12 @@ export async function POST(req: NextRequest) {
     }
 
     const timestamp = Math.round(Date.now() / 1000);
-    const folder = 'products';
-    const transformation = 'c_fill,w_1200,h_1200,g_auto';
+    // kind=blog : image de couverture d'article, format paysage 16:9.
+    // Par défaut (produit) : carré 1200x1200 comme avant.
+    const kind = form.get('kind');
+    const isBlog = kind === 'blog';
+    const folder = isBlog ? 'blog' : 'products';
+    const transformation = isBlog ? 'c_fill,w_1600,h_900,g_auto' : 'c_fill,w_1200,h_1200,g_auto';
 
     // Signature Cloudinary : sha1 des paramètres (hors file/api_key/signature),
     // triés par clé, concaténés "k=v&k2=v2", suivis du secret.

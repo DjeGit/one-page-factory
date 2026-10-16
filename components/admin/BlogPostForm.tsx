@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import '@uiw/react-md-editor/markdown-editor.css';
@@ -31,6 +31,30 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  // Upload de la couverture vers Cloudinary (même route que les images
+  // produit, dossier « blog », recadrage 16:9). L'URL complète est stockée.
+  const handleCoverUpload = async (file: File) => {
+    setCoverUploading(true);
+    setCoverError(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('kind', 'blog');
+      const res = await fetch('/api/upload', { method: 'POST', body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Erreur lors de l'upload");
+      handleChange('cover_image_url', data.url || data.public_id);
+    } catch (err) {
+      setCoverError(err instanceof Error ? err.message : 'Erreur inconnue');
+    } finally {
+      setCoverUploading(false);
+      if (coverInputRef.current) coverInputRef.current.value = '';
+    }
+  };
 
   // Génération IA — sujet/angle saisis à part, jamais sauvegardés tels
   // quels : ils ne servent qu'à pré-remplir le formulaire, que l'on relit
@@ -317,6 +341,28 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
             className={inputClass}
             placeholder="https://..."
           />
+          <div className="mt-2 flex items-center gap-3">
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              disabled={coverUploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleCoverUpload(f);
+              }}
+              className="text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 file:cursor-pointer disabled:opacity-60"
+            />
+            {coverUploading && <span className="text-xs text-gray-400">Envoi en cours...</span>}
+          </div>
+          {coverError && <p className="text-xs text-red-600 mt-1">{coverError}</p>}
+          <p className="text-xs text-gray-400 mt-1">
+            Choisis un fichier (recadré en 16:9 automatiquement) ou colle un lien.
+          </p>
+          {form.cover_image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={form.cover_image_url} alt="Aperçu de la couverture" className="mt-2 w-full max-w-xs rounded-xl border border-gray-200" />
+          )}
         </div>
         <div>
           <label className={labelClass}>Tags (séparés par des virgules)</label>

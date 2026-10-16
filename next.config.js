@@ -13,6 +13,12 @@ const nextConfig = {
         pathname: '/**',
       },
       {
+        // Photos Pexels collées par lien (couverture d'article de blog)
+        protocol: 'https',
+        hostname: 'images.pexels.com',
+        pathname: '/**',
+      },
+      {
         protocol: 'https',
         hostname: 'm.media-amazon.com',
         pathname: '/**',
