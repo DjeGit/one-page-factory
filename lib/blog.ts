@@ -89,11 +89,28 @@ export async function getBlogPostByIdAdmin(id: string): Promise<BlogPost | null>
 }
 
 /** Admin uniquement : tous les articles (brouillons + publies), plus recents d'abord. */
-export async function getAllBlogPostsAdmin(): Promise<BlogPost[]> {
+/**
+ * Liste admin : on ne charge PAS le contenu markdown (inutile dans un
+ * tableau, et 12 articles longs alourdissaient inutilement la page). Et on
+ * ne renvoie plus silencieusement [] en cas d'erreur Supabase — la page
+ * affichait alors "Aucun article" comme si les articles avaient disparu.
+ * Une nouvelle tentative est faite avant de remonter l'erreur.
+ */
+const LIST_SELECT =
+  'id, slug, market, title, excerpt, cover_image_url, status, tags, category_id, linked_product_ids, author_name, generated_by_ai, published_at, created_at, updated_at, category:blog_categories(*)';
+
+export async function getAllBlogPostsAdmin(): Promise<{ posts: BlogPost[]; error: string | null }> {
   const sb = getSupabaseAdmin();
-  const { data, error } = await sb.from('blog_posts').select(POST_SELECT).order('created_at', { ascending: false });
-  if (error || !data) return [];
-  return data as unknown as BlogPost[];
+  let lastError = 'Erreur inconnue';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await sb.from('blog_posts').select(LIST_SELECT).order('created_at', { ascending: false });
+    if (!error && data) {
+      return { posts: (data as unknown as BlogPost[]).map((p) => ({ ...p, content: '' })), error: null };
+    }
+    lastError = error?.message ?? lastError;
+    console.error('[blog] getAllBlogPostsAdmin a échoué (tentative ' + (attempt + 1) + ') :', lastError);
+  }
+  return { posts: [], error: lastError };
 }
 
 function toInsertPayload(form: BlogPostFormData) {

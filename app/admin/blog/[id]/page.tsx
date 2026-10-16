@@ -8,6 +8,8 @@ interface Props {
   params: { id: string };
 }
 
+export const dynamic = 'force-dynamic';
+
 export default async function EditBlogPostPage({ params }: Props) {
   const post = await getBlogPostByIdAdmin(params.id);
   if (!post) notFound();

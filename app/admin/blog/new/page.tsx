@@ -3,6 +3,8 @@ import BlogPostForm from '@/components/admin/BlogPostForm';
 import { getAllProducts } from '@/lib/supabase';
 import { getBlogCategories } from '@/lib/blog';
 
+export const dynamic = 'force-dynamic';
+
 export default async function NewBlogPostPage() {
   const [products, categories] = await Promise.all([getAllProducts(), getBlogCategories()]);
 

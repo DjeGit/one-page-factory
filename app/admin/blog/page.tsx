@@ -5,7 +5,7 @@ import BlogPostsTable from './BlogPostsTable';
 export const dynamic = 'force-dynamic';
 
 export default async function BlogAdminPage() {
-  const posts = await getAllBlogPostsAdmin();
+  const { posts, error } = await getAllBlogPostsAdmin();
 
   return (
     <div className="p-8">
@@ -36,7 +36,15 @@ export default async function BlogAdminPage() {
         </div>
       </div>
 
-      {posts.length === 0 ? (
+      {error ? (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-red-800">
+          <p className="font-bold mb-1">Impossible de charger les articles.</p>
+          <p className="text-sm mb-4">Vos articles ne sont pas supprimés — la lecture a échoué ({error}). Rechargez la page.</p>
+          <a href="/admin/blog" className="inline-block px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700">
+            Recharger
+          </a>
+        </div>
+      ) : posts.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-200 py-20 text-center">
           <div className="text-5xl mb-4">📝</div>
           <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun article</h3>

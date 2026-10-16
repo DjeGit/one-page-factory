@@ -30,6 +30,10 @@ const nextConfig = {
     ],
   },
   experimental: {
+    // Cache client des pages dynamiques désactivé : au retour (bouton Retour,
+    // flèche) l'admin recharge toujours les données au lieu d'afficher une
+    // vue périmée ou vide.
+    staleTimes: { dynamic: 0, static: 30 },
     serverActions: {
       allowedOrigins: ['localhost:3000', 'tendpick.com', 'www.tendpick.com'],
     },
