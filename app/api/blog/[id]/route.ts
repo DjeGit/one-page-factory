@@ -25,16 +25,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
   try {
     const body = await req.json();
 
-    if (!body.title || !body.content) {
-      return NextResponse.json({ error: 'Le titre et le contenu sont requis' }, { status: 400 });
-    }
-
     // Publication explicite demandée depuis l'admin (ex: bouton "Publier"
     // sans repasser par tout le formulaire) : { publish: true } seul.
     if (body.publish === true && Object.keys(body).length === 1) {
       const { post, error } = await publishBlogPost(params.id);
       if (!post) return NextResponse.json({ error: error || 'Erreur lors de la publication' }, { status: 500 });
       return NextResponse.json(post);
+    }
+
+    if (!body.title || !body.content) {
+      return NextResponse.json({ error: 'Le titre et le contenu sont requis' }, { status: 400 });
     }
 
     const form: BlogPostFormData = {

@@ -4,6 +4,18 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { BlogPost } from '@/types';
+import { MARKET_ORIGIN } from '@/lib/site-url';
+
+// Miniature légère : si l'image est sur Cloudinary, on demande une version
+// réduite 160x100 plutôt que l'image 1600x900 complète.
+function thumbUrl(url: string): string {
+  if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+    return url.replace('/upload/', '/upload/c_fill,w_160,h_100,q_auto,f_auto/');
+  }
+  return url;
+}
+
+type Notice = { kind: 'success' | 'error'; text: string; href?: string };
 
 interface Props {
   posts: BlogPost[];
@@ -12,13 +24,27 @@ interface Props {
 export default function BlogPostsTable({ posts }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+
+  const readError = async (res: Response): Promise<string> => {
+    const data = await res.json().catch(() => ({}));
+    return data?.error || `Erreur ${res.status}`;
+  };
 
   const handleDelete = async (post: BlogPost) => {
     if (!confirm(`Supprimer "${post.title}" ? Cette action est irréversible.`)) return;
     setBusyId(post.id);
+    setNotice(null);
     try {
       const res = await fetch(`/api/blog/${post.id}`, { method: 'DELETE' });
-      if (res.ok) router.refresh();
+      if (res.ok) {
+        setNotice({ kind: 'success', text: `Article « ${post.title} » supprimé.` });
+        router.refresh();
+      } else {
+        setNotice({ kind: 'error', text: `Suppression impossible : ${await readError(res)}` });
+      }
+    } catch {
+      setNotice({ kind: 'error', text: 'Suppression impossible : problème de connexion.' });
     } finally {
       setBusyId(null);
     }
@@ -26,19 +52,58 @@ export default function BlogPostsTable({ posts }: Props) {
 
   const handlePublish = async (post: BlogPost) => {
     setBusyId(post.id);
+    setNotice(null);
     try {
       const res = await fetch(`/api/blog/${post.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ publish: true }),
       });
-      if (res.ok) router.refresh();
+      if (res.ok) {
+        setNotice({
+          kind: 'success',
+          text: `Article « ${post.title} » publié.`,
+          href: `${MARKET_ORIGIN[post.market]}/blog/${post.slug}`,
+        });
+        router.refresh();
+      } else {
+        setNotice({ kind: 'error', text: `Publication impossible : ${await readError(res)}` });
+      }
+    } catch {
+      setNotice({ kind: 'error', text: 'Publication impossible : problème de connexion.' });
     } finally {
       setBusyId(null);
     }
   };
 
   return (
+    <>
+    {notice && (
+      <div
+        role="status"
+        className={`mb-4 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 text-sm font-medium ${
+          notice.kind === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}
+      >
+        <span>
+          {notice.kind === 'success' ? '✓ ' : '⚠ '}
+          {notice.text}
+          {notice.href && (
+            <>
+              {' '}
+              <a href={notice.href} target="_blank" rel="noopener noreferrer" className="underline font-semibold">
+                Voir l&apos;article en ligne
+              </a>
+            </>
+          )}
+        </span>
+        <button type="button" onClick={() => setNotice(null)} className="text-xs opacity-70 hover:opacity-100">
+          Fermer
+        </button>
+      </div>
+    )}
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -56,11 +121,31 @@ export default function BlogPostsTable({ posts }: Props) {
             {posts.map((post) => (
               <tr key={post.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4">
-                  <div className="font-semibold text-gray-900">
-                    {post.title}
-                    {post.generated_by_ai && <span className="ml-2 text-xs text-primary-600">🤖 IA</span>}
+                  <div className="flex items-center gap-4">
+                    {post.cover_image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={thumbUrl(post.cover_image_url)}
+                        alt=""
+                        loading="lazy"
+                        className="w-20 h-[50px] object-cover rounded-lg border border-gray-200 flex-shrink-0"
+                      />
+                    ) : (
+                      <div
+                        title="Pas encore d'image de couverture"
+                        className="w-20 h-[50px] rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-gray-300 text-lg flex-shrink-0"
+                      >
+                        🖼
+                      </div>
+                    )}
+                    <div>
+                      <div className="font-semibold text-gray-900">
+                        {post.title}
+                        {post.generated_by_ai && <span className="ml-2 text-xs text-primary-600">🤖 IA</span>}
+                      </div>
+                      <div className="text-xs text-gray-400">/blog/{post.slug}</div>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-400">/blog/{post.slug}</div>
                 </td>
                 <td className="px-4 py-4 hidden md:table-cell text-sm text-gray-600 uppercase">{post.market}</td>
                 <td className="px-4 py-4 hidden md:table-cell text-sm text-gray-600">
@@ -119,5 +204,6 @@ export default function BlogPostsTable({ posts }: Props) {
         </table>
       </div>
     </div>
+    </>
   );
 }
