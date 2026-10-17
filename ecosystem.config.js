@@ -15,6 +15,10 @@ const ENV_ALLOWLIST = [
 
   // ─── Site & media ───────────────────────────────────────────────────────
   'NEXT_PUBLIC_SITE_URL', 'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME',
+  // Upload d'images (app/api/upload) : absentes de cette liste jusqu'au 17/10,
+  // donc l'upload répondait toujours « non configuré » même avec les clés
+  // présentes dans .env.local.
+  'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET',
 
   // ─── Pixels du site catalogue (accueil, catalogue) — absents de cette liste
   //     jusqu'au 07/10 : app/page.tsx les lit via process.env mais PM2 ne les
