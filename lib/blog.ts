@@ -174,6 +174,19 @@ export async function publishBlogPost(id: string): Promise<{ post: BlogPost | nu
   return { post: data as unknown as BlogPost, error: null };
 }
 
+/** Repasse un article publie en brouillon (il disparait du site public). */
+export async function unpublishBlogPost(id: string): Promise<{ post: BlogPost | null; error: string | null }> {
+  const sb = getSupabaseAdmin();
+  const { data, error } = await sb
+    .from('blog_posts')
+    .update({ status: 'draft', published_at: null })
+    .eq('id', id)
+    .select(POST_SELECT)
+    .single();
+  if (error || !data) return { post: null, error: error?.message || 'Erreur inconnue' };
+  return { post: data as unknown as BlogPost, error: null };
+}
+
 export async function deleteBlogPost(id: string): Promise<{ error: string | null }> {
   const sb = getSupabaseAdmin();
   const { error } = await sb.from('blog_posts').delete().eq('id', id);

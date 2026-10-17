@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBlogPostByIdAdmin, updateBlogPost, deleteBlogPost, publishBlogPost } from '@/lib/blog';
+import { getBlogPostByIdAdmin, updateBlogPost, deleteBlogPost, publishBlogPost, unpublishBlogPost } from '@/lib/blog';
 import { slugifyBlogTitle } from '@/lib/slugify';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
 import { isValidMarket } from '@/lib/market';
@@ -30,6 +30,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
     if (body.publish === true && Object.keys(body).length === 1) {
       const { post, error } = await publishBlogPost(params.id);
       if (!post) return NextResponse.json({ error: error || 'Erreur lors de la publication' }, { status: 500 });
+      return NextResponse.json(post);
+    }
+
+    // Repasser en brouillon depuis la liste : { unpublish: true } seul.
+    if (body.unpublish === true && Object.keys(body).length === 1) {
+      const { post, error } = await unpublishBlogPost(params.id);
+      if (!post) return NextResponse.json({ error: error || 'Erreur lors du passage en brouillon' }, { status: 500 });
       return NextResponse.json(post);
     }
 

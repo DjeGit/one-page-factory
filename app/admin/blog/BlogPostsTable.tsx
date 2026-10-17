@@ -76,6 +76,29 @@ export default function BlogPostsTable({ posts }: Props) {
     }
   };
 
+  const handleUnpublish = async (post: BlogPost) => {
+    if (!confirm(`Repasser « ${post.title} » en brouillon ? L'article ne sera plus visible sur le site.`)) return;
+    setBusyId(post.id);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/blog/${post.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ unpublish: true }),
+      });
+      if (res.ok) {
+        setNotice({ kind: 'success', text: `Article « ${post.title} » repassé en brouillon : il n'est plus visible sur le site.` });
+        router.refresh();
+      } else {
+        setNotice({ kind: 'error', text: `Impossible de dépublier : ${await readError(res)}` });
+      }
+    } catch {
+      setNotice({ kind: 'error', text: 'Impossible de dépublier : problème de connexion.' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <>
     {notice && (
@@ -184,6 +207,15 @@ export default function BlogPostsTable({ posts }: Props) {
                         className="text-xs font-semibold text-green-700 hover:text-green-900 disabled:opacity-50"
                       >
                         Publier
+                      </button>
+                    )}
+                    {post.status === 'published' && (
+                      <button
+                        onClick={() => handleUnpublish(post)}
+                        disabled={busyId === post.id}
+                        className="text-xs font-semibold text-amber-700 hover:text-amber-900 disabled:opacity-50"
+                      >
+                        Dépublier
                       </button>
                     )}
                     <Link href={`/admin/blog/${post.id}`} className="text-xs font-semibold text-primary-600 hover:text-primary-800">
