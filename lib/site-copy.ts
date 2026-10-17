@@ -245,7 +245,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       ],
     },
     category: {
-      metaDescription: (name) => `Découvrez notre sélection ${name} sur Tendpick.`,
+      metaDescription: (name) =>
+        `${name} : notre sélection du moment, avec ce qui justifie chaque produit et le prix constaté chez le marchand. Mise à jour en continu.`,
       productCount: (n) => `${n} produit${plural(n)} sélectionné${plural(n)}`,
       newSoon: 'Nouveaux produits bientôt disponibles dans cette catégorie',
       preparing: 'Sélection en cours de préparation…',
@@ -273,8 +274,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nonePlatform: 'Aucun produit pour le moment sur cette plateforme.',
     },
     blogPage: {
-      metaTitle: 'Blog',
-      metaDescription: 'Nos articles sur les produits tendance et le high-tech.',
+      metaTitle: 'Blog : guides d\'achat et produits du moment',
+      metaDescription:
+        "Guides d'achat, comparatifs et tendances : nos articles expliquent quoi acheter, pour qui, et quand s'abstenir. Sources citées, aucun produit testé.",
       all: 'Tout',
       noArticles: 'Aucun article pour le moment — revenez bientôt !',
     },
@@ -406,7 +408,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       ],
     },
     category: {
-      metaDescription: (name) => `Descubre nuestra selección ${name} en Tendpick.`,
+      metaDescription: (name) =>
+        `${name}: nuestra selección del momento, con lo que justifica cada producto y el precio visto en la tienda. Actualizada de forma continua.`,
       productCount: (n) => `${n} producto${plural(n)} seleccionado${plural(n)}`,
       newSoon: 'Nuevos productos disponibles próximamente en esta categoría',
       preparing: 'Selección en preparación…',
@@ -434,8 +437,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nonePlatform: 'Ningún producto por ahora en esta plataforma.',
     },
     blogPage: {
-      metaTitle: 'Blog',
-      metaDescription: 'Nuestros artículos sobre productos de tendencia y tecnología.',
+      metaTitle: 'Blog: guías de compra y productos del momento',
+      metaDescription:
+        'Guías de compra, comparativas y tendencias: nuestros artículos explican qué comprar, para quién y cuándo no hace falta. Con fuentes citadas.',
       all: 'Todo',
       noArticles: 'Ningún artículo por ahora — ¡vuelve pronto!',
     },
@@ -567,7 +571,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       ],
     },
     category: {
-      metaDescription: (name) => `Discover our ${name} selection on Tendpick.`,
+      metaDescription: (name) =>
+        `${name}: our current pick, with what justifies each product and the price seen at the retailer. Kept up to date.`,
       productCount: (n) => `${n} product${plural(n)} selected`,
       newSoon: 'New products coming soon to this category',
       preparing: 'Selection coming together…',
@@ -595,8 +600,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nonePlatform: 'No products yet on this platform.',
     },
     blogPage: {
-      metaTitle: 'Blog',
-      metaDescription: 'Our articles on trending products and tech.',
+      metaTitle: 'Blog: buying guides and what is trending',
+      metaDescription:
+        'Buying guides, comparisons and trends: our articles explain what to buy, who it suits and when to skip it. Sources cited, no products tested.',
       all: 'All',
       noArticles: 'No articles yet — check back soon!',
     },

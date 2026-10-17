@@ -34,10 +34,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // n'est pas indexée (page vide = contenu mince) ; elle le redeviendra
   // d'elle-même dès le premier produit.
   const products = await getActiveProductsByCategory(category.id, market);
+  const description = SITE_COPY[market].category.metaDescription(name);
+  const alternates = buildAlternates(h, `/c/${category.slug}`);
   return {
     title: name,
-    description: SITE_COPY[market].category.metaDescription(name),
-    alternates: buildAlternates(h, `/c/${category.slug}`),
+    description,
+    alternates,
+    openGraph: {
+      type: 'website',
+      siteName: 'Tendpick',
+      title: name,
+      description,
+      url: alternates.canonical,
+    },
     robots: products.length === 0 ? { index: false, follow: true } : undefined,
   };
 }

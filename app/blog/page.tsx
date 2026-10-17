@@ -26,10 +26,18 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   // Blog vide = page mince : non indexée tant qu'aucun article n'est publié.
   const hasPosts = (await getPublishedBlogPosts(market)).length > 0;
   const blocked = !hasPosts || hasIndexBlockingParams(searchParams, ['tag', 'category']);
+  const alternates = buildAlternates(h, '/blog');
   return {
     title: t.blogPage.metaTitle,
     description: t.blogPage.metaDescription,
-    alternates: buildAlternates(h, '/blog'),
+    alternates,
+    openGraph: {
+      type: 'website',
+      siteName: 'Tendpick',
+      title: t.blogPage.metaTitle,
+      description: t.blogPage.metaDescription,
+      url: alternates.canonical,
+    },
     robots: blocked ? { index: false, follow: true } : undefined,
   };
 }

@@ -12,6 +12,7 @@ import { getCloudinaryUrl } from '@/lib/cloudinary';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import BlogStructuredData from '@/components/landing/BlogStructuredData';
+import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import { SITE_COPY } from '@/lib/site-copy';
 import { isValidMarket, DEFAULT_MARKET } from '@/lib/market';
 import { marketUrl } from '@/lib/site-url';
@@ -57,15 +58,53 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 // liens externes portent rel="sponsored nofollow noopener" (consigne Google
 // pour les liens commerciaux, audit E10) ; les liens internes restent de
 // simples liens.
+const MERCHANT_HOSTS = /(^|\.)(amazon\.|amzn\.|rakuten\.|aliexpress\.|awin1\.com|fnac\.|cdiscount\.|darty\.|boulanger\.)/i;
+
+function isMerchantLink(href: string): boolean {
+  if (href.startsWith('/api/go/')) return true;
+  try {
+    return MERCHANT_HOSTS.test(new URL(href).hostname);
+  } catch {
+    return false;
+  }
+}
+
 function ArticleLink({ href, children }: { href?: string; children?: React.ReactNode }) {
   if (!href) return <>{children}</>;
   const isInternal = href.startsWith('/') && !href.startsWith('/api/go/');
   if (isInternal) return <Link href={href}>{children}</Link>;
-  const isAffiliate = href.startsWith('/api/go/') || /^https?:\/\//i.test(href);
+  // Audit du 18/10 : rel="sponsored nofollow" est réservé aux liens
+  // commerciaux. Il était appliqué à TOUS les liens http, donc aussi aux
+  // sources éditoriales citées (OMS, NHS, INSV, presse) — un signal faux
+  // envoyé à Google, et la perte du bénéfice d'une citation de source.
+  const merchant = isMerchantLink(href);
   return (
-    <a href={href} rel={isAffiliate ? 'sponsored nofollow noopener' : 'noopener'} target={href.startsWith('/') ? undefined : '_blank'}>
+    <a
+      href={href}
+      rel={merchant ? 'sponsored nofollow noopener noreferrer' : 'noopener noreferrer'}
+      target={href.startsWith('/') ? undefined : '_blank'}
+    >
       {children}
     </a>
+  );
+}
+
+// Images insérées dans le corps Markdown : sans ces attributs, le navigateur
+// ne réserve pas la place de l'image et la page saute pendant le chargement
+// (CLS). ReactMarkdown ne surchargeait que les liens (audit du 17/10).
+function ArticleImage({ src, alt }: { src?: string; alt?: string }) {
+  if (!src) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt={alt || ''}
+      loading="lazy"
+      decoding="async"
+      width={1600}
+      height={900}
+      className="w-full h-auto rounded-xl"
+    />
   );
 }
 
@@ -84,6 +123,19 @@ export default async function BlogPostPage({ params }: Props) {
     getProductsByIds(post.linked_product_ids),
   ]);
 
+  // Signal de fraîcheur attendu par Google et par les lecteurs : la date de
+  // dernière mise à jour quand elle est postérieure à la publication.
+  const DATE_LABELS = {
+    fr: { updated: 'Mis à jour le' },
+    es: { updated: 'Actualizado el' },
+    uk: { updated: 'Updated on' },
+  } as const;
+  const dateLocale = market === 'fr' ? 'fr-FR' : market === 'es' ? 'es-ES' : 'en-GB';
+  const updatedDate =
+    post.updated_at && post.published_at && new Date(post.updated_at) > new Date(post.published_at)
+      ? new Date(post.updated_at).toLocaleDateString(dateLocale, { year: 'numeric', month: 'long', day: 'numeric' })
+      : null;
+
   const publishedDate = post.published_at
     ? new Date(post.published_at).toLocaleDateString(market === 'fr' ? 'fr-FR' : market === 'es' ? 'es-ES' : 'en-GB', {
         year: 'numeric',
@@ -96,6 +148,9 @@ export default async function BlogPostPage({ params }: Props) {
     <div className="min-h-screen bg-site-bg text-site-text">
       <BlogStructuredData post={post} />
       <SiteHeader categories={categories} market={market} />
+      {/* Divulgation avant le clic : elle existait sur les fiches produit,
+          pas sur les articles, qui portent aussi des liens commerciaux. */}
+      <AffiliateDisclosureBanner market={market} />
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
         <Link href="/blog" className="text-sm text-site-secondary hover:text-site-primary transition-colors">
@@ -112,7 +167,7 @@ export default async function BlogPostPage({ params }: Props) {
             }}
           >
             {post.category.icon && <span>{post.category.icon}</span>}
-            {post.category.name_fr}
+            {market === 'es' ? post.category.name_es : market === 'uk' ? post.category.name_uk : post.category.name_fr}
           </Link>
         )}
 
@@ -121,6 +176,11 @@ export default async function BlogPostPage({ params }: Props) {
         <div className="flex items-center gap-3 text-sm text-site-text-secondary mb-6">
           {post.author_name && <span>{post.author_name}</span>}
           {publishedDate && <span>· {publishedDate}</span>}
+          {updatedDate && (
+            <span>
+              · {DATE_LABELS[market].updated} {updatedDate}
+            </span>
+          )}
         </div>
 
         {post.cover_image_url && (
@@ -136,7 +196,7 @@ export default async function BlogPostPage({ params }: Props) {
         )}
 
         <article className="prose prose-headings:text-site-primary prose-a:text-site-secondary max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ArticleLink }}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ArticleLink, img: ArticleImage }}>
             {post.content}
           </ReactMarkdown>
         </article>
