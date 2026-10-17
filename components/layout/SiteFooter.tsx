@@ -63,15 +63,24 @@ export default function SiteFooter({ categories, market }: Props) {
             <Link href="/blog" className="text-xs text-white/60 hover:text-white transition-colors">
               {SITE_COPY[market].nav.blog}
             </Link>
+            <Link href="/a-propos" className="text-xs text-white/60 hover:text-white transition-colors">
+              {t.about}
+            </Link>
+            <Link href="/methode" className="text-xs text-white/60 hover:text-white transition-colors">
+              {t.method}
+            </Link>
+            <Link href="/partenariats" className="text-xs text-white/60 hover:text-white transition-colors">
+              {t.partners}
+            </Link>
             <Link href="/mentions-legales" className="text-xs text-white/60 hover:text-white transition-colors">
               {t.legalMentions}
             </Link>
             <Link href="/politique-confidentialite" className="text-xs text-white/60 hover:text-white transition-colors">
               {t.privacy}
             </Link>
-            <a href="mailto:contact@tendpick.com" className="text-xs text-white/60 hover:text-white transition-colors">
+            <Link href="/contact" className="text-xs text-white/60 hover:text-white transition-colors">
               {t.contact}
-            </a>
+            </Link>
           </div>
 
           <div className="flex flex-col gap-2">
@@ -99,7 +108,7 @@ export default function SiteFooter({ categories, market }: Props) {
 
         <div className="border-t border-white/15 pt-4 text-xs text-white/50">
           © {new Date().getFullYear()} Tendpick — {t.copyrightPrefix}{' '}
-          <Link href="/mentions-legales" className="underline hover:text-white/80 transition-colors">
+          <Link href="/methode" className="underline hover:text-white/80 transition-colors">
             {t.transparencyLink}
           </Link>
         </div>

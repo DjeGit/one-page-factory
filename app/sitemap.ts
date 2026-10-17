@@ -92,6 +92,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${origin}/produits`, lastModified: lastProducts },
     { url: `${origin}/top-ventes`, lastModified: lastProducts },
   ];
+  // Pages de confiance (18/10) : identiques sur les trois domaines, langue du
+  // marché, indexables — contrairement aux pages légales en noindex.
+  for (const path of ['/a-propos', '/methode', '/contact', '/partenariats']) {
+    fixed.push({ url: `${origin}${path}` });
+  }
+
   // /blog seulement s'il y a au moins un article publié sur ce marché.
   if (posts.length > 0) fixed.push({ url: `${origin}/blog`, lastModified: lastPosts });
 

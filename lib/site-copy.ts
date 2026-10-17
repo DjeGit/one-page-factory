@@ -41,6 +41,9 @@ interface SiteCopy {
     categoriesLabel: string;
     allCatalog: string;
     help: string;
+    about: string;
+    method: string;
+    partners: string;
     legalMentions: string;
     privacy: string;
     contact: string;
@@ -175,6 +178,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       categoriesLabel: 'Catégories',
       allCatalog: 'Tout le catalogue',
       help: 'Aide',
+      about: 'À propos',
+      method: 'Notre méthode',
+      partners: 'Partenariats',
       legalMentions: 'Mentions légales',
       privacy: 'Confidentialité',
       contact: 'Contact',
@@ -333,6 +339,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       categoriesLabel: 'Categorías',
       allCatalog: 'Todo el catálogo',
       help: 'Ayuda',
+      about: 'Sobre nosotros',
+      method: 'Nuestro método',
+      partners: 'Colaboraciones',
       legalMentions: 'Aviso legal',
       privacy: 'Privacidad',
       contact: 'Contacto',
@@ -491,6 +500,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       categoriesLabel: 'Categories',
       allCatalog: 'Full catalogue',
       help: 'Help',
+      about: 'About',
+      method: 'Our method',
+      partners: 'Partnerships',
       legalMentions: 'Legal notice',
       privacy: 'Privacy',
       contact: 'Contact',

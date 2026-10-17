@@ -26,7 +26,9 @@ export default async function MentionsLegales() {
 
         <h2 className="text-lg font-semibold mt-8 mb-3">Éditeur du site</h2>
         <p className="text-site-text-secondary">
-          Le site Tendpick (tendpick.com) est édité à titre personnel.<br />
+          Le site Tendpick (tendpick.com, tendpick.fr, tendpick.es) est édité par Jérôme, son
+          fondateur, à titre personnel. Les informations d&apos;immatriculation seront complétées
+          dès la création de la structure juridique.<br />
           Pour nous contacter : <a href="mailto:contact@tendpick.com" className="text-site-cta underline">contact@tendpick.com</a>
         </p>
 
@@ -72,6 +74,15 @@ export default async function MentionsLegales() {
           ne peut être tenu responsable des inexactitudes, erreurs ou omissions dans le contenu.
           Nous déclinons toute responsabilité quant aux décisions prises sur la base des
           informations présentées.
+        </p>
+
+        <h2 className="text-lg font-semibold mt-8 mb-3">Méthode éditoriale et partenariats</h2>
+        <p className="text-site-text-secondary">
+          La page{' '}
+          <Link href="/methode" className="text-site-cta underline">méthode de sélection</Link>{' '}
+          détaille nos critères, nos sources et ce que nous refusons ; la page{' '}
+          <Link href="/partenariats" className="text-site-cta underline">partenariats</Link>{' '}
+          précise les conditions de travail avec les marques et les réseaux d&apos;affiliation.
         </p>
 
         <h2 className="text-lg font-semibold mt-8 mb-3">Cookies et données personnelles</h2>
