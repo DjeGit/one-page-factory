@@ -99,11 +99,14 @@ export async function getBlogPostByIdAdmin(id: string): Promise<BlogPost | null>
 const LIST_SELECT =
   'id, slug, market, title, excerpt, cover_image_url, status, tags, category_id, linked_product_ids, author_name, generated_by_ai, published_at, created_at, updated_at, category:blog_categories(*)';
 
-export async function getAllBlogPostsAdmin(): Promise<{ posts: BlogPost[]; error: string | null }> {
+export async function getAllBlogPostsAdmin(market?: Market): Promise<{ posts: BlogPost[]; error: string | null }> {
   const sb = getSupabaseAdmin();
   let lastError = 'Erreur inconnue';
   for (let attempt = 0; attempt < 2; attempt++) {
-    const { data, error } = await sb.from('blog_posts').select(LIST_SELECT).order('created_at', { ascending: false });
+    let query = sb.from('blog_posts').select(LIST_SELECT).order('created_at', { ascending: false });
+    // Liste admin filtrée sur le marché actif du sélecteur (18/10).
+    if (market) query = query.eq('market', market);
+    const { data, error } = await query;
     if (!error && data) {
       return { posts: (data as unknown as BlogPost[]).map((p) => ({ ...p, content: '' })), error: null };
     }

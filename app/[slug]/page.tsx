@@ -179,7 +179,7 @@ export default async function ProductPage({ params }: Props) {
   trackServerPageView(product.id);
 
   const [categories, related, abTest] = await Promise.all([
-    getActiveCategories(),
+    getActiveCategories(market),
     getRelatedProducts(product, market),
     getActiveABTest(product.id),
   ]);

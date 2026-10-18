@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateCategory, deleteCategory } from '@/lib/supabase';
+import { updateCategory, deleteCategory, setCategoryMarketActive } from '@/lib/supabase';
+import { isValidMarket } from '@/lib/market';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
 import type { Category } from '@/types';
 
@@ -24,6 +25,21 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (body.icon !== undefined) update.icon = body.icon ?? null;
     if (body.sort_order !== undefined) update.sort_order = body.sort_order;
     if (body.is_active !== undefined) update.is_active = body.is_active;
+
+    // Activation par marché (18/10) : { market: 'es', market_active: true }.
+    if (body.market_active !== undefined) {
+      if (!isValidMarket(body.market)) {
+        return NextResponse.json({ error: 'Marché invalide' }, { status: 400 });
+      }
+      const toggled = await setCategoryMarketActive(params.id, body.market, !!body.market_active);
+      if (!toggled) {
+        return NextResponse.json(
+          { error: 'Mise à jour impossible (migration 20261018000001 appliquée dans Supabase ?)' },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json(toggled);
+    }
 
     const category = await updateCategory(params.id, update);
 

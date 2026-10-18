@@ -60,7 +60,7 @@ export default async function CategoryPage({ params }: Props) {
   const market = getMarketFromHost(host);
   const [products, allCategories] = await Promise.all([
     getActiveProductsByCategory(category.id, market),
-    getActiveCategories(),
+    getActiveCategories(market),
   ]);
 
   const name = categoryName(category, market);

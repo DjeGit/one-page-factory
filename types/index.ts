@@ -35,6 +35,8 @@ export interface Category {
   icon: string | null;
   sort_order: number;
   is_active: boolean;
+  /** Marchés où la catégorie est visible publiquement (absent avant la migration 20261018). */
+  active_markets?: Market[];
   created_at: string;
 }
 

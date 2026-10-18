@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Category } from '@/types';
+import { MARKETS, type Market } from '@/lib/market';
+import { useMarket } from '@/lib/market-context';
 
 interface Props {
   initialCategories: Category[];
@@ -28,6 +30,7 @@ const emptyDraft: CategoryDraft = {
 
 export default function CategoriesManager({ initialCategories }: Props) {
   const router = useRouter();
+  const { market: activeMarket } = useMarket();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<CategoryDraft>(emptyDraft);
@@ -112,14 +115,25 @@ export default function CategoriesManager({ initialCategories }: Props) {
     }
   };
 
+  // Visibilité PAR MARCHÉ (18/10) : le bouton agit sur le marché actif du
+  // sélecteur admin uniquement ; avant la migration (active_markets absente),
+  // on retombe sur is_active global.
+  const isActiveIn = (cat: Category, m: Market): boolean =>
+    Array.isArray(cat.active_markets) ? cat.active_markets.includes(m) : cat.is_active;
+
   const toggleActive = async (cat: Category) => {
     setSaving(true);
     setError(null);
     try {
+      const perMarket = Array.isArray(cat.active_markets);
       const res = await fetch(`/api/categories/${cat.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !cat.is_active }),
+        body: JSON.stringify(
+          perMarket
+            ? { market: activeMarket, market_active: !isActiveIn(cat, activeMarket) }
+            : { is_active: !cat.is_active }
+        ),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -184,7 +198,7 @@ export default function CategoriesManager({ initialCategories }: Props) {
             <th className="px-4 py-3">Nom (ES)</th>
             <th className="px-4 py-3">Nom (UK)</th>
             <th className="px-4 py-3">Ordre</th>
-            <th className="px-4 py-3">Visibilite</th>
+            <th className="px-4 py-3">Visibilité (marché actif)</th>
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
@@ -214,18 +228,32 @@ export default function CategoriesManager({ initialCategories }: Props) {
                       <input type="number" className={inputClass} value={editDraft.sort_order} onChange={(e) => setEditDraft((d) => ({ ...d, sort_order: e.target.value }))} />
                     </td>
                     <td className="px-4 py-2">
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => toggleActive(cat)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
-                          cat.is_active
-                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                        }`}
-                      >
-                        {cat.is_active ? 'Actif' : 'Masque'}
-                      </button>
+                      <div className="flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => toggleActive(cat)}
+                          title={`Activer / masquer sur le marché ${MARKETS.find((m) => m.code === activeMarket)?.label}`}
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
+                            isActiveIn(cat, activeMarket)
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          {MARKETS.find((m) => m.code === activeMarket)?.flag} {isActiveIn(cat, activeMarket) ? 'Actif' : 'Masqué'}
+                        </button>
+                        <div className="flex gap-1 text-[10px] font-semibold uppercase tracking-wide">
+                          {MARKETS.map((m) => (
+                            <span
+                              key={m.code}
+                              className={isActiveIn(cat, m.code) ? 'text-green-700' : 'text-gray-300'}
+                              title={`${m.label} : ${isActiveIn(cat, m.code) ? 'visible' : 'masquée'}`}
+                            >
+                              {m.code}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">
                       <button disabled={saving} onClick={() => saveEdit(cat.id)} className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg mr-2 disabled:opacity-50">
@@ -245,18 +273,32 @@ export default function CategoriesManager({ initialCategories }: Props) {
                     <td className="px-4 py-3 text-gray-600">{cat.name_uk}</td>
                     <td className="px-4 py-3 text-gray-500">{cat.sort_order}</td>
                     <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() => toggleActive(cat)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
-                          cat.is_active
-                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                        }`}
-                      >
-                        {cat.is_active ? 'Actif' : 'Masque'}
-                      </button>
+                      <div className="flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => toggleActive(cat)}
+                          title={`Activer / masquer sur le marché ${MARKETS.find((m) => m.code === activeMarket)?.label}`}
+                          className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
+                            isActiveIn(cat, activeMarket)
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                          }`}
+                        >
+                          {MARKETS.find((m) => m.code === activeMarket)?.flag} {isActiveIn(cat, activeMarket) ? 'Actif' : 'Masqué'}
+                        </button>
+                        <div className="flex gap-1 text-[10px] font-semibold uppercase tracking-wide">
+                          {MARKETS.map((m) => (
+                            <span
+                              key={m.code}
+                              className={isActiveIn(cat, m.code) ? 'text-green-700' : 'text-gray-300'}
+                              title={`${m.label} : ${isActiveIn(cat, m.code) ? 'visible' : 'masquée'}`}
+                            >
+                              {m.code}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={() => startEdit(cat)} className="px-3 py-1.5 border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 mr-2">

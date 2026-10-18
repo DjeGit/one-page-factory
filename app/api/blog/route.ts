@@ -10,7 +10,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    const { posts, error: listError } = await getAllBlogPostsAdmin();
+    const marketParam = req.nextUrl.searchParams.get('market');
+    const { posts, error: listError } = await getAllBlogPostsAdmin(isValidMarket(marketParam) ? marketParam : undefined);
     if (listError) return NextResponse.json({ error: listError }, { status: 500 });
     return NextResponse.json(posts);
   } catch (error) {

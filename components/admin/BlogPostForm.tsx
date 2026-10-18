@@ -7,6 +7,7 @@ import '@uiw/react-md-editor/markdown-editor.css';
 import type { BlogPost, BlogCategory, Product } from '@/types';
 import type { Market } from '@/lib/market';
 import { slugifyBlogTitle } from '@/lib/slugify';
+import { useMarket } from '@/lib/market-context';
 
 // MDEditor touche `window`/`navigator` au chargement — import dynamique
 // sans SSR, comme tout composant d'édition riche dans un App Router
@@ -27,6 +28,8 @@ const MARKETS: { value: Market; label: string }[] = [
 ];
 
 export default function BlogPostForm({ post, mode, products, categories }: BlogPostFormProps) {
+  // Nouveau billet : marché par défaut = marché actif du sélecteur admin.
+  const { market: activeMarket } = useMarket();
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +70,7 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
   const [form, setForm] = useState({
     title: post?.title || '',
     slug: post?.slug || '',
-    market: post?.market || ('fr' as Market),
+    market: post?.market || activeMarket,
     excerpt: post?.excerpt || '',
     content: post?.content || '',
     cover_image_url: post?.cover_image_url || '',

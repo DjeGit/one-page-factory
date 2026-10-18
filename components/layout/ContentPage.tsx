@@ -40,7 +40,7 @@ interface Props {
 
 export default async function ContentPage({ copy, path }: Props) {
   const market: Market = getMarketFromHost(headers().get('host'));
-  const categories = await getActiveCategories();
+  const categories = await getActiveCategories(market);
   const pageUrl = marketUrl(market, path);
 
   const jsonLd = {

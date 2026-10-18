@@ -56,7 +56,7 @@ export default async function TopVentesPage({ searchParams }: Props) {
   const t = SITE_COPY[market];
   const [allProducts, categories] = await Promise.all([
     getActiveProducts(market),
-    getActiveCategories(),
+    getActiveCategories(market),
   ]);
 
   const withSource = allProducts

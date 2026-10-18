@@ -77,7 +77,7 @@ export default async function ProduitsPage({ searchParams }: Props) {
   // même logique que app/layout.tsx (lib/market-from-host.ts).
   const market = getMarketFromHost(headers().get('host'));
   const query = searchParams.q?.trim() || undefined;
-  const [products, categories] = await Promise.all([getAllActive(market, query), getActiveCategories()]);
+  const [products, categories] = await Promise.all([getAllActive(market, query), getActiveCategories(market)]);
   const t = SITE_COPY[market];
 
   return (

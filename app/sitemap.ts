@@ -56,7 +56,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       fetchAll((from, to) =>
         sb.from('blog_posts').select('slug, updated_at').eq('status', 'published').eq('market', market).range(from, to)
       ),
-      fetchAll((from, to) => sb.from('categories').select('id, slug').eq('is_active', true).range(from, to)),
+      fetchAll((from, to) => sb.from('categories').select('id, slug, is_active, active_markets').range(from, to)),
     ]);
   } catch {
     // Base injoignable : on sert au moins les pages fixes plutôt qu'une erreur 500.
@@ -74,6 +74,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Catégories : uniquement celles qui ont au moins un produit sur ce marché.
   const categoryUrls: MetadataRoute.Sitemap = categories
+    .filter((c) =>
+      Array.isArray(c.active_markets) ? (c.active_markets as string[]).includes(market) : Boolean(c.is_active)
+    )
     .map((c) => {
       const inCategory = products.filter((p) => p.category_id === c.id);
       if (inCategory.length === 0) return null;

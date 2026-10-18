@@ -76,7 +76,7 @@ export default async function HomePage({ searchParams }: Props) {
   const t = SITE_COPY[market];
   const [featured, categories, topVentesPool, latestBlogPosts, blogCategories] = await Promise.all([
     getFeaturedProducts(market),
-    getActiveCategories(),
+    getActiveCategories(market),
     getTopVentesPool(market),
     getLatestPublishedBlogPosts(market, 3),
     getBlogCategories(),

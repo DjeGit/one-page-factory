@@ -50,7 +50,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
 
   const [posts, categories, blogCategories] = await Promise.all([
     getPublishedBlogPosts(market, { tag, categorySlug }),
-    getActiveCategories(),
+    getActiveCategories(market),
     getBlogCategories(),
   ]);
 

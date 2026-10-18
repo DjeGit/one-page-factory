@@ -120,7 +120,7 @@ export default async function BlogPostPage({ params }: Props) {
   const t = SITE_COPY[market];
 
   const [categories, linkedProducts] = await Promise.all([
-    getActiveCategories(),
+    getActiveCategories(market),
     getProductsByIds(post.linked_product_ids),
   ]);
 

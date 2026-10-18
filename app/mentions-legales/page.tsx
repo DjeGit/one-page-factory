@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default async function MentionsLegales() {
   const market = getMarketFromHost(headers().get('host'));
-  const categories = await getActiveCategories();
+  const categories = await getActiveCategories(market);
 
   return (
     <div className="min-h-screen bg-site-bg text-site-text">

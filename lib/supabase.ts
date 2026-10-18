@@ -188,19 +188,51 @@ export async function getCategories(): Promise<Category[]> {
   return data as Category[];
 }
 
-// Categories visibles publiquement (nav, accueil, /produits, /c/[slug]) —
-// l'admin voit tout via getCategories(), le site public ne voit que
-// is_active=true (Jerome, 28/09 : pouvoir masquer une categorie sans la
-// supprimer ni deplacer ses produits).
-export async function getActiveCategories(): Promise<Category[]> {
+// Categories visibles publiquement (nav, accueil, /produits, /c/[slug]).
+// Visibilite PAR MARCHE (18/10, demande Jerome) : activer une categorie
+// depuis l'admin ES ne doit pas la faire apparaitre sur tendpick.com/.fr.
+// La colonne categories.active_markets (migration 20261018) liste les marches
+// ou la categorie est visible ; avant la migration, on retombe sur
+// is_active (global) pour ne rien casser.
+export function isCategoryActiveIn(category: Pick<Category, 'is_active' | 'active_markets'>, market: Market): boolean {
+  if (Array.isArray(category.active_markets)) return category.active_markets.includes(market);
+  return category.is_active;
+}
+
+export async function getActiveCategories(market?: Market): Promise<Category[]> {
   const { data, error } = await supabaseAdmin
     .from('categories')
     .select('*')
-    .eq('is_active', true)
     .order('sort_order', { ascending: true });
 
   if (error || !data) return [];
-  return data as Category[];
+  const all = data as Category[];
+  // Sans marche : ancien comportement (is_active global).
+  if (!market) return all.filter((c) => c.is_active);
+  return all.filter((c) => isCategoryActiveIn(c, market));
+}
+
+/**
+ * Active/masque une categorie pour UN marche seulement. is_active reste
+ * synchronise (vrai des qu'un marche au moins est actif) pour le code
+ * historique qui le lit encore.
+ */
+export async function setCategoryMarketActive(id: string, market: Market, active: boolean): Promise<Category | null> {
+  const { data: current, error: readError } = await supabaseAdmin.from('categories').select('*').eq('id', id).single();
+  if (readError || !current) {
+    console.error('Error reading category:', readError);
+    return null;
+  }
+  const row = current as Category;
+  if (!Array.isArray(row.active_markets)) {
+    console.error('categories.active_markets absente : appliquer la migration 20261018000001_categories_active_markets.sql');
+    return null;
+  }
+  const next = new Set<Market>(row.active_markets);
+  if (active) next.add(market);
+  else next.delete(market);
+  const list = Array.from(next);
+  return updateCategory(id, { active_markets: list, is_active: list.length > 0 });
 }
 
 export async function getCategoryBySlug(slug: string): Promise<Category | null> {
