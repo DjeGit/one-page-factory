@@ -241,12 +241,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       steps: [
         { emoji: '🔍', title: 'On analyse', desc: 'Chaque semaine, nous passons en revue les meilleures ventes en ligne pour trouver les produits les plus populaires et les mieux notés.' },
         { emoji: '✍️', title: 'On rédige', desc: "Pour chaque produit, nous créons une fiche complète : avantages clés, FAQ, avis clients et conseils d'achat pour vous aider à décider." },
-        { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement chez le marchand, en toute sécurité, au meilleur prix disponible.' },
+        { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement chez le marchand, en toute sécurité, sur la page du marchand.' },
       ],
     },
     category: {
       metaDescription: (name) =>
-        `${name} : notre sélection du moment, avec ce qui justifie chaque produit et le prix constaté chez le marchand. Mise à jour en continu.`,
+        `${name} : notre sélection du moment, avec ce qui justifie chaque produit. Mise à jour en continu.`,
       productCount: (n) => `${n} produit${plural(n)} sélectionné${plural(n)}`,
       newSoon: 'Nouveaux produits bientôt disponibles dans cette catégorie',
       preparing: 'Sélection en cours de préparation…',
@@ -317,7 +317,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     },
     global: {
       siteTitleDefault: 'Tendpick — Les meilleurs produits du moment',
-      siteDescription: 'Tendpick sélectionne les meilleurs produits Amazon pour vous. Fiches détaillées, avis, et prix mis à jour.',
+      siteDescription: 'Tendpick sélectionne les meilleurs produits Amazon pour vous. Fiches détaillées, sources citées, sélection mise à jour.',
     },
   },
 
@@ -404,12 +404,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       steps: [
         { emoji: '🔍', title: 'Analizamos', desc: 'Cada semana revisamos los más vendidos online para encontrar los productos más populares y mejor valorados.' },
         { emoji: '✍️', title: 'Redactamos', desc: 'Para cada producto creamos una ficha completa: ventajas clave, preguntas frecuentes, opiniones de clientes y consejos de compra para ayudarte a decidir.' },
-        { emoji: '🛒', title: 'Tú compras', desc: 'Un clic en el botón te lleva directamente a la tienda, de forma segura, al mejor precio disponible.' },
+        { emoji: '🛒', title: 'Tú compras', desc: 'Un clic en el botón te lleva directamente a la tienda, de forma segura, a la página de la tienda.' },
       ],
     },
     category: {
       metaDescription: (name) =>
-        `${name}: nuestra selección del momento, con lo que justifica cada producto y el precio visto en la tienda. Actualizada de forma continua.`,
+        `${name}: nuestra selección del momento, con lo que justifica cada producto. Actualizada de forma continua.`,
       productCount: (n) => `${n} producto${plural(n)} seleccionado${plural(n)}`,
       newSoon: 'Nuevos productos disponibles próximamente en esta categoría',
       preparing: 'Selección en preparación…',
@@ -480,7 +480,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     },
     global: {
       siteTitleDefault: 'Tendpick — Los mejores productos del momento',
-      siteDescription: 'Tendpick selecciona los mejores productos de Amazon para ti. Fichas detalladas, opiniones y precios actualizados.',
+      siteDescription: 'Tendpick selecciona los mejores productos de Amazon para ti. Fichas detalladas, fuentes citadas y selección actualizada.',
     },
   },
 
@@ -567,12 +567,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       steps: [
         { emoji: '🔍', title: 'We research', desc: "Every week we review the best-selling products online to find what's most popular and best rated." },
         { emoji: '✍️', title: 'We write it up', desc: 'For every product we build a full listing: key benefits, FAQ, customer reviews and buying advice to help you decide.' },
-        { emoji: '🛒', title: 'You buy', desc: 'One click takes you straight to the merchant, safely, at the best price available.' },
+        { emoji: '🛒', title: 'You buy', desc: 'One click takes you straight to the retailer page, safely.' },
       ],
     },
     category: {
       metaDescription: (name) =>
-        `${name}: our current pick, with what justifies each product and the price seen at the retailer. Kept up to date.`,
+        `${name}: our current pick, with what justifies each product. Kept up to date.`,
       productCount: (n) => `${n} product${plural(n)} selected`,
       newSoon: 'New products coming soon to this category',
       preparing: 'Selection coming together…',
@@ -643,7 +643,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     },
     global: {
       siteTitleDefault: 'Tendpick — The best products right now',
-      siteDescription: 'Tendpick selects the best Amazon products for you. Detailed listings, reviews, and prices kept up to date.',
+      siteDescription: 'Tendpick selects the best Amazon products for you. Detailed listings, cited sources, and a regularly updated selection.',
     },
   },
 };

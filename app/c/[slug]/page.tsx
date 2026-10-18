@@ -11,6 +11,7 @@ import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
 import { buildAlternates } from '@/lib/site-url';
+import { SHOW_PRICES } from '@/lib/flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,7 +128,7 @@ export default async function CategoryPage({ params }: Props) {
                       {p.hero_title || p.name}
                     </p>
                     <div className="flex items-center justify-between mt-1">
-                      {p.price ? (
+                      {SHOW_PRICES && p.price ? (
                         <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
                       ) : (
                         <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>

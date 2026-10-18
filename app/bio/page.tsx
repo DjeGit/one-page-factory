@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
 import { SITE_COPY } from '@/lib/site-copy';
+import { SHOW_PRICES } from '@/lib/flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -177,7 +178,7 @@ export default async function BioPage() {
                 >
                   {product.name}
                 </div>
-                {product.price && (
+                {SHOW_PRICES && product.price && (
                   <div
                     style={{
                       fontSize: 13,

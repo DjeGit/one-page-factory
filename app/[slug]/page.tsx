@@ -26,6 +26,7 @@ import { SITE_COPY } from '@/lib/site-copy';
 import { isValidMarket, DEFAULT_MARKET, getMarketLabel, getCurrencyForMarket } from '@/lib/market';
 import type { Market } from '@/lib/market';
 import type { ABTest, Category, Product } from '@/types';
+import { SHOW_PRICES } from '@/lib/flags';
 
 interface Props {
   params: { slug: string };
@@ -211,7 +212,7 @@ export default async function ProductPage({ params }: Props) {
   const sourceLabel = TOP_VENTES_SOURCES.find((s) => s.key === source)?.label ?? null;
 
   const fmt = new Intl.NumberFormat(p.locale, { style: 'currency', currency: getCurrencyForMarket(market) });
-  const priceLabel = product.price ? fmt.format(product.price) : null;
+  const priceLabel = SHOW_PRICES && product.price ? fmt.format(product.price) : null;
   const originalLabel =
     product.original_price && product.price && product.original_price > product.price
       ? fmt.format(product.original_price)
@@ -476,7 +477,7 @@ export default async function ProductPage({ params }: Props) {
                       <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
                         {r.hero_title || r.name}
                       </p>
-                      {r.price ? (
+                      {SHOW_PRICES && r.price ? (
                         <span className="text-site-cta font-bold text-base">{fmt.format(r.price)}</span>
                       ) : (
                         <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>

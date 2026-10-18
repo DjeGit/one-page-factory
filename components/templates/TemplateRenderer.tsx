@@ -2,6 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import type { Product } from '@/types';
 import type { TemplateConfig } from '@/lib/templates';
+import { SHOW_PRICES, SHOW_TESTIMONIALS } from '@/lib/flags';
 
 export interface TemplateOverrides {
   heroTitle?: string;
@@ -155,7 +156,7 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
       </p>
 
       {/* Price */}
-      {product.price && (
+      {SHOW_PRICES && product.price && (
         <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ fontSize: '2rem', fontWeight: 900, color: template.accentColor }}>
             {formatPrice(product.price)}
@@ -273,7 +274,7 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
             </p>
             <HeroImage />
             <div style={{ marginTop: '32px' }}>
-              {product.price && (
+              {SHOW_PRICES && product.price && (
                 <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
                   <span style={{ fontSize: '2rem', fontWeight: 900, color: template.accentColor }}>
                     {formatPrice(product.price)}
@@ -409,7 +410,7 @@ export default function TemplateRenderer({ product, template, overrides, scale, 
       )}
 
       {/* TESTIMONIALS */}
-      {sections.testimonials && product.testimonials && product.testimonials.length > 0 && (
+      {SHOW_TESTIMONIALS && sections.testimonials && product.testimonials && product.testimonials.length > 0 && (
         <section style={sectionStyle} className="tp-section">
           <h2 style={sectionTitleStyle}>Ce que disent nos clients</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', maxWidth: '1000px', margin: '0 auto' }}>

@@ -2,6 +2,7 @@ import Image from 'next/image';
 import CTAButton from './CTAButton';
 import { getProductImageUrl } from '@/lib/cloudinary';
 import type { Product } from '@/types';
+import { SHOW_PRICES } from '@/lib/flags';
 
 interface HeroSectionProps {
   product: Product;
@@ -47,7 +48,7 @@ export default function HeroSection({ product, heroTitle, heroSubtitle, heroCta 
             </p>
 
             {/* Price Block */}
-            {(product.price || product.original_price) && (
+            {SHOW_PRICES && (product.price || product.original_price) && (
               <div className="flex items-center gap-4 justify-center lg:justify-start mb-8">
                 <div className="text-5xl font-black text-white">
                   {product.price?.toFixed(2)}€

@@ -249,7 +249,8 @@ function parseAndValidate(content: string, productName: string, productDescripti
     benefits: Array.isArray(parsed.benefits) ? parsed.benefits.slice(0, 6) : [],
     faq: Array.isArray(parsed.faq) ? parsed.faq.slice(0, 5) : [],
     tiktok_script: parsed.tiktok_script || '',
-    testimonials: Array.isArray(parsed.testimonials) ? parsed.testimonials.slice(0, 3) : [],
+    // Témoignages volontairement non conservés : ils étaient fictifs (décision 18/10/2026).
+    testimonials: [],
     meta_title: parsed.meta_title || productName,
     meta_description: parsed.meta_description || productDescription,
   };

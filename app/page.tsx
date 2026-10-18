@@ -17,6 +17,7 @@ import { getLatestPublishedBlogPosts, getBlogCategories } from '@/lib/blog';
 import type { Metadata } from 'next';
 import SiteStructuredData from '@/components/landing/SiteStructuredData';
 import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
+import { SHOW_PRICES } from '@/lib/flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -177,7 +178,7 @@ export default async function HomePage({ searchParams }: Props) {
                   <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
                     {p.hero_title || p.name}
                   </p>
-                  {p.price ? (
+                  {SHOW_PRICES && p.price ? (
                     <span className="text-site-cta font-bold text-base">{p.price.toFixed(2)} €</span>
                   ) : (
                     <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
@@ -238,7 +239,7 @@ export default async function HomePage({ searchParams }: Props) {
                   <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
                     {p.hero_title || p.name}
                   </p>
-                  {p.price ? (
+                  {SHOW_PRICES && p.price ? (
                     <span className="text-site-cta font-bold text-base">{p.price.toFixed(2)} €</span>
                   ) : (
                     <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>

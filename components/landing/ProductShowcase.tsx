@@ -2,6 +2,7 @@ import Image from 'next/image';
 import CTAButton from './CTAButton';
 import { getProductImageUrl } from '@/lib/cloudinary';
 import type { Product } from '@/types';
+import { SHOW_PRICES } from '@/lib/flags';
 
 interface ProductShowcaseProps {
   product: Product;
@@ -44,13 +45,13 @@ export default function ProductShowcase({ product }: ProductShowcaseProps) {
 
                 {/* Price */}
                 <div className="flex items-center gap-4 mb-8">
-                  {product.price && (
+                  {SHOW_PRICES && product.price && (
                     <span className="text-4xl font-black text-white">{product.price.toFixed(2)}€</span>
                   )}
-                  {product.original_price && (
+                  {SHOW_PRICES && product.original_price && (
                     <span className="text-xl text-gray-500 line-through">{product.original_price.toFixed(2)}€</span>
                   )}
-                  {discount && (
+                  {SHOW_PRICES && discount && (
                     <span className="bg-green-500/20 text-green-400 border border-green-500/30 text-sm font-bold px-3 py-1 rounded-full">
                       Économisez {discount}%
                     </span>

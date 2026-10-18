@@ -6,6 +6,7 @@ import { serializeJsonLd } from '@/lib/json-ld';
 import { marketUrl } from '@/lib/site-url';
 import { DEFAULT_MARKET, isValidMarket } from '@/lib/market';
 import type { Market } from '@/lib/market';
+import { SHOW_PRICES } from '@/lib/flags';
 
 interface ProductStructuredDataProps {
   product: Product;
@@ -54,7 +55,7 @@ export default function ProductStructuredData({
     getCloudinaryUrl(img, { width: 1200, height: 1200, crop: 'fill', format: 'auto', quality: 'auto' })
   );
 
-  const hasPrice = typeof product.price === 'number' && product.price > 0;
+  const hasPrice = SHOW_PRICES && typeof product.price === 'number' && product.price > 0;
 
   const productNode = {
     '@type': 'Product',

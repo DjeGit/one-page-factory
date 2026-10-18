@@ -17,6 +17,7 @@ import { SITE_COPY } from '@/lib/site-copy';
 import { isValidMarket, DEFAULT_MARKET } from '@/lib/market';
 import { marketUrl } from '@/lib/site-url';
 import { redirectToMarketDomain } from '@/lib/market-redirect';
+import { SHOW_PRICES } from '@/lib/flags';
 
 export const dynamic = 'force-dynamic';
 
@@ -254,7 +255,7 @@ export default async function BlogPostPage({ params }: Props) {
                       </div>
                     </Link>
                     <div className="px-3 pb-3 flex items-center justify-between gap-2">
-                      {p.price ? (
+                      {SHOW_PRICES && p.price ? (
                         <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
                       ) : (
                         <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>

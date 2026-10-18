@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { SHOW_PRICES } from '@/lib/flags';
 
 interface StickyBuyProps {
   redirectCode: string;
@@ -48,7 +49,7 @@ export default function StickyBuy({ redirectCode, productId, price, productName 
         <div className="flex items-center gap-3">
           {/* Price */}
           <div className="flex-shrink-0">
-            {price && (
+            {SHOW_PRICES && price && (
               <div className="text-2xl font-black text-white">{price.toFixed(2)}€</div>
             )}
             <div className="text-xs text-gray-400 truncate max-w-[120px]">{productName}</div>
