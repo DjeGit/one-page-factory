@@ -4,6 +4,7 @@ import type { Market } from '@/lib/market';
 import { NextRequest } from 'next/server';
 import { createHash } from 'crypto';
 import { isBotUserAgent } from '@/lib/bot-detection';
+import { ttlCache } from '@/lib/ttl-cache';
 
 // Lazy singleton clients — created on first use so env vars are available
 let _supabase: SupabaseClient | null = null;
@@ -199,14 +200,18 @@ export function isCategoryActiveIn(category: Pick<Category, 'is_active' | 'activ
   return category.is_active;
 }
 
-export async function getActiveCategories(market?: Market): Promise<Category[]> {
+async function fetchAllCategories(): Promise<Category[]> {
   const { data, error } = await supabaseAdmin
     .from('categories')
     .select('*')
     .order('sort_order', { ascending: true });
-
   if (error || !data) return [];
-  const all = data as Category[];
+  return data as Category[];
+}
+
+export async function getActiveCategories(market?: Market): Promise<Category[]> {
+  // Cache 60 s (lecture publique, voir lib/ttl-cache.ts).
+  const all = await ttlCache('categories:all', 60_000, fetchAllCategories);
   // Sans marche : ancien comportement (is_active global).
   if (!market) return all.filter((c) => c.is_active);
   return all.filter((c) => isCategoryActiveIn(c, market));

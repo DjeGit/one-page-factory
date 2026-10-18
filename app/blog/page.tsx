@@ -3,7 +3,7 @@ import Image from 'next/image';
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import { getMarketFromHost } from '@/lib/market-from-host';
-import { getPublishedBlogPosts, getBlogCategories } from '@/lib/blog';
+import { getPublishedBlogPosts, getBlogCategoriesCached } from '@/lib/blog';
 import { getActiveCategories } from '@/lib/supabase';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import SiteHeader from '@/components/layout/SiteHeader';
@@ -51,7 +51,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
   const [posts, categories, blogCategories] = await Promise.all([
     getPublishedBlogPosts(market, { tag, categorySlug }),
     getActiveCategories(market),
-    getBlogCategories(),
+    getBlogCategoriesCached(),
   ]);
 
   // Tags disponibles calculés sur la page courante (volume faible au

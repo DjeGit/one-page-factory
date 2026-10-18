@@ -9,6 +9,7 @@
 import { getSupabaseAdmin } from '@/lib/supabase';
 import type { BlogPost, BlogPostFormData, BlogCategory } from '@/types';
 import type { Market } from '@/lib/market';
+import { ttlCache } from '@/lib/ttl-cache';
 export { slugifyBlogTitle } from '@/lib/slugify';
 
 // Jointure systematique sur la categorie — un article affiche presque
@@ -49,6 +50,10 @@ export async function getPublishedBlogPosts(market: Market, options: GetPublishe
 
 /** Les N derniers articles publies — utilise par la section "Depuis le blog" de l'accueil. */
 export async function getLatestPublishedBlogPosts(market: Market, limit: number): Promise<BlogPost[]> {
+  return ttlCache(`blog:latest:${market}:${limit}`, 60_000, () => fetchLatestPublishedBlogPosts(market, limit));
+}
+
+async function fetchLatestPublishedBlogPosts(market: Market, limit: number): Promise<BlogPost[]> {
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
     .from('blog_posts')
@@ -204,6 +209,11 @@ export async function getBlogCategories(): Promise<BlogCategory[]> {
   const { data, error } = await sb.from('blog_categories').select('*').order('sort_order', { ascending: true });
   if (error || !data) return [];
   return data as BlogCategory[];
+}
+
+/** Version mise en cache 60 s pour les pages publiques (l'admin garde getBlogCategories). */
+export async function getBlogCategoriesCached(): Promise<BlogCategory[]> {
+  return ttlCache('blog:categories', 60_000, getBlogCategories);
 }
 
 export async function getBlogCategoryBySlug(slug: string): Promise<BlogCategory | null> {

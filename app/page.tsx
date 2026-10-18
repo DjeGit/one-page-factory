@@ -13,7 +13,8 @@ import SiteFooter from '@/components/layout/SiteFooter';
 import HeroCarousel from '@/components/landing/HeroCarousel';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
-import { getLatestPublishedBlogPosts, getBlogCategories } from '@/lib/blog';
+import { getLatestPublishedBlogPosts, getBlogCategoriesCached } from '@/lib/blog';
+import { ttlCache } from '@/lib/ttl-cache';
 import type { Metadata } from 'next';
 import SiteStructuredData from '@/components/landing/SiteStructuredData';
 import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
@@ -35,25 +36,14 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   };
 }
 
-async function getFeaturedProducts(market: Market): Promise<Product[]> {
-  try {
-    const sb = getSupabaseAdmin();
-    const { data } = await sb
-      .from('products')
-      .select('*')
-      .eq('active', true)
-      .eq('market', market)
-      .order('updated_at', { ascending: false })
-      .limit(6);
-    return (data as Product[]) || [];
-  } catch {
-    return [];
-  }
-}
-
 // Top Ventes (accueil) : pool plus large que "Sélection du moment" pour avoir
 // de quoi remplir les 3 onglets Amazon/Rakuten/AliExpress (30/09).
 async function getTopVentesPool(market: Market): Promise<Product[]> {
+  // Cache 60 s : même requête pour "Sélection du moment" (6 premiers) et Top Ventes.
+  return ttlCache(`home:pool:${market}`, 60_000, () => fetchTopVentesPool(market));
+}
+
+async function fetchTopVentesPool(market: Market): Promise<Product[]> {
   try {
     const sb = getSupabaseAdmin();
     const { data } = await sb
@@ -74,13 +64,14 @@ export default async function HomePage({ searchParams }: Props) {
   // même logique que app/layout.tsx (lib/market-from-host.ts).
   const market = getMarketFromHost(headers().get('host'));
   const t = SITE_COPY[market];
-  const [featured, categories, topVentesPool, latestBlogPosts, blogCategories] = await Promise.all([
-    getFeaturedProducts(market),
-    getActiveCategories(market),
+  const [topVentesPool, categories, latestBlogPosts, blogCategories] = await Promise.all([
     getTopVentesPool(market),
+    getActiveCategories(market),
     getLatestPublishedBlogPosts(market, 3),
-    getBlogCategories(),
+    getBlogCategoriesCached(),
   ]);
+  // Mêmes produits, même tri (updated_at desc) : les 6 premiers du pool.
+  const featured = topVentesPool.slice(0, 6);
 
   const topVentesWithSource = topVentesPool
     .map((p) => ({ product: p, source: getProductSource(p.affiliate_url) }))
