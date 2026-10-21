@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { categoryPath } from '@/lib/category-slugs';
 import type { Category } from '@/types';
 import type { Market } from '@/lib/market';
 import { SITE_COPY } from '@/lib/site-copy';
@@ -46,7 +47,7 @@ export default function SiteFooter({ categories, market }: Props) {
             {categories.length > 0 ? (
               <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                 {categories.map((c) => (
-                  <Link key={c.id} href={`/c/${c.slug}`} className="text-xs text-white/60 hover:text-white transition-colors">
+                  <Link key={c.id} href={categoryPath(c.slug, market)} className="text-xs text-white/60 hover:text-white transition-colors">
                     {categoryName(c, market)}
                   </Link>
                 ))}

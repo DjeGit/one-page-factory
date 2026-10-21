@@ -1,4 +1,5 @@
 import { Metadata } from 'next';
+import { categoryPath } from '@/lib/category-slugs';
 import Link from 'next/link';
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
@@ -263,7 +264,7 @@ export default async function ProductPage({ params }: Props) {
             {category && (
               <>
                 <span aria-hidden="true">/</span>
-                <Link href={`/c/${category.slug}`} className="hover:text-site-cta transition-colors">
+                <Link href={categoryPath(category.slug, market)} className="hover:text-site-cta transition-colors">
                   {categoryName(category, market)}
                 </Link>
               </>

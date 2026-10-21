@@ -79,6 +79,8 @@ interface SiteCopy {
     seeAllBlog: string;
     howItWorks: string;
     steps: { emoji: string; title: string; desc: string }[];
+    /** Texte d'introduction visible sur l'accueil (SEO + transparence éditoriale). */
+    intro: { title: string; paragraphs: string[]; guideCta: string; blogCta: string };
   };
   category: {
     metaDescription: (name: string) => string;
@@ -204,8 +206,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     hero: {
       slides: [
         {
-          headlineLine1: 'De nouveaux produits repérés',
-          headlineLine2: 'chaque semaine',
+          headlineLine1: 'Les produits tendance,',
+          headlineLine2: 'triés et expliqués',
           subtitle:
             "Notre veille identifie en continu ce qui émerge sur Amazon, Rakuten et AliExpress. Chaque fiche résume l'essentiel pour décider vite.",
         },
@@ -252,6 +254,15 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
         { emoji: '✍️', title: 'On rédige', desc: "Pour chaque produit, nous créons une fiche complète : avantages clés, FAQ, avis clients et conseils d'achat pour vous aider à décider." },
         { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement chez le marchand, en toute sécurité, sur la page du marchand.' },
       ],
+      intro: {
+        title: "Acheter en ligne en confiance",
+        paragraphs: [
+          "Tendpick est un site éditorial qui rassemble les produits tendance du moment, issus de sources publiées, dans des fiches claires : points forts, limites et profil de l'acheteur à qui le produit convient. Nous ne testons pas les produits nous-mêmes : nos fiches sont rédigées avec l'aide de l'IA, puis relues.",
+          "Avant d'acheter, lisez notre guide d'achat pour repérer les offres douteuses et les pièges courants, ou parcourez le blog pour des conseils par thème. Certains liens sont affiliés : si vous achetez via l'un d'eux, nous touchons une commission, sans supplément de prix pour vous.",
+        ],
+        guideCta: "Lire le guide d'achat",
+        blogCta: 'Voir le blog',
+      },
     },
     category: {
       metaDescription: (name) =>
@@ -332,8 +343,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       affiliateFooter: "Liens d'affiliation ·",
     },
     global: {
-      siteTitleDefault: 'Tendpick — Les meilleurs produits du moment',
-      siteDescription: 'Tendpick sélectionne les meilleurs produits Amazon pour vous. Fiches détaillées, sources citées, sélection mise à jour.',
+      siteTitleDefault: "Tendpick — Produits tendance, guides d'achat et sélections",
+      siteDescription: "Sélection de produits tendance issue de sources publiées, fiches détaillées et guides d'achat pour acheter en ligne en toute confiance.",
     },
   },
 
@@ -375,8 +386,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     hero: {
       slides: [
         {
-          headlineLine1: 'Nuevos productos detectados',
-          headlineLine2: 'cada semana',
+          headlineLine1: 'Los productos de moda,',
+          headlineLine2: 'seleccionados y explicados',
           subtitle:
             'Nuestra vigilancia identifica continuamente lo que surge en Amazon, Rakuten y AliExpress. Cada ficha resume lo esencial para decidir rápido.',
         },
@@ -423,6 +434,15 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
         { emoji: '✍️', title: 'Redactamos', desc: 'Para cada producto creamos una ficha completa: ventajas clave, preguntas frecuentes, opiniones de clientes y consejos de compra para ayudarte a decidir.' },
         { emoji: '🛒', title: 'Tú compras', desc: 'Un clic en el botón te lleva directamente a la tienda, de forma segura, a la página de la tienda.' },
       ],
+      intro: {
+        title: 'Comprar online con confianza',
+        paragraphs: [
+          'Tendpick es un sitio editorial que reúne los productos de moda del momento, procedentes de fuentes publicadas, en fichas claras: puntos fuertes, limitaciones y a qué tipo de comprador le conviene cada producto. No probamos los productos nosotros mismos: nuestras fichas se redactan con ayuda de la IA y después se revisan.',
+          'Antes de comprar, lee nuestra guía de compra para detectar ofertas dudosas y trampas habituales, o explora el blog para ver consejos por temas. Algunos enlaces son de afiliados: si compras a través de uno de ellos, recibimos una comisión, sin coste adicional para ti.',
+        ],
+        guideCta: 'Leer la guía de compra',
+        blogCta: 'Ver el blog',
+      },
     },
     category: {
       metaDescription: (name) =>
@@ -503,8 +523,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       affiliateFooter: 'Enlaces de afiliados ·',
     },
     global: {
-      siteTitleDefault: 'Tendpick — Los mejores productos del momento',
-      siteDescription: 'Tendpick selecciona los mejores productos de Amazon para ti. Fichas detalladas, fuentes citadas y selección actualizada.',
+      siteTitleDefault: 'Tendpick — Productos de moda, guías de compra y selecciones',
+      siteDescription: 'Selección de productos de moda a partir de fuentes publicadas, fichas detalladas y guías de compra para comprar online con confianza.',
     },
   },
 
@@ -546,8 +566,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     hero: {
       slides: [
         {
-          headlineLine1: 'New products spotted',
-          headlineLine2: 'every week',
+          headlineLine1: 'Trending products,',
+          headlineLine2: 'picked and explained',
           subtitle:
             "Our tracking continuously identifies what's emerging on Amazon, Rakuten and AliExpress. Each listing sums up what matters so you can decide fast.",
         },
@@ -594,6 +614,15 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
         { emoji: '✍️', title: 'We write it up', desc: 'For every product we build a full listing: key benefits, FAQ, customer reviews and buying advice to help you decide.' },
         { emoji: '🛒', title: 'You buy', desc: 'One click takes you straight to the retailer page, safely.' },
       ],
+      intro: {
+        title: 'Shop online with confidence',
+        paragraphs: [
+          "Tendpick is an editorial site that gathers today's trending products, drawn from published sources, into clear listings: strengths, limitations and the kind of buyer each product suits. We do not test products ourselves: our listings are written with the help of AI and then reviewed.",
+          'Before you buy, read our buying guide to spot dubious offers and common traps, or browse the blog for advice by topic. Some links are affiliate links: if you buy through one, we earn a commission at no extra cost to you.',
+        ],
+        guideCta: 'Read the buying guide',
+        blogCta: 'Browse the blog',
+      },
     },
     category: {
       metaDescription: (name) =>
@@ -674,8 +703,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       affiliateFooter: 'Affiliate links ·',
     },
     global: {
-      siteTitleDefault: 'Tendpick — The best products right now',
-      siteDescription: 'Tendpick selects the best Amazon products for you. Detailed listings, cited sources, and a regularly updated selection.',
+      siteTitleDefault: 'Tendpick — Trending products, buying guides and picks',
+      siteDescription: 'A selection of trending products drawn from published sources, with detailed listings and buying guides to help you shop online with confidence.',
     },
   },
 };

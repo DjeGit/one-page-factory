@@ -40,7 +40,7 @@ describe('ProductStructuredData (audit E5, E5b)', () => {
     const crumbs = ld['@graph'].find((n: { '@type': string }) => n['@type'] === 'BreadcrumbList');
     expect(crumbs.itemListElement.map((c: { item: string }) => c.item)).toEqual([
       'https://tendpick.es',
-      'https://tendpick.es/c/tech',
+      'https://tendpick.es/c/tecnologia',
       'https://tendpick.es/casque-test',
     ]);
   });

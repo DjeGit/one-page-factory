@@ -14,6 +14,7 @@ import HeroCarousel from '@/components/landing/HeroCarousel';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
 import { getLatestPublishedBlogPosts, getBlogCategoriesCached } from '@/lib/blog';
+import { GUIDE_BASE_PATH, GUIDE_CATEGORY_SLUG } from '@/lib/buying-guide';
 import { ttlCache } from '@/lib/ttl-cache';
 import type { Metadata } from 'next';
 import SiteStructuredData from '@/components/landing/SiteStructuredData';
@@ -30,8 +31,22 @@ interface Props {
 // versions du site ; la variante filtrée par onglet (?source=) n'est pas
 // indexée.
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const h = headers();
+  const copy = SITE_COPY[getMarketFromHost(h.get('host'))].global;
+  const alternates = buildAlternates(h, '/');
   return {
-    alternates: buildAlternates(headers(), '/'),
+    // Titre et description propres à l'accueil (mots-clés de la marque et des
+    // sections), sans le gabarit « | Tendpick » : la marque est déjà dedans.
+    title: { absolute: copy.siteTitleDefault },
+    description: copy.siteDescription,
+    alternates,
+    openGraph: {
+      type: 'website',
+      siteName: 'Tendpick',
+      title: copy.siteTitleDefault,
+      description: copy.siteDescription,
+      url: alternates.canonical,
+    },
     robots: hasIndexBlockingParams(searchParams, ['source']) ? { index: false, follow: true } : undefined,
   };
 }
@@ -266,7 +281,7 @@ export default async function HomePage({ searchParams }: Props) {
             {blogCategories.map((c) => (
               <Link
                 key={c.id}
-                href={`/blog?category=${encodeURIComponent(c.slug)}`}
+                href={c.slug === GUIDE_CATEGORY_SLUG ? GUIDE_BASE_PATH : `/blog?category=${encodeURIComponent(c.slug)}`}
                 className="bg-[#EAF2FB] rounded-2xl p-8 flex flex-col gap-3 hover:shadow-md transition-shadow"
               >
                 {/* Couleur propre à la catégorie, ou bleu secondaire du site
@@ -278,7 +293,9 @@ export default async function HomePage({ searchParams }: Props) {
                 >
                   {c.icon}
                 </span>
-                <span className="text-lg font-bold text-site-text">{c.name_fr}</span>
+                <span className="text-lg font-bold text-site-text">
+                  {(market === 'es' ? c.name_es : market === 'uk' ? c.name_uk : c.name_fr) || c.name_fr}
+                </span>
                 <span className="text-[13px] text-site-text-secondary">{t.home.exploreCategoryDesc}</span>
               </Link>
             ))}
@@ -323,6 +340,40 @@ export default async function HomePage({ searchParams }: Props) {
           </div>
         </section>
       )}
+
+      {/* Texte d'introduction (SEO + transparence éditoriale) : contenu
+          visible, avec liens internes vers le guide d'achat, le blog et la
+          page méthode. */}
+      <section className="bg-white border-y border-site-border px-4 sm:px-6 py-16">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary mb-5">{t.home.intro.title}</h2>
+          {t.home.intro.paragraphs.map((para, i) => (
+            <p key={i} className="text-site-text-secondary leading-relaxed mb-4">
+              {para}
+            </p>
+          ))}
+          <div className="flex flex-wrap gap-3 mt-6">
+            <Link
+              href={GUIDE_BASE_PATH}
+              className="px-5 py-2.5 rounded-full text-sm font-semibold bg-site-primary text-white hover:opacity-90 transition-opacity"
+            >
+              {t.home.intro.guideCta}
+            </Link>
+            <Link
+              href="/blog"
+              className="px-5 py-2.5 rounded-full text-sm font-semibold border border-site-border text-site-text hover:border-site-secondary transition-colors"
+            >
+              {t.home.intro.blogCta}
+            </Link>
+            <Link
+              href="/methode"
+              className="px-5 py-2.5 rounded-full text-sm font-semibold border border-site-border text-site-text hover:border-site-secondary transition-colors"
+            >
+              {t.footer.method}
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* Comment ça marche */}
       <section id="comment" className="py-20">

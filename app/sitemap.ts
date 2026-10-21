@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import type { MetadataRoute } from 'next';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { categoryPath } from '@/lib/category-slugs';
 import { GUIDE_BASE_PATH, GUIDE_CATEGORY_SLUG, GUIDE_PILLAR_SLUG } from '@/lib/buying-guide';
 import { getRequestHost, getRequestMarket, getRequestOrigin, isBackofficeHost } from '@/lib/site-url';
 
@@ -96,7 +97,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       const inCategory = products.filter((p) => p.category_id === c.id);
       if (inCategory.length === 0) return null;
       return {
-        url: `${origin}/c/${c.slug}`,
+        url: `${origin}${categoryPath(c.slug as string, market)}`,
         lastModified: latest(inCategory.map((p) => p.updated_at as string)),
       };
     })

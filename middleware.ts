@@ -45,6 +45,28 @@ function isPrivatePath(pathname: string): boolean {
   );
 }
 
+// Cache du HTML public par le CDN (Cloudflare) : 5 min, puis servi périmé
+// jusqu'à 10 min pendant qu'il se recharge. Liste blanche volontairement
+// courte : pages éditoriales et listings, sans paramètre de requête.
+// Exclues : fiches produit (test A/B par visiteur), /api, /admin, /preview,
+// /bio, et toute URL avec ?q=, ?tag=, ?source=… Voir docs/cloudflare-cache.md.
+const PUBLIC_PAGE_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=600';
+const CACHEABLE_EXACT = new Set([
+  '/', '/produits', '/top-ventes', '/blog', '/guide-achat',
+  '/a-propos', '/methode', '/contact', '/partenariats',
+  '/mentions-legales', '/politique-confidentialite',
+]);
+const CACHEABLE_PREFIXES = ['/c/', '/blog/', '/guide-achat/'];
+
+function isEdgeCacheable(request: NextRequest): boolean {
+  if (request.method !== 'GET') return false;
+  if (request.nextUrl.search) return false;
+  // Requêtes de navigation interne Next (RSC / prefetch) : jamais en cache HTML.
+  if (request.headers.get('rsc') || request.headers.get('next-router-prefetch')) return false;
+  const { pathname } = request.nextUrl;
+  return CACHEABLE_EXACT.has(pathname) || CACHEABLE_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
 function withRobots(res: NextResponse, pathname: string): NextResponse {
   if (isPrivatePath(pathname)) res.headers.set('X-Robots-Tag', 'noindex, nofollow');
   return res;
@@ -95,7 +117,10 @@ export function middleware(request: NextRequest) {
     const res = NextResponse.next();
     res.headers.set('x-market', market);
     res.headers.set('x-market-locale', market === 'fr' ? 'fr-FR' : market === 'es' ? 'es-ES' : 'en-GB');
-    res.cookies.set('opf_market', market, { path: '/', maxAge: 2592000, sameSite: 'lax' });
+    // Le cookie opf_market n'est plus posé (21/10) : plus aucun code ne le lit
+    // (le marché vient du host), et un Set-Cookie sur chaque page empêche
+    // Cloudflare de mettre le HTML public en cache.
+    if (isEdgeCacheable(request)) res.headers.set('Cache-Control', PUBLIC_PAGE_CACHE_CONTROL);
     return withRobots(res, pathname);
   }
 

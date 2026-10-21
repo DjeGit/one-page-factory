@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { headers } from 'next/headers';
-import { notFound } from 'next/navigation';
+import { notFound, permanentRedirect } from 'next/navigation';
 import { getCategoryBySlug, getActiveProductsByCategory, getActiveCategories } from '@/lib/supabase';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getMarketFromHost } from '@/lib/market-from-host';
@@ -11,7 +11,7 @@ import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureB
 import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
-import { buildAlternates } from '@/lib/site-url';
+import { baseCategorySlug, categoryAlternates, categoryPath, localizedCategorySlug } from '@/lib/category-slugs';
 import { SHOW_PRICES } from '@/lib/flags';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +27,7 @@ function categoryName(category: { name_fr: string; name_es: string; name_uk: str
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const category = await getCategoryBySlug(params.slug);
+  const category = await getCategoryBySlug(baseCategorySlug(params.slug));
   if (!category) return {};
   const h = headers();
   const market = getMarketFromHost(h.get('host'));
@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // d'elle-même dès le premier produit.
   const products = await getActiveProductsByCategory(category.id, market);
   const description = SITE_COPY[market].category.metaDescription(name);
-  const alternates = buildAlternates(h, `/c/${category.slug}`);
+  const alternates = categoryAlternates(category.slug, market);
   return {
     title: name,
     description,
@@ -54,11 +54,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function CategoryPage({ params }: Props) {
-  const category = await getCategoryBySlug(params.slug);
+  const category = await getCategoryBySlug(baseCategorySlug(params.slug));
   if (!category) notFound();
 
   const host = headers().get('host');
   const market = getMarketFromHost(host);
+
+  // Slug traduit par marché : l'ancienne URL (slug de base ou slug d'un autre
+  // marché) redirige définitivement vers l'adresse du marché courant.
+  if (params.slug !== localizedCategorySlug(category.slug, market)) {
+    permanentRedirect(categoryPath(category.slug, market));
+  }
   const [products, allCategories] = await Promise.all([
     getActiveProductsByCategory(category.id, market),
     getActiveCategories(market),

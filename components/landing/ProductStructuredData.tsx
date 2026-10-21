@@ -1,4 +1,5 @@
 import type { Product } from '@/types';
+import { categoryPath } from '@/lib/category-slugs';
 import { getCurrencyForMarket } from '@/lib/market';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getProductGallery } from '@/lib/product-images';
@@ -75,7 +76,7 @@ export default function ProductStructuredData({
   };
 
   const crumbs = [{ name: 'Tendpick', url: marketUrl(m, '/') }];
-  if (categoryName && categorySlug) crumbs.push({ name: categoryName, url: marketUrl(m, `/c/${categorySlug}`) });
+  if (categoryName && categorySlug) crumbs.push({ name: categoryName, url: marketUrl(m, categoryPath(categorySlug, m)) });
   crumbs.push({ name: product.name, url: productUrl });
 
   const jsonLd = {

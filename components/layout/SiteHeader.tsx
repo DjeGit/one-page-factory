@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { categoryPath } from '@/lib/category-slugs';
 import { Menu, X, Search, ShoppingCart } from 'lucide-react';
 import type { Category } from '@/types';
 import type { Market } from '@/lib/market';
@@ -135,7 +136,7 @@ export default function SiteHeader({ categories, market }: Props) {
           {categories.map((c) => (
             <Link
               key={c.id}
-              href={`/c/${c.slug}`}
+              href={categoryPath(c.slug, market)}
               className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
             >
               {categoryName(c, market)}
@@ -247,7 +248,7 @@ export default function SiteHeader({ categories, market }: Props) {
               {categories.map((c) => (
                 <Link
                   key={c.id}
-                  href={`/c/${c.slug}`}
+                  href={categoryPath(c.slug, market)}
                   onClick={() => setMobileOpen(false)}
                   className="block px-2 py-2.5 text-sm text-site-text rounded-lg hover:bg-site-bg"
                 >
