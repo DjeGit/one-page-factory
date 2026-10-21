@@ -143,6 +143,13 @@ export default function SiteHeader({ categories, market }: Props) {
           ))}
 
           <Link
+            href="/guide-achat"
+            className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+          >
+            {t.nav.buyingGuide}
+          </Link>
+
+          <Link
             href="/blog"
             className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
           >
@@ -250,9 +257,16 @@ export default function SiteHeader({ categories, market }: Props) {
             </div>
 
             <Link
-              href="/blog"
+              href="/guide-achat"
               onClick={() => setMobileOpen(false)}
               className="mt-2 pt-2 border-t border-site-border block px-2 py-2.5 text-sm font-semibold text-site-text rounded-lg hover:bg-site-bg"
+            >
+              {t.nav.buyingGuide}
+            </Link>
+            <Link
+              href="/blog"
+              onClick={() => setMobileOpen(false)}
+              className="block px-2 py-2.5 text-sm font-semibold text-site-text rounded-lg hover:bg-site-bg"
             >
               {t.nav.blog}
             </Link>

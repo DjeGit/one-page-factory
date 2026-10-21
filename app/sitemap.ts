@@ -1,6 +1,7 @@
 import { headers } from 'next/headers';
 import type { MetadataRoute } from 'next';
 import { getSupabaseAdmin } from '@/lib/supabase';
+import { GUIDE_BASE_PATH, GUIDE_CATEGORY_SLUG, GUIDE_PILLAR_SLUG } from '@/lib/buying-guide';
 import { getRequestHost, getRequestMarket, getRequestOrigin, isBackofficeHost } from '@/lib/site-url';
 
 // Audit SEO du 07/10 (C4, E4) : le sitemap listait tous les marchés sous
@@ -47,6 +48,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let products: Row[] = [];
   let posts: Row[] = [];
   let categories: Row[] = [];
+  let guideCategoryId: string | null = null;
   try {
     const sb = getSupabaseAdmin();
     [products, posts, categories] = await Promise.all([
@@ -54,10 +56,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         sb.from('products').select('slug, category_id, updated_at').eq('active', true).eq('market', market).range(from, to)
       ),
       fetchAll((from, to) =>
-        sb.from('blog_posts').select('slug, updated_at').eq('status', 'published').eq('market', market).range(from, to)
+        sb.from('blog_posts').select('slug, updated_at, category_id').eq('status', 'published').eq('market', market).range(from, to)
       ),
       fetchAll((from, to) => sb.from('categories').select('id, slug, is_active, active_markets').range(from, to)),
     ]);
+    const { data: gc } = await sb.from('blog_categories').select('id').eq('slug', GUIDE_CATEGORY_SLUG).maybeSingle();
+    guideCategoryId = (gc?.id as string | undefined) ?? null;
   } catch {
     // Base injoignable : on sert au moins les pages fixes plutôt qu'une erreur 500.
   }
@@ -67,8 +71,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: p.updated_at ? new Date(p.updated_at as string) : undefined,
   }));
 
-  const blogUrls: MetadataRoute.Sitemap = posts.map((p) => ({
+  // Les guides d'achat vivent sous /guide-achat (le guide pilier = /guide-achat).
+  const isGuide = (p: Row) => guideCategoryId !== null && p.category_id === guideCategoryId;
+  const blogPosts = posts.filter((p) => !isGuide(p));
+  const guidePosts = posts.filter(isGuide);
+  const pillarSlug = GUIDE_PILLAR_SLUG[market];
+
+  const blogUrls: MetadataRoute.Sitemap = blogPosts.map((p) => ({
     url: `${origin}/blog/${p.slug}`,
+    lastModified: p.updated_at ? new Date(p.updated_at as string) : undefined,
+  }));
+
+  const guideUrls: MetadataRoute.Sitemap = guidePosts.map((p) => ({
+    url: p.slug === pillarSlug ? `${origin}${GUIDE_BASE_PATH}` : `${origin}${GUIDE_BASE_PATH}/${p.slug}`,
     lastModified: p.updated_at ? new Date(p.updated_at as string) : undefined,
   }));
 
@@ -88,7 +103,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .filter((x): x is { url: string; lastModified: Date | undefined } => x !== null);
 
   const lastProducts = latest(products.map((p) => p.updated_at as string));
-  const lastPosts = latest(posts.map((p) => p.updated_at as string));
+  const lastPosts = latest(blogPosts.map((p) => p.updated_at as string));
 
   const fixed: MetadataRoute.Sitemap = [
     { url: origin, lastModified: latest([lastProducts?.toISOString(), lastPosts?.toISOString()]) },
@@ -102,8 +117,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // /blog seulement s'il y a au moins un article publié sur ce marché.
-  if (posts.length > 0) fixed.push({ url: `${origin}/blog`, lastModified: lastPosts });
+  if (blogPosts.length > 0) fixed.push({ url: `${origin}/blog`, lastModified: lastPosts });
 
   // Pages légales volontairement absentes : elles sont en noindex.
-  return [...fixed, ...categoryUrls, ...productUrls, ...blogUrls];
+  return [...fixed, ...categoryUrls, ...productUrls, ...guideUrls, ...blogUrls];
 }

@@ -10,6 +10,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import type { BlogPost, BlogPostFormData, BlogCategory } from '@/types';
 import type { Market } from '@/lib/market';
 import { ttlCache } from '@/lib/ttl-cache';
+import { GUIDE_CATEGORY_SLUG } from '@/lib/buying-guide';
 export { slugifyBlogTitle } from '@/lib/slugify';
 
 // Jointure systematique sur la categorie — un article affiche presque
@@ -20,6 +21,19 @@ const POST_SELECT = '*, category:blog_categories(*)';
 interface GetPublishedOptions {
   tag?: string;
   categorySlug?: string;
+  /** Les guides d'achat vivent dans /guide-achat : exclus du blog sauf demande explicite. */
+  includeGuides?: boolean;
+}
+
+/** Id de la catégorie « guides-achat » (null si elle n'existe pas encore en base). */
+async function getGuideCategoryId(): Promise<string | null> {
+  const cats = await getBlogCategoriesCached();
+  return cats.find((c) => c.slug === GUIDE_CATEGORY_SLUG)?.id ?? null;
+}
+
+/** Filtre PostgREST excluant les guides d'achat (NULL compris : un article sans catégorie reste visible). */
+function notGuideFilter(guideId: string): string {
+  return `category_id.is.null,category_id.neq.${guideId}`;
 }
 
 /** Articles publies d'un marche, les plus recents d'abord. Filtres optionnels par tag et/ou categorie. */
@@ -32,6 +46,10 @@ export async function getPublishedBlogPosts(market: Market, options: GetPublishe
     .eq('status', 'published')
     .order('published_at', { ascending: false });
 
+  if (!options.includeGuides && options.categorySlug !== GUIDE_CATEGORY_SLUG) {
+    const gid = await getGuideCategoryId();
+    if (gid) query = query.or(notGuideFilter(gid));
+  }
   if (options.tag) {
     query = query.contains('tags', [options.tag]);
   }
@@ -55,16 +73,37 @@ export async function getLatestPublishedBlogPosts(market: Market, limit: number)
 
 async function fetchLatestPublishedBlogPosts(market: Market, limit: number): Promise<BlogPost[]> {
   const sb = getSupabaseAdmin();
-  const { data, error } = await sb
+  let query = sb
     .from('blog_posts')
     .select(POST_SELECT)
     .eq('market', market)
     .eq('status', 'published')
     .order('published_at', { ascending: false })
     .limit(limit);
+  const gid = await getGuideCategoryId();
+  if (gid) query = query.or(notGuideFilter(gid));
+  const { data, error } = await query;
 
   if (error || !data) return [];
   return data as unknown as BlogPost[];
+}
+
+/** Contenus publiés du guide d'achat d'un marché (pilier compris), les plus récents d'abord. */
+export async function getPublishedGuidePosts(market: Market): Promise<BlogPost[]> {
+  return ttlCache(`guide:posts:${market}`, 60_000, async () => {
+    const gid = await getGuideCategoryId();
+    if (!gid) return [];
+    const sb = getSupabaseAdmin();
+    const { data, error } = await sb
+      .from('blog_posts')
+      .select(POST_SELECT)
+      .eq('market', market)
+      .eq('status', 'published')
+      .eq('category_id', gid)
+      .order('published_at', { ascending: false });
+    if (error || !data) return [];
+    return data as unknown as BlogPost[];
+  });
 }
 
 /**

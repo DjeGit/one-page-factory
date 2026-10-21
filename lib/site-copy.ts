@@ -25,6 +25,7 @@ interface SiteCopy {
   nav: {
     homeAria: string;
     topVentes: string;
+    buyingGuide: string;
     blog: string;
     seeAll: string;
     searchPlaceholder: string;
@@ -113,6 +114,13 @@ interface SiteCopy {
     all: string;
     noArticles: string;
   };
+  // Guide d'achat (21/10) : section à part entière, entrée du menu.
+  guidePage: {
+    metaTitle: string;
+    metaDescription: string;
+    moreGuides: string;
+    readGuide: string;
+  };
   // Page produit (06/10, maquette A validée par Jerome). Remplace les
   // chaînes en dur de l'ancienne one-page (CTA_I18N dans app/[slug]).
   // Le CONTENU du produit (titre, description, points forts, FAQ) vient de
@@ -162,6 +170,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     nav: {
       homeAria: 'Tendpick, accueil',
       topVentes: 'Top Ventes',
+      buyingGuide: "Guide d'achat",
       blog: 'Blog',
       seeAll: 'Tout voir',
       searchPlaceholder: 'Rechercher un produit…',
@@ -280,6 +289,13 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       all: 'Tout',
       noArticles: 'Aucun article pour le moment — revenez bientôt !',
     },
+    guidePage: {
+      metaTitle: "Guide d'achat : acheter en ligne en toute sécurité",
+      metaDescription:
+        "Vérifier un site, repérer les faux avis, payer en sécurité, droits de rétractation et de garantie : notre guide d'achat pour acheter en ligne sans se tromper.",
+      moreGuides: "Autres guides d'achat",
+      readGuide: 'Lire le guide',
+    },
     product: {
       locale: 'fr-FR',
       breadcrumbAria: "Fil d'Ariane",
@@ -325,6 +341,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     nav: {
       homeAria: 'Tendpick, inicio',
       topVentes: 'Más vendidos',
+      buyingGuide: "Guía de compra",
       blog: 'Blog',
       seeAll: 'Ver todo',
       searchPlaceholder: 'Buscar un producto…',
@@ -443,6 +460,13 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       all: 'Todo',
       noArticles: 'Ningún artículo por ahora — ¡vuelve pronto!',
     },
+    guidePage: {
+      metaTitle: 'Guía de compra: comprar online con seguridad',
+      metaDescription:
+        'Cómo saber si una tienda es fiable, detectar reseñas falsas, pagar con seguridad y conocer tus derechos: nuestra guía de compra para comprar online sin sustos.',
+      moreGuides: 'Más guías de compra',
+      readGuide: 'Leer la guía',
+    },
     product: {
       locale: 'es-ES',
       breadcrumbAria: 'Ruta de navegación',
@@ -488,6 +512,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     nav: {
       homeAria: 'Tendpick, home',
       topVentes: 'Best Sellers',
+      buyingGuide: "Buying guide",
       blog: 'Blog',
       seeAll: 'See all',
       searchPlaceholder: 'Search for a product…',
@@ -605,6 +630,13 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
         'Buying guides, comparisons and trends: our articles explain what to buy, who it suits and when to skip it. Sources cited, no products tested.',
       all: 'All',
       noArticles: 'No articles yet — check back soon!',
+    },
+    guidePage: {
+      metaTitle: 'Buying guide: how to shop online safely',
+      metaDescription:
+        'Spot fake websites and reviews, pay safely and know your rights: our buying guide for shopping online with confidence.',
+      moreGuides: 'More buying guides',
+      readGuide: 'Read the guide',
     },
     product: {
       locale: 'en-GB',

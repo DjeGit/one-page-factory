@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { permanentRedirect } from 'next/navigation';
 import Image from 'next/image';
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
@@ -10,6 +11,7 @@ import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { SITE_COPY } from '@/lib/site-copy';
 import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
+import { GUIDE_BASE_PATH, GUIDE_CATEGORY_SLUG } from '@/lib/buying-guide';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,15 +50,23 @@ export default async function BlogIndexPage({ searchParams }: Props) {
   const tag = searchParams.tag?.trim() || undefined;
   const categorySlug = searchParams.category?.trim() || undefined;
 
+  // Les guides d'achat ont leur propre section : l'ancienne URL de catégorie
+  // renvoie définitivement vers la page dédiée.
+  if (categorySlug === GUIDE_CATEGORY_SLUG) permanentRedirect(GUIDE_BASE_PATH);
+
   const [posts, categories, blogCategories] = await Promise.all([
     getPublishedBlogPosts(market, { tag, categorySlug }),
     getActiveCategories(market),
     getBlogCategoriesCached(),
   ]);
 
-  // Tags disponibles calculés sur la page courante (volume faible au
-  // lancement — pas besoin d'une requête dédiée côté DB pour ça).
-  const allTags = Array.from(new Set(posts.flatMap((p) => p.tags))).sort();
+  // Pastilles de catégories : sans « Guides d'achat » (section dédiée), nom
+  // dans la langue du marché. Le nuage de mots-clés a été retiré de la liste
+  // (trop volumineux, pages ?tag= en noindex, Google ignore les keywords) ;
+  // quelques tags restent affichés, discrets, sous chaque article.
+  const catName = (c: { name_fr: string; name_es: string; name_uk: string }) =>
+    (market === 'es' ? c.name_es : market === 'uk' ? c.name_uk : c.name_fr) || c.name_fr;
+  const visibleCategories = blogCategories.filter((c) => c.slug !== GUIDE_CATEGORY_SLUG);
 
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
@@ -67,8 +77,8 @@ export default async function BlogIndexPage({ searchParams }: Props) {
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{t.nav.blog}</h1>
         </div>
 
-        {blogCategories.length > 0 && (
-          <div className="flex flex-wrap gap-3 mb-6">
+        {visibleCategories.length > 0 && (
+          <div className="flex flex-wrap gap-3 mb-10">
             <Link
               href={tag ? `/blog?tag=${encodeURIComponent(tag)}` : '/blog'}
               className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
@@ -79,7 +89,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
             >
               {t.blogPage.all}
             </Link>
-            {blogCategories.map((cat) => {
+            {visibleCategories.map((cat) => {
               const href = `/blog?category=${encodeURIComponent(cat.slug)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`;
               const active = categorySlug === cat.slug;
               return (
@@ -96,28 +106,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                       : 'bg-white border-site-border text-site-text hover:border-site-secondary'
                   }`}
                 >
-                  {cat.name_fr}
-                </Link>
-              );
-            })}
-          </div>
-        )}
-
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-10">
-            {allTags.map((tg) => {
-              const href = `/blog?tag=${encodeURIComponent(tg)}${categorySlug ? `&category=${encodeURIComponent(categorySlug)}` : ''}`;
-              return (
-                <Link
-                  key={tg}
-                  href={href}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
-                    tag === tg
-                      ? 'bg-site-secondary border-site-secondary text-white'
-                      : 'bg-white border-site-border text-site-text-secondary hover:border-site-secondary'
-                  }`}
-                >
-                  #{tg}
+                  {catName(cat)}
                 </Link>
               );
             })}
@@ -165,7 +154,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                         }}
                       >
                         {post.category.icon && <span>{post.category.icon}</span>}
-                        {post.category.name_fr}
+                        {catName(post.category)}
                       </span>
                     )}
                     <p className="text-base font-bold text-site-text group-hover:text-site-primary transition-colors leading-snug">

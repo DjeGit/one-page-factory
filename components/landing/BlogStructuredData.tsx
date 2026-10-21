@@ -6,6 +6,13 @@ import { DEFAULT_MARKET, isValidMarket } from '@/lib/market';
 
 interface BlogStructuredDataProps {
   post: BlogPost;
+  /** Chemin public de l'article (21/10 : /blog/[slug] par défaut, /guide-achat… pour le guide). */
+  path?: string;
+  /** Rubrique du fil d'Ariane (défaut : Blog). */
+  sectionName?: string;
+  sectionPath?: string;
+  /** Page d'accueil du guide : pas de rubrique intermédiaire. */
+  hideSectionCrumb?: boolean;
 }
 
 /**
@@ -18,9 +25,15 @@ interface BlogStructuredDataProps {
  * un blog), image en URL absolue (un identifiant Cloudinary n'est pas une
  * URL), langue déclarée, URL sur le domaine du marché de l'article.
  */
-export default function BlogStructuredData({ post }: BlogStructuredDataProps) {
+export default function BlogStructuredData({
+  post,
+  path,
+  sectionName = 'Blog',
+  sectionPath = '/blog',
+  hideSectionCrumb = false,
+}: BlogStructuredDataProps) {
   const market = isValidMarket(post.market) ? post.market : DEFAULT_MARKET;
-  const postUrl = marketUrl(market, `/blog/${post.slug}`);
+  const postUrl = marketUrl(market, path ?? `/blog/${post.slug}`);
   const image = post.cover_image_url
     ? getCloudinaryUrl(post.cover_image_url, { width: 1200, height: 630, crop: 'fill', format: 'auto', quality: 'auto' })
     : undefined;
@@ -54,8 +67,8 @@ export default function BlogStructuredData({ post }: BlogStructuredDataProps) {
         '@type': 'BreadcrumbList',
         itemListElement: [
           { '@type': 'ListItem', position: 1, name: 'Tendpick', item: marketUrl(market, '/') },
-          { '@type': 'ListItem', position: 2, name: 'Blog', item: marketUrl(market, '/blog') },
-          { '@type': 'ListItem', position: 3, name: post.title, item: postUrl },
+          ...(hideSectionCrumb ? [] : [{ '@type': 'ListItem', position: 2, name: sectionName, item: marketUrl(market, sectionPath) }]),
+          { '@type': 'ListItem', position: hideSectionCrumb ? 2 : 3, name: post.title, item: postUrl },
         ],
       },
     ],
