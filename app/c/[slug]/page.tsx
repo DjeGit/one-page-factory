@@ -7,6 +7,7 @@ import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
 import SiteHeader from '@/components/layout/SiteHeader';
+import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
@@ -69,6 +70,7 @@ export default async function CategoryPage({ params }: Props) {
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteHeader categories={allCategories} market={market} />
+      <AffiliateDisclosureBanner market={market} />
 
       {/* La rangée de pastilles catégories (avec icônes) sous le header a
           été retirée (02/10, demande Jerome) : les catégories sont déjà

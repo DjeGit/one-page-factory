@@ -127,9 +127,9 @@ export default async function PostView({ post, market, section, path, isGuideHub
         hideSectionCrumb={isGuideHub}
       />
       <SiteHeader categories={categories} market={market} />
-      {/* Divulgation avant le clic : elle existait sur les fiches produit,
-          pas sur les articles, qui portent aussi des liens commerciaux. */}
-      <AffiliateDisclosureBanner market={market} />
+      {/* Divulgation avant le clic sur les articles de blog (liens commerciaux).
+          Pas sur le guide d'achat : contenu pédagogique, sans liens affiliés. */}
+      {section === 'blog' && <AffiliateDisclosureBanner market={market} />}
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12">
         {section === 'blog' && (

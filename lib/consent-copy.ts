@@ -38,7 +38,7 @@ export const CONSENT_COPY: Record<Market, ConsentCopy> = {
       accept: 'Accepter',
     },
     disclosureBanner:
-      '📢 Publicité — Cette page contient des liens affiliés Amazon. Nous touchons une commission sur les achats éligibles, sans supplément de prix pour vous.',
+      '📢 Publicité — Cette page contient des liens affiliés. Nous touchons une commission sur les achats éligibles, sans supplément de prix pour vous.',
     footerDisclosure:
       "Information importante : Tendpick est un site participatif au programme d'affiliation d'Amazon EU. En tant que partenaire Amazon, nous réalisons un bénéfice sur les achats remplissant les conditions requises. Cela n'affecte pas le prix que vous payez. Les avis et recommandations présents sur ce site sont rédigés à titre informatif.",
   },
@@ -51,7 +51,7 @@ export const CONSENT_COPY: Record<Market, ConsentCopy> = {
       accept: 'Aceptar',
     },
     disclosureBanner:
-      '📢 Publicidad — Esta página contiene enlaces de afiliados de Amazon. Recibimos una comisión por las compras que cumplan los requisitos, sin coste adicional para ti.',
+      '📢 Publicidad — Esta página contiene enlaces de afiliados. Recibimos una comisión por las compras que cumplan los requisitos, sin coste adicional para ti.',
     footerDisclosure:
       'Información importante: Tendpick participa en el Programa de Afiliados de Amazon EU. Como socio de Amazon, obtenemos ingresos por las compras que cumplan los requisitos aplicables. Esto no afecta al precio que pagas. Las reseñas y recomendaciones de este sitio tienen fines informativos.',
   },
@@ -64,7 +64,7 @@ export const CONSENT_COPY: Record<Market, ConsentCopy> = {
       accept: 'Accept',
     },
     disclosureBanner:
-      '📢 Advertising — This page contains Amazon affiliate links. We earn a commission on qualifying purchases, at no extra cost to you.',
+      '📢 Advertising — This page contains affiliate links. We earn a commission on qualifying purchases, at no extra cost to you.',
     footerDisclosure:
       "Important information: Tendpick is a participant in the Amazon EU Associates Programme. As an Amazon Associate, we earn from qualifying purchases. This does not affect the price you pay. Reviews and recommendations on this site are for informational purposes.",
   },

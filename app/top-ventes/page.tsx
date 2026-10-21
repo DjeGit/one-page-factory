@@ -8,6 +8,7 @@ import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Market } from '@/lib/market';
 import type { Metadata } from 'next';
 import SiteHeader from '@/components/layout/SiteHeader';
+import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
@@ -74,6 +75,7 @@ export default async function TopVentesPage({ searchParams }: Props) {
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteHeader categories={categories} market={market} />
+      <AffiliateDisclosureBanner market={market} />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-8">

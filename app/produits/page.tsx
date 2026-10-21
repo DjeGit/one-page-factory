@@ -10,6 +10,7 @@ import type { Market } from '@/lib/market';
 import CookieConsent from '@/components/layout/CookieConsent';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
+import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
@@ -83,6 +84,7 @@ export default async function ProduitsPage({ searchParams }: Props) {
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteHeader categories={categories} market={market} />
+      <AffiliateDisclosureBanner market={market} />
 
       {/* La rangée de pastilles catégories (avec icônes) sous le header a
           été retirée (02/10, demande Jerome) : les catégories sont déjà
