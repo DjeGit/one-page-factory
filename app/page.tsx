@@ -6,7 +6,6 @@ import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { headers } from 'next/headers';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Market } from '@/lib/market';
-import CookieConsent from '@/components/layout/CookieConsent';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
@@ -399,7 +398,6 @@ export default async function HomePage({ searchParams }: Props) {
           unique, donc pas de pixel_meta/pixel_tiktok/pixel_gtm par produit —
           on utilise des IDs de pixel globaux (env), avec le même gating de
           consentement que sur les pages produit. */}
-      <CookieConsent market={market} />
       <PixelInjector
         pixelMeta={process.env.SITE_PIXEL_META}
         pixelTiktok={process.env.SITE_PIXEL_TIKTOK}

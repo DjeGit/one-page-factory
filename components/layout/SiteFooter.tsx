@@ -3,6 +3,9 @@ import { categoryPath } from '@/lib/category-slugs';
 import type { Category } from '@/types';
 import type { Market } from '@/lib/market';
 import { SITE_COPY } from '@/lib/site-copy';
+import { CONSENT_COPY } from '@/lib/consent-copy';
+import CookieConsent from '@/components/layout/CookieConsent';
+import CookieSettingsButton from '@/components/layout/CookieSettingsButton';
 
 interface Props {
   categories: Category[];
@@ -82,6 +85,7 @@ export default function SiteFooter({ categories, market }: Props) {
             <Link href="/politique-confidentialite" className="text-xs text-white/60 hover:text-white transition-colors">
               {t.privacy}
             </Link>
+            <CookieSettingsButton label={CONSENT_COPY[market].manageCookies} />
             <Link href="/contact" className="text-xs text-white/60 hover:text-white transition-colors">
               {t.contact}
             </Link>
@@ -117,6 +121,9 @@ export default function SiteFooter({ categories, market }: Props) {
           </Link>
         </div>
       </div>
+      {/* Bannière de consentement sur toutes les pages publiques qui ont ce
+          pied de page (avant : accueil, /produits et fiches seulement). */}
+      <CookieConsent market={market} />
     </footer>
   );
 }

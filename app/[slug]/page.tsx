@@ -13,7 +13,6 @@ import ProductStructuredData from '@/components/landing/ProductStructuredData';
 import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
-import CookieConsent from '@/components/layout/CookieConsent';
 import ProductGallery from '@/components/product/ProductGallery';
 import ProductCTA from '@/components/product/ProductCTA';
 import MobileBuyBar from '@/components/product/MobileBuyBar';
@@ -549,7 +548,6 @@ export default async function ProductPage({ params }: Props) {
       )}
 
       {/* GDPR Cookie Consent */}
-      <CookieConsent market={market} />
     </div>
   );
 }

@@ -22,6 +22,8 @@ interface CookieBannerCopy {
 
 interface ConsentCopy {
   cookieBanner: CookieBannerCopy;
+  /** Libellé du lien de pied de page qui rouvre le choix de cookies. */
+  manageCookies: string;
   /** Bandeau court, visible avant le clic, en haut de page. */
   disclosureBanner: string;
   /** Paragraphe détaillé dans le footer (existant, désormais localisé). */
@@ -30,6 +32,7 @@ interface ConsentCopy {
 
 export const CONSENT_COPY: Record<Market, ConsentCopy> = {
   fr: {
+    manageCookies: 'Gérer les cookies',
     cookieBanner: {
       title: '🍪 Ce site utilise des cookies',
       body: "Nous utilisons des cookies pour mesurer l'audience et améliorer votre expérience. Certains partenaires (Amazon, Meta, TikTok) peuvent également en déposer pour vous proposer des publicités pertinentes.",
@@ -43,6 +46,7 @@ export const CONSENT_COPY: Record<Market, ConsentCopy> = {
       "Information importante : Tendpick est un site participatif au programme d'affiliation d'Amazon EU. En tant que partenaire Amazon, nous réalisons un bénéfice sur les achats remplissant les conditions requises. Cela n'affecte pas le prix que vous payez. Les avis et recommandations présents sur ce site sont rédigés à titre informatif.",
   },
   es: {
+    manageCookies: 'Gestionar cookies',
     cookieBanner: {
       title: '🍪 Este sitio utiliza cookies',
       body: 'Utilizamos cookies para medir la audiencia y mejorar tu experiencia. Algunos socios (Amazon, Meta, TikTok) también pueden utilizarlas para mostrarte publicidad relevante.',
@@ -56,6 +60,7 @@ export const CONSENT_COPY: Record<Market, ConsentCopy> = {
       'Información importante: Tendpick participa en el Programa de Afiliados de Amazon EU. Como socio de Amazon, obtenemos ingresos por las compras que cumplan los requisitos aplicables. Esto no afecta al precio que pagas. Las reseñas y recomendaciones de este sitio tienen fines informativos.',
   },
   uk: {
+    manageCookies: 'Manage cookies',
     cookieBanner: {
       title: '🍪 This site uses cookies',
       body: 'We use cookies to measure audience and improve your experience. Some partners (Amazon, Meta, TikTok) may also use them to show you relevant ads.',
@@ -72,4 +77,7 @@ export const CONSENT_COPY: Record<Market, ConsentCopy> = {
 
 /** Nom de l'event DOM émis par CookieConsent au choix de l'utilisateur, écouté par PixelInjector. */
 export const CONSENT_CHANGED_EVENT = 'cookie-consent-changed';
+
+/** Événement émis par le lien « Gérer les cookies » du pied de page : CookieConsent rouvre la bannière. */
+export const OPEN_COOKIE_SETTINGS_EVENT = 'open-cookie-settings';
 export type ConsentValue = 'accepted' | 'declined';

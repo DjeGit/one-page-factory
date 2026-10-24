@@ -7,7 +7,6 @@ import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Market } from '@/lib/market';
-import CookieConsent from '@/components/layout/CookieConsent';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
 import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
@@ -177,8 +176,6 @@ export default async function ProduitsPage({ searchParams }: Props) {
       </main>
 
       <SiteFooter categories={categories} market={market} />
-
-      <CookieConsent market={market} />
       <PixelInjector
         pixelMeta={process.env.SITE_PIXEL_META}
         pixelTiktok={process.env.SITE_PIXEL_TIKTOK}

@@ -95,7 +95,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         "Critères de sélection, sources utilisées, place de l'IA, ce que nous refusons et pourquoi nous n'affichons pas de note. Dit en clair.",
       intro: [
         "Cette page explique comment une sélection Tendpick est faite, avec quelles sources, et ce que nous refusons de faire. Elle vaut pour les trois sites.",
-        "Une sélection n'est pas figée : nous la revoyons dès qu'un prix, une disponibilité ou un modèle change, et nous corrigeons la page plutôt que de la laisser vieillir.",
+        "Une sélection n'est pas figée : nous la revoyons dès qu'une disponibilité ou un modèle change, et nous corrigeons la page plutôt que de la laisser vieillir.",
       ],
       sections: [
         {
@@ -107,8 +107,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
             "les fiches et caractéristiques techniques publiées par les fabricants ;",
             "les avis d'acheteurs, lus en volume et pas seulement les mieux notés ;",
             "les tests publiés par des médias spécialisés, cités et liés dans nos articles ;",
-            "les classements de ventes publics des marchands et les tendances de recherche, pour repérer ce qui monte vraiment ;",
-            "les prix relevés chez plusieurs marchands au moment où nous écrivons, pour ne pas présenter comme une promotion un prix habituel.",
+            "les classements de ventes publics des marchands et les tendances de recherche, pour repérer ce qui monte vraiment.",
           ],
         },
         {
@@ -118,8 +117,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
             "le rapport qualité-prix à son niveau de gamme, pas dans l'absolu ;",
             "la fiabilité, d'après les retours d'acheteurs sur la durée et le service après-vente ;",
             "la disponibilité chez un marchand sérieux, dans le pays concerné ;",
-            "la fraîcheur : un modèle encore vendu, pas remplacé depuis six mois ;",
-            "l'honnêteté du prix affiché au moment où nous écrivons.",
+            "la fraîcheur : un modèle encore vendu, pas remplacé depuis six mois.",
           ],
           paragraphs: [
             "Une sélection n'est pas exhaustive. Nous retenons une poignée de produits par besoin, parmi ceux disponibles chez les marchands avec lesquels nous travaillons. Un produit excellent mais introuvable n'aide personne.",
@@ -144,7 +142,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Prix et disponibilité",
           paragraphs: [
-            "Les prix changent vite. Celui qui compte est celui affiché chez le marchand au moment de l'achat ; sur nos pages, il est indicatif et daté quand nous l'affichons. En cas d'écart, c'est le marchand qui fait foi.",
+            "Nous n'affichons pas de prix : ils changent trop vite pour qu'une page les garde à jour. Le prix qui compte est celui affiché chez le marchand au moment de l'achat ; en cas d'écart avec ce que vous lisez ici, c'est le marchand qui fait foi.",
           ],
         },
         {
@@ -156,7 +154,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Signaler une erreur",
           paragraphs: [
-            "Un prix faux, un lien mort, un produit qui n'existe plus, une affirmation discutable : écrivez à contact@tendpick.com. Nous corrigeons, et quand la correction change le sens de la page, nous le disons sur la page.",
+            "Un lien mort, un produit qui n'existe plus, une information fausse, une affirmation discutable : écrivez à contact@tendpick.com. Nous corrigeons, et quand la correction change le sens de la page, nous le disons sur la page.",
           ],
         },
       ],
@@ -335,7 +333,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         "Criterios de selección, fuentes utilizadas, el papel de la IA, lo que rechazamos y por qué no publicamos notas. Dicho claramente.",
       intro: [
         "Esta página explica cómo se hace una selección de Tendpick, con qué fuentes y lo que nos negamos a hacer. Vale para los tres sitios.",
-        "Una selección no es definitiva: la revisamos en cuanto cambia un precio, una disponibilidad o un modelo, y corregimos la página en lugar de dejarla envejecer.",
+        "Una selección no es definitiva: la revisamos en cuanto cambia una disponibilidad o un modelo, y corregimos la página en lugar de dejarla envejecer.",
       ],
       sections: [
         {
@@ -347,8 +345,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
             "las fichas y características técnicas publicadas por los fabricantes;",
             "las opiniones de compradores, leídas en volumen y no solo las mejor valoradas;",
             "las pruebas publicadas por medios especializados, citadas y enlazadas en nuestros artículos;",
-            "las listas de ventas públicas de las tiendas y las tendencias de búsqueda, para detectar lo que sube de verdad;",
-            "los precios consultados en varias tiendas en el momento de escribir, para no presentar como oferta un precio habitual.",
+            "las listas de ventas públicas de las tiendas y las tendencias de búsqueda, para detectar lo que sube de verdad.",
           ],
         },
         {
@@ -358,8 +355,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
             "la relación calidad-precio en su gama, no en términos absolutos;",
             "la fiabilidad, según las opiniones a lo largo del tiempo y el servicio posventa;",
             "la disponibilidad en una tienda fiable, en el país correspondiente;",
-            "la vigencia: un modelo que siga a la venta y que no haya sido sustituido hace meses;",
-            "la honestidad del precio mostrado en el momento en que escribimos.",
+            "la vigencia: un modelo que siga a la venta y que no haya sido sustituido hace meses.",
           ],
           paragraphs: [
             "Una selección no es exhaustiva. Seleccionamos unos pocos productos para cada necesidad, entre los disponibles en las tiendas con las que trabajamos. Un producto excelente pero imposible de encontrar no ayuda a nadie.",
@@ -384,7 +380,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Precios y disponibilidad",
           paragraphs: [
-            "Los precios cambian rápido. El que cuenta es el que muestra la tienda en el momento de la compra; en nuestras páginas es orientativo y fechado cuando lo mostramos. Si hay diferencia, prevalece el precio de la tienda.",
+            "No mostramos precios: cambian demasiado rápido para que una página los mantenga al día. El que cuenta es el que muestra la tienda en el momento de la compra; si hay diferencia con lo que lees aquí, prevalece el de la tienda.",
           ],
         },
         {
@@ -396,7 +392,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Avisar de un error",
           paragraphs: [
-            "Un precio equivocado, un enlace roto, un producto que ya no existe, una afirmación discutible: escribe a contact@tendpick.com. Lo corregimos y, cuando la corrección cambia el sentido de la página, lo decimos en la propia página.",
+            "Un enlace roto, un producto que ya no existe, un dato equivocado, una afirmación discutible: escribe a contact@tendpick.com. Lo corregimos y, cuando la corrección cambia el sentido de la página, lo decimos en la propia página.",
           ],
         },
       ],
@@ -575,7 +571,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         "Selection criteria, the sources we use, the role of AI, what we refuse, and why we publish no scores. Said plainly.",
       intro: [
         "This page explains how a Tendpick selection is made, from which sources, and what we refuse to do. It applies to all three sites.",
-        "A selection is not set in stone: we revisit it as soon as a price, a stock level or a model changes, and we correct the page rather than let it age.",
+        "A selection is not set in stone: we revisit it as soon as availability or a model changes, and we correct the page rather than let it age.",
       ],
       sections: [
         {
@@ -587,8 +583,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
             "the specifications published by the manufacturers;",
             "buyer reviews, read in volume rather than only the best-rated ones;",
             "tests published by specialist media, cited and linked in our articles;",
-            "retailers’ public bestseller rankings and search trends, to spot what is genuinely taking off;",
-            "prices checked at several retailers as we write, so a normal price is never passed off as a discount.",
+            "retailers’ public bestseller rankings and search trends, to spot what is genuinely taking off.",
           ],
         },
         {
@@ -598,8 +593,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
             "value for money within its price bracket, not in absolute terms;",
             "reliability, based on buyer feedback over time and after-sales service;",
             "availability from a credible retailer, in the country concerned;",
-            "still current: a model you can still buy, not one replaced six months ago;",
-            "an honest price at the time of writing.",
+            "still current: a model you can still buy, not one replaced six months ago.",
           ],
           paragraphs: [
             "A selection is not exhaustive. We keep a handful of products per need, among those available from the retailers we work with. An excellent product nobody can buy helps no one.",
@@ -624,7 +618,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Prices and availability",
           paragraphs: [
-            "Prices move fast. The one that counts is the retailer's price at the moment of purchase; on our pages it is indicative, and dated where we show it. Where the two differ, the retailer is right.",
+            "We do not show prices: they change too fast for a page to keep up. The one that counts is the retailer's price at the moment of purchase; where it differs from anything you read here, the retailer is right.",
           ],
         },
         {
@@ -636,7 +630,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Reporting a mistake",
           paragraphs: [
-            "A wrong price, a dead link, a product that no longer exists, a claim worth challenging: write to contact@tendpick.com. We fix it, and when the fix changes the meaning of the page, we say so on the page.",
+            "A dead link, a product that no longer exists, a wrong fact, a claim worth challenging: write to contact@tendpick.com. We fix it, and when the fix changes the meaning of the page, we say so on the page.",
           ],
         },
       ],

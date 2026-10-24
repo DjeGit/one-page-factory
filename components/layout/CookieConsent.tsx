@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { Market } from '@/lib/market';
-import { CONSENT_COPY, CONSENT_CHANGED_EVENT, type ConsentValue } from '@/lib/consent-copy';
+import { CONSENT_COPY, CONSENT_CHANGED_EVENT, OPEN_COOKIE_SETTINGS_EVENT, type ConsentValue } from '@/lib/consent-copy';
 
 interface CookieConsentProps {
   market: Market;
@@ -19,6 +19,14 @@ export default function CookieConsent({ market }: CookieConsentProps) {
     } catch {
       setVisible(true);
     }
+  }, []);
+
+  // Lien « Gérer les cookies » du pied de page : rouvre la bannière pour
+  // changer ou retirer son choix (retrait aussi simple que l'accord).
+  useEffect(() => {
+    const open = () => setVisible(true);
+    window.addEventListener(OPEN_COOKIE_SETTINGS_EVENT, open);
+    return () => window.removeEventListener(OPEN_COOKIE_SETTINGS_EVENT, open);
   }, []);
 
   function setConsent(value: ConsentValue) {
