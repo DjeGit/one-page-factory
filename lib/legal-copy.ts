@@ -94,12 +94,14 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
             'Données de navigation : pages visitées, clics sur les liens vers les marchands, durée de visite (anonymisées).',
             "Adresse e-mail : uniquement si vous la saisissez volontairement dans un formulaire ou si vous nous écrivez.",
             'Données techniques : adresse IP (hachée), type de navigateur, pays.',
+            "Identifiant de visiteur (cookie tp_vid) : uniquement si vous acceptez les cookies, pour reconnaître un visiteur qui revient et mesurer les pages consultées et le temps passé.",
           ],
         },
         {
           heading: '2. Finalités du traitement',
           bullets: [
             "mesurer l'audience et améliorer le site ;",
+            'comprendre combien de visiteurs reviennent, ce qu\'ils consultent et combien de temps, uniquement avec votre consentement ;',
             "suivre les clics d'affiliation et prévenir la fraude ;",
             'mesurer des campagnes publicitaires, uniquement avec votre consentement ;',
             "répondre à vos messages ;",
@@ -110,6 +112,7 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: '3. Cookies et technologies de suivi',
           paragraphs: ['Les technologies suivantes ne sont activées qu\'avec votre consentement :'],
           bullets: [
+            'tp_vid (mesure d\'audience de Tendpick) : identifiant aléatoire, sans donnée personnelle, propre à chaque domaine, conservé 13 mois ;',
             'Pixel Meta (Facebook) : mesure de l\'efficacité des campagnes publicitaires ;',
             'Pixel TikTok : suivi des conversions des campagnes TikTok ;',
             'Google Tag Manager : gestionnaire de balises qui centralise le suivi.',
@@ -119,13 +122,13 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: '4. Liens vers les marchands',
           paragraphs: [
             "Quand vous cliquez sur un lien vers un marchand (Amazon, par exemple), vous quittez Tendpick : le marchand ou son réseau d'affiliation peut déposer ses propres cookies, selon sa propre politique.",
-            "Vous pouvez modifier ou retirer votre choix à tout moment avec le lien « Gérer les cookies » en bas de chaque page, ou en effaçant les cookies de votre navigateur.",
+            "Vous pouvez modifier ou retirer votre choix à tout moment avec le lien « Gérer les cookies » en bas de chaque page, ou en effaçant les cookies de votre navigateur. Si vous retirez votre consentement, le cookie tp_vid est supprimé et les données de mesure liées à ce visiteur sont effacées.",
           ],
         },
         {
           heading: '5. Durée de conservation',
           paragraphs: [
-            "Les données de navigation sont conservées 13 mois au maximum. Les adresses e-mail sont conservées jusqu'à votre demande de suppression ou de désinscription.",
+            "Les données de navigation sont conservées 13 mois au maximum. Le cookie tp_vid et les données de mesure associées sont conservés 13 mois après votre dernière visite. Les adresses e-mail sont conservées jusqu'à votre demande de suppression ou de désinscription.",
           ],
         },
         {
@@ -222,12 +225,14 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
             'Datos de navegación: páginas visitadas, clics en los enlaces a tiendas, duración de la visita (anonimizados).',
             'Correo electrónico: solo si lo escribes voluntariamente en un formulario o si nos escribes.',
             'Datos técnicos: dirección IP (con hash), tipo de navegador, país.',
+            'Identificador de visitante (cookie tp_vid): solo si aceptas las cookies, para reconocer a un visitante que vuelve y medir las páginas consultadas y el tiempo de permanencia.',
           ],
         },
         {
           heading: '2. Finalidades del tratamiento',
           bullets: [
             'medir la audiencia y mejorar el sitio;',
+            'entender cuántos visitantes vuelven, qué consultan y cuánto tiempo, solo con tu consentimiento;',
             'seguir los clics de afiliación y prevenir el fraude;',
             'medir campañas publicitarias, solo con tu consentimiento;',
             'responder a tus mensajes;',
@@ -238,6 +243,7 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: '3. Cookies y tecnologías de seguimiento',
           paragraphs: ['Las siguientes tecnologías solo se activan con tu consentimiento:'],
           bullets: [
+            'tp_vid (medición de audiencia de Tendpick): identificador aleatorio, sin datos personales, propio de cada dominio, conservado 13 meses;',
             'Píxel de Meta (Facebook): medición de la eficacia de las campañas publicitarias;',
             'Píxel de TikTok: seguimiento de las conversiones de las campañas de TikTok;',
             'Google Tag Manager: gestor de etiquetas que centraliza el seguimiento.',
@@ -247,13 +253,13 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: '4. Enlaces a tiendas',
           paragraphs: [
             'Cuando haces clic en un enlace a una tienda (Amazon, por ejemplo), sales de Tendpick: la tienda o su red de afiliación puede instalar sus propias cookies, según su propia política.',
-            'Puedes cambiar o retirar tu elección en cualquier momento con el enlace «Gestionar cookies» al pie de cada página, o borrando las cookies del navegador.',
+            'Puedes cambiar o retirar tu elección en cualquier momento con el enlace «Gestionar cookies» al pie de cada página, o borrando las cookies del navegador. Si retiras tu consentimiento, se elimina la cookie tp_vid y se borran los datos de medición vinculados a ese visitante.',
           ],
         },
         {
           heading: '5. Plazo de conservación',
           paragraphs: [
-            'Los datos de navegación se conservan 13 meses como máximo. Las direcciones de correo se conservan hasta que pidas su supresión o te des de baja.',
+            'Los datos de navegación se conservan 13 meses como máximo. La cookie tp_vid y los datos de medición asociados se conservan 13 meses desde tu última visita. Las direcciones de correo se conservan hasta que pidas su supresión o te des de baja.',
           ],
         },
         {
@@ -350,12 +356,14 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
             'Browsing data: pages visited, clicks on links to retailers, length of visit (anonymised).',
             'Email address: only if you enter it voluntarily in a form or write to us.',
             'Technical data: IP address (hashed), browser type, country.',
+            'Visitor identifier (tp_vid cookie): only if you accept cookies, to recognise a returning visitor and measure pages viewed and time spent.',
           ],
         },
         {
           heading: '2. Why we process it',
           bullets: [
             'to measure audience and improve the site;',
+            'to understand how many visitors return, what they read and for how long, only with your consent;',
             'to track affiliate clicks and prevent fraud;',
             'to measure advertising campaigns, only with your consent;',
             'to reply to your messages;',
@@ -366,6 +374,7 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: '3. Cookies and tracking technologies',
           paragraphs: ['The following are switched on only with your consent:'],
           bullets: [
+            'tp_vid (Tendpick audience measurement): a random identifier, no personal data, specific to each domain, kept for 13 months;',
             'Meta (Facebook) pixel: measures how well advertising campaigns perform;',
             'TikTok pixel: tracks conversions from TikTok campaigns;',
             'Google Tag Manager: a tag manager that centralises tracking.',
@@ -375,13 +384,13 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: '4. Links to retailers',
           paragraphs: [
             'When you click a link to a retailer (Amazon, for example), you leave Tendpick: the retailer or its affiliate network may set its own cookies, under its own policy.',
-            'You can change or withdraw your choice at any time with the “Manage cookies” link at the bottom of every page, or by clearing your browser’s cookies.',
+            'You can change or withdraw your choice at any time with the “Manage cookies” link at the bottom of every page, or by clearing your browser’s cookies. If you withdraw consent, the tp_vid cookie is deleted and the measurement data linked to that visitor is erased.',
           ],
         },
         {
           heading: '5. How long we keep it',
           paragraphs: [
-            'Browsing data is kept for 13 months at most. Email addresses are kept until you ask for deletion or unsubscribe.',
+            'Browsing data is kept for 13 months at most. The tp_vid cookie and the measurement data linked to it are kept for 13 months after your last visit. Email addresses are kept until you ask for deletion or unsubscribe.',
           ],
         },
         {

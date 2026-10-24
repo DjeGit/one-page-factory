@@ -6,6 +6,7 @@ import { SITE_COPY } from '@/lib/site-copy';
 import { CONSENT_COPY } from '@/lib/consent-copy';
 import CookieConsent from '@/components/layout/CookieConsent';
 import CookieSettingsButton from '@/components/layout/CookieSettingsButton';
+import VisitTracker from '@/components/layout/VisitTracker';
 
 interface Props {
   categories: Category[];
@@ -124,6 +125,8 @@ export default function SiteFooter({ categories, market }: Props) {
       {/* Bannière de consentement sur toutes les pages publiques qui ont ce
           pied de page (avant : accueil, /produits et fiches seulement). */}
       <CookieConsent market={market} />
+      {/* Mesure d'audience maison : inactive sans consentement (voir VisitTracker). */}
+      <VisitTracker />
     </footer>
   );
 }

@@ -18,6 +18,7 @@
 #   10 */6 * * *   MARKET=uk /var/www/one-page-factory/pipeline-cron.sh market-refresh >> /var/log/opf-market.log 2>&1
 #   30 4 * * *     /var/www/one-page-factory/pipeline-cron.sh exchange-rates >> /var/log/opf-market.log 2>&1
 #   * * * * *      /var/www/one-page-factory/pipeline-cron.sh social-publish >> /var/log/opf-social.log 2>&1
+#   15 4 * * *     /var/www/one-page-factory/pipeline-cron.sh purge-visits >> /var/log/opf-market.log 2>&1
 #
 # market-refresh et exchange-rates utilisent INTERNAL_CRON_SECRET (ou, à
 # défaut, PIPELINE_SECRET puis ADMIN_SECRET) — cf. .env.example.
@@ -147,8 +148,16 @@ if n:
 "
     ;;
 
+  purge-visits)
+    echo "Purging visitor analytics older than 13 months"
+    curl -s -X POST "$SITE_URL/api/cron/purge-visits" \
+      -H "Authorization: Bearer $CRON_SECRET" \
+      -H "Content-Type: application/json"
+    echo
+    ;;
+
   *)
-    echo "Usage: $0 {run|optimize|discover|dry-run|market-refresh|exchange-rates|social-publish}"
+    echo "Usage: $0 {run|optimize|discover|dry-run|market-refresh|exchange-rates|social-publish|purge-visits}"
     exit 1
     ;;
 esac
