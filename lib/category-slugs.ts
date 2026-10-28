@@ -22,9 +22,22 @@ const LOCALIZED: Record<string, Record<Market, string>> = {
   'mode-beaute': { fr: 'mode-beaute', es: 'moda-belleza', uk: 'fashion-beauty' },
   'maison-deco': { fr: 'maison-deco', es: 'hogar-decoracion', uk: 'home-living' },
   'sport-bien-etre': { fr: 'sport-bien-etre', es: 'deporte-bienestar', uk: 'sport-wellness' },
-  gaming: { fr: 'gaming-casino-paris', es: 'gaming-casino-apuestas', uk: 'gaming-casino-betting' },
+  'jeux-jouets': { fr: 'jeux-jouets', es: 'juguetes-juegos', uk: 'toys-games' },
   'art-design': { fr: 'art-design', es: 'arte-diseno', uk: 'art-design' },
   loisirs: { fr: 'loisirs-divertissement', es: 'ocio-entretenimiento', uk: 'hobbies-leisure' },
+  puericulture: { fr: 'bebe-puericulture', es: 'bebe-puericultura', uk: 'baby-nursery' },
+};
+
+/**
+ * Anciens slugs devenus obsolètes (catégorie « Gaming, Casino & Paris »
+ * remplacée par « Jeux & Jouets », 28/10/2026). Ils répondent par une
+ * redirection 301 vers la nouvelle catégorie.
+ */
+const LEGACY_SLUGS: Record<string, string> = {
+  gaming: 'jeux-jouets',
+  'gaming-casino-paris': 'jeux-jouets',
+  'gaming-casino-apuestas': 'jeux-jouets',
+  'gaming-casino-betting': 'jeux-jouets',
 };
 
 const MARKETS: Market[] = ['fr', 'es', 'uk'];
@@ -44,6 +57,7 @@ export function categoryPath(baseSlug: string, market: Market): string {
  * Si rien ne correspond, renvoie le slug tel quel (catégorie hors table).
  */
 export function baseCategorySlug(urlSlug: string): string {
+  if (LEGACY_SLUGS[urlSlug]) return LEGACY_SLUGS[urlSlug];
   for (const [base, byMarket] of Object.entries(LOCALIZED)) {
     if (base === urlSlug || MARKETS.some((m) => byMarket[m] === urlSlug)) return base;
   }

@@ -47,7 +47,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
       metaDescription:
         "Tendpick repère les produits qui montent et explique comment ils sont choisis. Qui édite le site, comment il est financé, et ce qu'il ne fait pas.",
       intro: [
-        "Tendpick est un site de sélection de produits. Nous repérons ce qui se vend et ce qui monte dans nos univers produit — tech, maison, mode et beauté, sport et bien-être, art et design, gaming, loisirs — et nous expliquons pourquoi un produit vaut le détour, ou pas.",
+        "Tendpick est un site de sélection de produits. Nous repérons ce qui se vend et ce qui monte dans nos univers produit — tech, maison, mode et beauté, sport et bien-être, art et design, jeux et jouets, bébé et puériculture, loisirs — et nous expliquons pourquoi un produit vaut le détour, ou pas.",
         "Le site est édité par Jérôme, son fondateur, depuis l'Espagne. C'est un projet indépendant, mené à une personne, sans rédaction externalisée ni investisseur.",
       ],
       sections: [
@@ -285,7 +285,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
       metaDescription:
         "Tendpick detecta los productos que suben y explica cómo los elige. Quién edita el sitio, cómo se financia y lo que no hace.",
       intro: [
-        "Tendpick es un sitio de selección de productos. Detectamos lo que se vende y lo que sube en nuestros universos de producto — tecnología, hogar, moda y belleza, deporte y bienestar, arte y diseño, gaming, ocio — y explicamos por qué un producto merece la pena, o no.",
+        "Tendpick es un sitio de selección de productos. Detectamos lo que se vende y lo que sube en nuestros universos de producto — tecnología, hogar, moda y belleza, deporte y bienestar, arte y diseño, juguetes y juegos, bebé y puericultura, ocio — y explicamos por qué un producto merece la pena, o no.",
         "El sitio lo edita Jérôme, su fundador, desde España. Es un proyecto independiente, llevado por una sola persona, sin redacción externa ni inversores.",
       ],
       sections: [
@@ -523,7 +523,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
       metaDescription:
         "Tendpick spots the products that are taking off and explains how they are picked. Who runs the site, how it is funded, and what it does not do.",
       intro: [
-        "Tendpick is a product selection site. We track what sells and what is taking off across our product areas — tech, home, fashion and beauty, sport and wellbeing, art and design, gaming, hobbies — and explain why a product is worth it, or not.",
+        "Tendpick is a product selection site. We track what sells and what is taking off across our product areas — tech, home, fashion and beauty, sport and wellbeing, art and design, toys and games, baby and nursery, hobbies — and explain why a product is worth it, or not.",
         "The site is run by Jérôme, its founder, from Spain. It is an independent one-person project, with no outsourced writing and no investors.",
       ],
       sections: [
