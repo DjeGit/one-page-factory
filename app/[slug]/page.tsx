@@ -310,7 +310,7 @@ export default async function ProductPage({ params }: Props) {
 
               {benefits.length > 0 && (
                 <ul className="flex flex-col gap-2.5 text-[15px]">
-                  {benefits.slice(0, 3).map((b, i) => (
+                  {benefits.slice(0, 5).map((b, i) => (
                     <li key={i} className="flex gap-2.5 items-start">
                       {checkIcon}
                       <span>{b.title}</span>
@@ -386,7 +386,7 @@ export default async function ProductPage({ params }: Props) {
                   {sourceLabel && (
                     <>
                       <dt className="text-site-text-secondary">{p.briefSoldBy}</dt>
-                      <dd className="font-semibold">{sourceLabel}</dd>
+                      <dd className="font-semibold">{product.seller_name ? `${sourceLabel} · ${product.seller_name}` : sourceLabel}</dd>
                     </>
                   )}
                   {category && (

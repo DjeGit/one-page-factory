@@ -92,6 +92,8 @@ export interface Product {
   market: Market;
   source_product_ref?: string | null; // lien optionnel vers le même produit physique sur un autre marché
   product_source?: 'auto_discovered' | 'manual_affiliate' | 'own_product' | null;
+  /** Nom de la boutique/du revendeur sur la marketplace (ex. AliExpress), affiché dans « Vendu par ». */
+  seller_name?: string | null;
 
   // Categories (23/09) — une categorie par produit.
   category_id?: string | null;
