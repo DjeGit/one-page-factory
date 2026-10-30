@@ -147,6 +147,9 @@ interface SiteCopy {
     briefCategory: string;
     pointsTitle: string;
     faqTitle: string;
+    videoTitle: string;
+    videoPlay: string;
+    videoOnYoutube: string;
     relatedTitle: string;
     photoAria: (n: number, total: number) => string;
     prevPhoto: string;
@@ -328,6 +331,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       briefCategory: 'Catégorie',
       pointsTitle: 'Points forts',
       faqTitle: 'Questions fréquentes',
+      videoTitle: 'En vidéo',
+      videoPlay: 'Lire la vidéo',
+      videoOnYoutube: 'Regarder sur YouTube',
       relatedTitle: 'Vous aimerez aussi',
       photoAria: (n, total) => `Afficher la photo ${n} sur ${total}`,
       prevPhoto: 'Photo précédente',
@@ -508,6 +514,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       briefCategory: 'Categoría',
       pointsTitle: 'Puntos fuertes',
       faqTitle: 'Preguntas frecuentes',
+      videoTitle: 'En vídeo',
+      videoPlay: 'Reproducir el vídeo',
+      videoOnYoutube: 'Ver en YouTube',
       relatedTitle: 'También te puede gustar',
       photoAria: (n, total) => `Mostrar la foto ${n} de ${total}`,
       prevPhoto: 'Foto anterior',
@@ -688,6 +697,9 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       briefCategory: 'Category',
       pointsTitle: 'Key features',
       faqTitle: 'Frequently asked questions',
+      videoTitle: 'Video',
+      videoPlay: 'Play the video',
+      videoOnYoutube: 'Watch on YouTube',
       relatedTitle: 'You might also like',
       photoAria: (n, total) => `Show photo ${n} of ${total}`,
       prevPhoto: 'Previous photo',

@@ -35,6 +35,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
     ad_spend_allocated: product?.ad_spend_allocated?.toString() || '',
     commission_rate: product?.commission_rate != null ? String(Math.round(product.commission_rate * 1000) / 10) : '',
     affiliate_url: product?.affiliate_url || '',
+    video_url: product?.video_url || '',
     active: product?.active ?? true,
     slug: product?.slug || '',
     category_id: product?.category_id || '',
@@ -195,6 +196,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
         ad_spend_allocated: form.ad_spend_allocated ? parseFloat(form.ad_spend_allocated) : null,
         commission_rate: form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
         affiliate_url: form.affiliate_url,
+        video_url: form.video_url.trim() || null,
         // images[0] = couverture, recopiée dans image_url (voir plus haut).
         image_url: images[0] || null,
         images,
@@ -369,6 +371,18 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
                 placeholder="59.99"
               />
             </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Vidéo (lien YouTube)</label>
+            <input
+              type="url"
+              value={form.video_url}
+              onChange={(e) => handleChange('video_url', e.target.value)}
+              className={inputClass}
+              placeholder="https://www.youtube.com/watch?v=..."
+            />
+            <p className="text-xs text-gray-400 mt-1">Vidéo du fabricant ou d&apos;un test. Affichée en miniature sur la fiche ; seul YouTube est accepté.</p>
           </div>
 
           {/* Coût vs Gain (Sprint 5) */}

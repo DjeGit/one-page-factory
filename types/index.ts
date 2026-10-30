@@ -94,6 +94,8 @@ export interface Product {
   product_source?: 'auto_discovered' | 'manual_affiliate' | 'own_product' | null;
   /** Nom de la boutique/du revendeur sur la marketplace (ex. AliExpress), affiché dans « Vendu par ». */
   seller_name?: string | null;
+  /** Lien YouTube (fabricant ou test), affiché en miniature cliquable sur la fiche. */
+  video_url?: string | null;
 
   // Categories (23/09) — une categorie par produit.
   category_id?: string | null;

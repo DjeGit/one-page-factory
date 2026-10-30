@@ -15,6 +15,8 @@ import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import ProductGallery from '@/components/product/ProductGallery';
 import ProductCTA from '@/components/product/ProductCTA';
+import ProductVideo from '@/components/product/ProductVideo';
+import { getYouTubeId } from '@/lib/video';
 import MobileBuyBar from '@/components/product/MobileBuyBar';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getProductGallery } from '@/lib/product-images';
@@ -235,6 +237,7 @@ export default async function ProductPage({ params }: Props) {
 
   const showDescription = paragraphs.length > 0 || sourceLabel !== null || category !== null;
   const showPoints = benefits.length > 0;
+  const videoId = getYouTubeId(product.video_url);
   const showFaq = faq.length > 0;
 
   const checkIcon = <Check className="w-5 h-5 text-site-secondary flex-shrink-0 mt-0.5" strokeWidth={2.6} aria-hidden="true" />;
@@ -397,6 +400,17 @@ export default async function ProductPage({ params }: Props) {
                   )}
                 </dl>
               </div>
+            </section>
+          )}
+
+          {videoId && (
+            <section id="video" className="pt-9 pb-2 scroll-mt-20">
+              <h2 className="text-2xl font-extrabold text-site-primary mb-5">{p.videoTitle}</h2>
+              <ProductVideo
+                videoId={videoId}
+                title={product.name}
+                labels={{ play: p.videoPlay, watchOnYoutube: p.videoOnYoutube }}
+              />
             </section>
           )}
 

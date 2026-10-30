@@ -62,7 +62,7 @@ const nextConfig = {
               "img-src 'self' data: blob: https: http:",
               "font-src 'self' data:",
               "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.openai.com https://www.facebook.com https://connect.facebook.net https://analytics.tiktok.com https://*.tiktok.com https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
-              "frame-src 'self' https://trends.google.com https://www.google.com",
+              "frame-src 'self' https://trends.google.com https://www.google.com https://www.youtube-nocookie.com",
               "frame-ancestors 'none'",
             ].join('; '),
           },
