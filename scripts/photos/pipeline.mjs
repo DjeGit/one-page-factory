@@ -28,8 +28,8 @@ export function normalizeImageUrl(url) {
   return m ? m[1] : u;
 }
 
-/** Cherche les photos de la fiche dans la page produit (JSON embarqué `imagePathList`). Peut échouer (captcha). */
-export async function fetchImageUrlsFromItemPage(aliexpressId) {
+/** Lit la page produit : photos de la galerie (`imagePathList`) et, au mieux, photos de la description. Peut échouer (captcha). */
+export async function fetchItemPage(aliexpressId) {
   const res = await fetch(`https://www.aliexpress.com/item/${aliexpressId}.html`, {
     headers: { 'user-agent': UA, 'accept-language': 'en-US,en;q=0.9' },
     signal: AbortSignal.timeout(25000),
@@ -38,9 +38,31 @@ export async function fetchImageUrlsFromItemPage(aliexpressId) {
   const html = await res.text();
   const m = html.match(/"imagePathList"\s*:\s*\[([^\]]*)\]/);
   if (!m) throw new Error('imagePathList introuvable (captcha ou page différente)');
-  const urls = [...m[1].matchAll(/"([^"]+)"/g)].map((x) => normalizeImageUrl(x[1])).filter(Boolean);
-  if (!urls.length) throw new Error('imagePathList vide');
-  return [...new Set(urls)];
+  const gallery = [...new Set([...m[1].matchAll(/"([^"]+)"/g)].map((x) => normalizeImageUrl(x[1])).filter(Boolean))];
+  if (!gallery.length) throw new Error('imagePathList vide');
+  let description = [];
+  try {
+    const d = html.match(/"descriptionUrl"\s*:\s*"([^"]+)"/);
+    if (d) {
+      const dres = await fetch(d[1].replace(/\\\//g, '/'), { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(20000) });
+      if (dres.ok) {
+        const dhtml = await dres.text();
+        description = [...dhtml.matchAll(/(?:src|data-src)\s*=\s*["']([^"']+)["']/gi)]
+          .map((x) => x[1])
+          .filter((u) => !/\.(gif|svg)(\?|$)/i.test(u))
+          .map(normalizeImageUrl)
+          .filter(Boolean);
+        description = [...new Set(description)].filter((u) => !gallery.includes(u)).slice(0, 8);
+      }
+    }
+  } catch {
+    description = [];
+  }
+  return { gallery, description };
+}
+
+export async function fetchImageUrlsFromItemPage(aliexpressId) {
+  return (await fetchItemPage(aliexpressId)).gallery;
 }
 
 // ─── Téléchargement ─────────────────────────────────────────────────────────
@@ -143,16 +165,39 @@ export async function toSquareJpeg(buf, size = SIZE) {
 
 const CLASSIFY_PROMPT = `Tu tries les photos d'une annonce AliExpress pour une fiche produit d'un site d'affiliation (Tendpick).
 Pour CHAQUE image numérotée, réponds par un objet JSON. Réponds uniquement par un tableau JSON, sans texte autour :
-[{"index":0,"usable":true,"kind":"product_white","text":"none","watermark":false,"score":4,"note":"…"}]
+[{"index":0,"usable":true,"kind":"product_white","text":"none","watermark":false,"score":4,"clean_box":null,"note":"…"}]
 - kind : "product_white" (produit seul sur fond blanc/uni), "product_in_use" (produit porté/utilisé, mise en situation), "detail" (gros plan, composant, accessoire), "infographic" (schéma/caractéristiques avec beaucoup de texte), "promo" (affiche promotionnelle : SALE, 11.11, coupon, remise, prix, bandeau « 100% Original », « Fast Shipping »), "size_chart" (tableau de tailles), "packaging" (emballage, boîte, carton), "other".
 - text : texte incrusté dans l'image : "none" (aucun), "light" (un petit logo ou une courte légende discrète), "heavy" (paragraphes, listes, gros titres, bandeaux).
 - watermark : true si un filigrane ou logo de vendeur est visible.
 - score : 1 à 5 (netteté, éclairage, intérêt commercial, composition).
-- usable : false si promo, size_chart, packaging, other, texte "heavy", image floue, ou collage de plusieurs vignettes.
+- usable : false si promo, size_chart, packaging, other, image floue, ou collage de plusieurs vignettes. Une image avec beaucoup de texte reste usable si elle contient une vraie photo du produit : renseigne alors clean_box.
+- clean_box : [ymin, xmin, ymax, xmax] sur une échelle de 0 à 1000 = le plus grand rectangle de l'image qui montre le produit ENTIER sans AUCUN texte, logo, badge ni bandeau à l'intérieur. null si l'image n'a pas de texte, ou si un tel rectangle n'existe pas.
 - note : 8 mots maximum.`;
 
 async function shrinkForVision(buf) {
   return sharp(buf).resize(640, 640, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 70 }).toBuffer();
+}
+
+/** [ymin,xmin,ymax,xmax] 0-1000 valide, sinon null. */
+export function parseBox(b) {
+  if (!Array.isArray(b) || b.length !== 4) return null;
+  const [y0, x0, y1, x1] = b.map(Number);
+  if ([y0, x0, y1, x1].some((n) => !Number.isFinite(n))) return null;
+  const c = (n) => Math.min(1000, Math.max(0, n));
+  const box = [c(y0), c(x0), c(y1), c(x1)];
+  return box[2] > box[0] && box[3] > box[1] ? box : null;
+}
+
+/** Découpe la zone « sans texte » d'une image. Refus si elle est trop petite (< 35 % de l'image ou < 400 px de côté). */
+export async function cropToCleanBox(buf, box) {
+  if (!box) return null;
+  const { width, height } = await sharp(buf).metadata();
+  const left = Math.round((box[1] / 1000) * width);
+  const top = Math.round((box[0] / 1000) * height);
+  const w = Math.round(((box[3] - box[1]) / 1000) * width);
+  const h = Math.round(((box[2] - box[0]) / 1000) * height);
+  if (w < 400 || h < 400 || (w * h) / (width * height) < 0.35) return null;
+  return sharp(buf).extract({ left, top, width: Math.min(w, width - left), height: Math.min(h, height - top) }).toBuffer();
 }
 
 export function parseClassification(text, count) {
@@ -173,6 +218,7 @@ export function parseClassification(text, count) {
       text: ['none', 'light', 'heavy'].includes(o.text) ? o.text : 'heavy',
       watermark: bool(o.watermark),
       score: Math.min(5, Math.max(1, Number(o.score) || 1)),
+      cleanBox: parseBox(o.clean_box),
       note: typeof o.note === 'string' ? o.note.slice(0, 80) : '',
     };
   });
@@ -324,8 +370,9 @@ export async function processProduct(row, opts = {}) {
   let urls = (row.image_urls || []).map(normalizeImageUrl).filter(Boolean);
   if (!urls.length) {
     try {
-      urls = await fetchImageUrlsFromItemPage(row.aliexpress_id);
-      report.urlsFrom = 'page produit';
+      const page = await (opts.fetchPage || fetchItemPage)(row.aliexpress_id);
+      urls = [...page.gallery, ...page.description];
+      report.urlsFrom = `page produit (${page.gallery.length} galerie + ${page.description.length} description)`;
     } catch (e) {
       report.warnings.push(`page produit : ${e.message}`);
     }
@@ -333,7 +380,7 @@ export async function processProduct(row, opts = {}) {
     report.urlsFrom = 'image_urls';
   }
   if (!urls.length && row.image_url) urls = [normalizeImageUrl(row.image_url)].filter(Boolean);
-  urls = [...new Set(urls)].slice(0, 15);
+  urls = [...new Set(urls)].slice(0, 14);
   if (!urls.length) throw new Error('aucune URL de photo (renseigner image_urls)');
 
   const downloaded = (
@@ -372,6 +419,19 @@ export async function processProduct(row, opts = {}) {
     report.warnings.push('Images non triées (aucune clé ANTHROPIC_API_KEY / GEMINI_API_KEY) : à vérifier une par une.');
     verdicts = unique.map((_, i) => ({ index: i, usable: true, kind: 'other', text: 'none', watermark: false, score: 3, note: 'non classée' }));
   }
+  // Images avec beaucoup de texte : on découpe la zone sans texte (jamais de retouche des pixels).
+  if (report.classified) {
+    for (const v of verdicts) {
+      if (!v.usable || v.text !== 'heavy') continue;
+      const cropped = await cropToCleanBox(unique[v.index].buf, v.cleanBox);
+      if (!cropped) continue;
+      unique[v.index] = { ...unique[v.index], buf: cropped };
+      v.text = 'none';
+      v.cropped = true;
+      if (v.kind === 'infographic') v.kind = 'detail';
+    }
+    report.cropped = verdicts.filter((v) => v.cropped).length;
+  }
   for (const v of verdicts) {
     if (!v.usable) report.rejected.push({ url: unique[v.index].url, kind: v.kind, text: v.text, note: v.note });
   }
@@ -390,6 +450,7 @@ export async function processProduct(row, opts = {}) {
     const flags = [...sq.flags];
     if (v.watermark) flags.push('filigrane');
     if (v.text === 'light') flags.push('texte_leger');
+    if (v.cropped) flags.push('recadree_sans_texte');
     if (!report.classified) flags.push('non_classee');
     const name = `ae-${row.aliexpress_id}-${i + 1}`;
     previews.push({ name: `${String(i + 1).padStart(2, '0')}-${v.kind}.jpg`, buffer: sq.buffer });

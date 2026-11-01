@@ -9,7 +9,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createClient } from '@supabase/supabase-js';
-import { fetchBuffer, fetchImageUrlsFromItemPage, processProduct } from './pipeline.mjs';
+import { fetchBuffer, fetchItemPage, processProduct } from './pipeline.mjs';
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
@@ -35,9 +35,9 @@ async function latestRow(supabase, id) {
 async function probe(id) {
   console.log(`Sonde pour ${id}…`);
   try {
-    const urls = await fetchImageUrlsFromItemPage(id);
-    console.log(`Page produit : OK, ${urls.length} photo(s) trouvée(s).`);
-    const buf = await fetchBuffer(urls[0]);
+    const page = await fetchItemPage(id);
+    console.log(`Page produit : OK, ${page.gallery.length} photo(s) de galerie + ${page.description.length} de description.`);
+    const buf = await fetchBuffer(page.gallery[0]);
     console.log(`Téléchargement de la 1re photo : OK (${Math.round(buf.length / 1024)} Ko).`);
   } catch (e) {
     console.log(`Échec : ${e.message}`);
@@ -64,7 +64,8 @@ async function runOne(supabase, row, { dryRun }) {
       console.log(`  ${photos.length} photo(s) envoyée(s) sur Cloudinary — statut « review »`);
     }
     for (const w of report.warnings) console.log(`  ⚠ ${w}`);
-    console.log(`  téléchargées ${report.fetched}, doublons ${report.duplicates}, trop petites ${report.tooSmall}, écartées par le tri ${report.rejected.length}`);
+    console.log(`  téléchargées ${report.fetched}, doublons ${report.duplicates}, trop petites ${report.tooSmall}, écartées par le tri ${report.rejected.length}, recadrées sans texte ${report.cropped || 0}${report.provider ? ', tri ' + report.provider : ''}`);
+    if (report.urlsFrom) console.log(`  sources : ${report.urlsFrom}`);
     for (const p of photos) console.log(`  - ${p.kind} (texte ${p.text}${p.flags.length ? ', ' + p.flags.join(', ') : ''})`);
   } catch (e) {
     console.log(`  ERREUR : ${e.message}`);

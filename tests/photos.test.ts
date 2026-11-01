@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 // @ts-ignore — module Node pur (.mjs) sans déclaration de types
-import { normalizeImageUrl, dedupe, toSquareJpeg, pickBest, parseClassification, processProduct, visionProvider, classifyImages } from '../scripts/photos/pipeline.mjs';
+import { normalizeImageUrl, dedupe, toSquareJpeg, pickBest, parseClassification, processProduct, visionProvider, classifyImages, parseBox, cropToCleanBox } from '../scripts/photos/pipeline.mjs';
 
 const solid = (w: number, h: number, rgb: [number, number, number]) =>
   sharp({ create: { width: w, height: h, channels: 3, background: { r: rgb[0], g: rgb[1], b: rgb[2] } } }).jpeg().toBuffer();
@@ -114,6 +114,34 @@ describe('photos pipeline', () => {
       expect(sent.contents[0].parts.filter((p: any) => p.inline_data).length).toBe(2);
       expect(out[0].kind).toBe('product_white');
       expect(out[1].usable).toBe(false);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('parseBox / cropToCleanBox : découpe la zone sans texte, refuse les zones trop petites', async () => {
+    expect(parseBox([0, 0, 500, 500])).toEqual([0, 0, 500, 500]);
+    expect(parseBox([500, 0, 100, 500])).toBeNull();
+    expect(parseBox('x')).toBeNull();
+    const img = await scene(1200, 1000, 1);
+    const out = await cropToCleanBox(img, [0, 0, 1000, 500]); // moitié gauche
+    const m = await sharp(out!).metadata();
+    expect([m.width, m.height]).toEqual([600, 1000]);
+    expect(await cropToCleanBox(img, [0, 0, 300, 300])).toBeNull(); // trop petite
+    expect(await cropToCleanBox(img, null)).toBeNull();
+  });
+
+  it('processProduct : une image « texte lourd » est recadrée sur sa zone propre et devient exploitable', async () => {
+    const origFetch = globalThis.fetch;
+    const imgs: Record<string, Buffer> = {};
+    for (let i = 0; i < 4; i++) imgs[`https://ae01.alicdn.com/kf/T${i}.jpg`] = await scene(1000 + i * 10, 900 + i * 15, i + 1);
+    globalThis.fetch = (async (u: any) => (imgs[String(u)] ? new Response(imgs[String(u)], { status: 200 }) : new Response('no', { status: 404 }))) as any;
+    try {
+      const classify = async (bufs: Buffer[]) => bufs.map((_, index) => ({ index, usable: true, kind: 'infographic', text: 'heavy', watermark: false, score: 4, note: '', cleanBox: [0, 0, 1000, 600] }));
+      const out = await processProduct({ aliexpress_id: '2', image_urls: Object.keys(imgs) }, { dryRun: true, classify });
+      expect(out.report.cropped).toBe(4);
+      expect(out.photos.length).toBe(4);
+      expect(out.photos.every((p: any) => p.flags.includes('recadree_sans_texte') && p.kind === 'detail')).toBe(true);
     } finally {
       globalThis.fetch = origFetch;
     }
