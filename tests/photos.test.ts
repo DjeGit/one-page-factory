@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 // @ts-ignore — module Node pur (.mjs) sans déclaration de types
-import { normalizeImageUrl, dedupe, toSquareJpeg, pickBest, parseClassification, processProduct } from '../scripts/photos/pipeline.mjs';
+import { normalizeImageUrl, dedupe, toSquareJpeg, pickBest, parseClassification, processProduct, visionProvider, classifyImages } from '../scripts/photos/pipeline.mjs';
 
 const solid = (w: number, h: number, rgb: [number, number, number]) =>
   sharp({ create: { width: w, height: h, channels: 3, background: { r: rgb[0], g: rgb[1], b: rgb[2] } } }).jpeg().toBuffer();
@@ -83,6 +83,33 @@ describe('photos pipeline', () => {
       expect(out.report.rejected.length).toBe(1);
       expect(out.photos[0].kind).toBe('product_white');
       for (const p of out.previews) expect((await sharp(p.buffer).metadata()).width).toBe(1000);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  it('visionProvider : Claude si clé Anthropic non vide, sinon Gemini', () => {
+    expect(visionProvider({ ANTHROPIC_API_KEY: '', GEMINI_API_KEY: 'g' })).toBe('gemini');
+    expect(visionProvider({ ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g' })).toBe('claude');
+    expect(visionProvider({ ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g', PHOTO_VISION_PROVIDER: 'gemini' })).toBe('gemini');
+    expect(visionProvider({})).toBeNull();
+  });
+
+  it('classifyImages (Gemini) envoie les images et lit la réponse JSON', async () => {
+    const origFetch = globalThis.fetch;
+    let sent: any = null;
+    let url = '';
+    globalThis.fetch = (async (u: any, init: any) => {
+      url = String(u);
+      sent = JSON.parse(init.body);
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '[{"index":0,"usable":true,"kind":"product_white","text":"none","watermark":false,"score":5,"note":"ok"},{"index":1,"usable":false,"kind":"promo","text":"heavy","watermark":false,"score":1,"note":"11.11"}]' }] } }] }), { status: 200 });
+    }) as any;
+    try {
+      const out = await classifyImages([await scene(700, 700, 1), await scene(700, 700, 2)], { provider: 'gemini', apiKey: 'test' });
+      expect(url).toContain('gemini-2.5-flash:generateContent');
+      expect(sent.contents[0].parts.filter((p: any) => p.inline_data).length).toBe(2);
+      expect(out[0].kind).toBe('product_white');
+      expect(out[1].usable).toBe(false);
     } finally {
       globalThis.fetch = origFetch;
     }

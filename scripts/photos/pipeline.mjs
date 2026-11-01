@@ -1,6 +1,6 @@
 // Pipeline photos Tendpick : photos du vendeur → 5 photos carrées 1000x1000 sur Cloudinary.
 // Pur Node (aucune compilation) : `node --env-file=.env.local scripts/photos/run.mjs …`
-// Étapes : télécharger → écarter les images trop petites et les doublons → faire trier les images par Claude
+// Étapes : télécharger → écarter les images trop petites et les doublons → faire trier les images par Claude ou Gemini
 // (affiches promo, bandeaux, texte lourd = écartés) → choisir 5 photos variées → recadrer en carré → Cloudinary.
 // Le texte incrusté n'est pas réécrit automatiquement : on garde les photos « nues » (règle de la fiche produit).
 import sharp from 'sharp';
@@ -174,7 +174,7 @@ export function parseClassification(text, count) {
   });
 }
 
-export async function classifyImages(buffers, { apiKey, model } = {}) {
+async function classifyWithClaude(buffers, { apiKey, model } = {}) {
   const key = apiKey || process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error('ANTHROPIC_API_KEY absente');
   const content = [];
@@ -197,6 +197,50 @@ export async function classifyImages(buffers, { apiKey, model } = {}) {
   const data = await res.json();
   if (!res.ok) throw new Error(`Anthropic ${res.status} : ${data?.error?.message || 'erreur'}`);
   return parseClassification(data.content?.map((c) => c.text || '').join('') || '', buffers.length);
+}
+
+async function classifyWithGemini(buffers, { apiKey, model } = {}) {
+  const key = apiKey || process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY absente');
+  const mdl = model || process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
+  const parts = [];
+  for (let i = 0; i < buffers.length; i++) {
+    const small = await shrinkForVision(buffers[i]);
+    parts.push({ text: `Image ${i} :` });
+    parts.push({ inline_data: { mime_type: 'image/jpeg', data: small.toString('base64') } });
+  }
+  parts.push({ text: CLASSIFY_PROMPT });
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent`, {
+    method: 'POST',
+    headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts }],
+      generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
+    }),
+    signal: AbortSignal.timeout(120000),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Gemini ${res.status} : ${data?.error?.message || 'erreur'}`);
+  const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+  if (!text) throw new Error(`Gemini : réponse vide (${data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'inconnue'})`);
+  return parseClassification(text, buffers.length);
+}
+
+/** Fournisseur de vision : PHOTO_VISION_PROVIDER=claude|gemini, sinon Claude si ANTHROPIC_API_KEY, sinon Gemini. */
+export function visionProvider(env = process.env) {
+  const forced = (env.PHOTO_VISION_PROVIDER || '').toLowerCase();
+  if (forced === 'gemini' && env.GEMINI_API_KEY) return 'gemini';
+  if (forced === 'claude' && env.ANTHROPIC_API_KEY) return 'claude';
+  if (env.ANTHROPIC_API_KEY) return 'claude';
+  if (env.GEMINI_API_KEY) return 'gemini';
+  return null;
+}
+
+export async function classifyImages(buffers, opts = {}) {
+  const provider = opts.provider || visionProvider();
+  if (provider === 'gemini') return classifyWithGemini(buffers, opts);
+  if (provider === 'claude') return classifyWithClaude(buffers, opts);
+  throw new Error('aucune clé de vision (ANTHROPIC_API_KEY ou GEMINI_API_KEY)');
 }
 
 // ─── Choix des 5 photos ─────────────────────────────────────────────────────
@@ -315,12 +359,13 @@ export async function processProduct(row, opts = {}) {
   if (!unique.length) throw new Error('aucune image exploitable après tri de taille');
 
   let verdicts;
-  if (opts.classify !== false && (opts.classify || process.env.ANTHROPIC_API_KEY)) {
+  if (opts.classify !== false && (opts.classify || visionProvider())) {
     const classify = typeof opts.classify === 'function' ? opts.classify : classifyImages;
     verdicts = await classify(unique.map((u) => u.buf));
     report.classified = true;
+    report.provider = typeof opts.classify === 'function' ? 'test' : visionProvider();
   } else {
-    report.warnings.push('Images non triées (ANTHROPIC_API_KEY absente) : à vérifier une par une.');
+    report.warnings.push('Images non triées (aucune clé ANTHROPIC_API_KEY / GEMINI_API_KEY) : à vérifier une par une.');
     verdicts = unique.map((_, i) => ({ index: i, usable: true, kind: 'other', text: 'none', watermark: false, score: 3, note: 'non classée' }));
   }
   for (const v of verdicts) {
