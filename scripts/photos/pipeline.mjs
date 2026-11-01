@@ -5,6 +5,8 @@
 // Le texte incrusté n'est pas réécrit automatiquement : on garde les photos « nues » (règle de la fiche produit).
 import sharp from 'sharp';
 import { createHash } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export const SIZE = 1000;
 export const MAX_PHOTOS = 5;
@@ -188,7 +190,7 @@ export function parseBox(b) {
   return box[2] > box[0] && box[3] > box[1] ? box : null;
 }
 
-/** Découpe la zone « sans texte » d'une image. Refus si elle est trop petite (< 35 % de l'image ou < 400 px de côté). */
+/** Découpe la zone « sans texte » d'une image. Refus si elle est trop petite (< 25 % de l'image ou < 400 px de côté). */
 export async function cropToCleanBox(buf, box) {
   if (!box) return null;
   const { width, height } = await sharp(buf).metadata();
@@ -196,7 +198,7 @@ export async function cropToCleanBox(buf, box) {
   const top = Math.round((box[0] / 1000) * height);
   const w = Math.round(((box[3] - box[1]) / 1000) * width);
   const h = Math.round(((box[2] - box[0]) / 1000) * height);
-  if (w < 400 || h < 400 || (w * h) / (width * height) < 0.35) return null;
+  if (w < 400 || h < 400 || (w * h) / (width * height) < 0.25) return null;
   return sharp(buf).extract({ left, top, width: Math.min(w, width - left), height: Math.min(h, height - top) }).toBuffer();
 }
 
@@ -435,9 +437,14 @@ export async function processProduct(row, opts = {}) {
   for (const v of verdicts) {
     if (!v.usable) report.rejected.push({ url: unique[v.index].url, kind: v.kind, text: v.text, note: v.note });
   }
+  if (opts.debugDir) {
+    mkdirSync(opts.debugDir, { recursive: true });
+    for (const v of verdicts) writeFileSync(join(opts.debugDir, `${String(v.index).padStart(2, '0')}-${v.kind}-${v.usable ? 'ok' : 'ecartee'}${v.cropped ? '-recadree' : ''}.jpg`), unique[v.index].buf);
+    writeFileSync(join(opts.debugDir, 'verdicts.json'), JSON.stringify({ report, verdicts: verdicts.map((v) => ({ ...v, source: unique[v.index].url })) }, null, 2));
+  }
   const chosen = report.classified ? pickBest(verdicts) : verdicts.slice(0, MAX_PHOTOS);
   if (chosen.length < MIN_PHOTOS) {
-    const detail = verdicts.map((v) => `#${v.index} ${v.usable ? 'ok' : 'écartée'} ${v.kind}/texte ${v.text}${v.note ? ' — ' + v.note : ''}`).join(' | ');
+    const detail = verdicts.map((v) => `#${v.index} ${v.usable ? 'ok' : 'écartée'} ${v.kind}/texte ${v.text}${v.cropped ? ' (recadrée)' : v.cleanBox ? ' (zone propre refusée : trop petite)' : ''}${v.note ? ' — ' + v.note : ''}`).join(' | ');
     throw new Error(`seulement ${chosen.length} photo(s) exploitable(s) (minimum ${MIN_PHOTOS}). Verdicts : ${detail}`);
   }
 

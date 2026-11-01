@@ -48,7 +48,7 @@ async function probe(id) {
 async function runOne(supabase, row, { dryRun }) {
   console.log(`\n${row.aliexpress_id} — ${row.name}`);
   try {
-    const { photos, report, previews } = await processProduct(row, { dryRun });
+    const { photos, report, previews } = await processProduct(row, { dryRun, debugDir: dryRun ? join('tmp-photos', row.aliexpress_id, 'sources') : undefined });
     if (dryRun) {
       const dir = join('tmp-photos', row.aliexpress_id);
       mkdirSync(dir, { recursive: true });
