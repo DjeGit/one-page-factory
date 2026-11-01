@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProductById, updateProduct, deleteProduct } from '@/lib/supabase';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { syncActivation } from '@/lib/market-sync';
 
 export async function GET(
   req: NextRequest,
@@ -30,10 +31,17 @@ export async function PUT(
   }
   try {
     const body = await req.json();
+    // Activer/désactiver un produit sur un marché le fait suivre sur les autres marchés (lib/market-sync.ts).
+    const before = typeof body?.active === 'boolean' ? await getProductById(params.id) : null;
     const product = await updateProduct(params.id, body);
 
     if (!product) {
       return NextResponse.json({ error: 'Erreur lors de la mise à jour' }, { status: 500 });
+    }
+
+    if (before && before.active !== body.active) {
+      const sync = await syncActivation({ id: product.id, source_product_ref: product.source_product_ref ?? null }, body.active);
+      return NextResponse.json({ ...product, sync });
     }
 
     return NextResponse.json(product);

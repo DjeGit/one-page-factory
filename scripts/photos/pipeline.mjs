@@ -173,7 +173,7 @@ Pour CHAQUE image numérotée, réponds par un objet JSON. Réponds uniquement p
 - watermark : true si un filigrane ou logo de vendeur est visible.
 - score : 1 à 5 (netteté, éclairage, intérêt commercial, composition).
 - usable : false si promo, size_chart, packaging, other, image floue, ou collage de plusieurs vignettes. Une image avec beaucoup de texte reste usable si elle contient une vraie photo du produit : renseigne alors clean_box.
-- clean_box : [ymin, xmin, ymax, xmax] sur une échelle de 0 à 1000 = le plus grand rectangle de l'image qui montre le produit ENTIER sans AUCUN texte, logo, badge ni bandeau à l'intérieur. null si l'image n'a pas de texte, ou si un tel rectangle n'existe pas.
+- clean_box : [ymin, xmin, ymax, xmax] sur une échelle de 0 à 1000 = le plus GRAND rectangle de l'image qui montre le produit (ou la personne qui le porte) SANS AUCUN texte, titre, logo, badge ni bandeau à l'intérieur. Cherche-le activement pour toute image dont "text" vaut "heavy" : si le texte n'occupe qu'un bord (titre en haut, légende en bas, colonne à côté), la zone propre est le reste de l'image (ex. titre en haut → [250, 0, 1000, 1000]). Le rectangle doit couvrir au moins un quart de l'image. Renvoie null seulement si le texte recouvre le produit lui-même ou si l'image n'a pas de texte.
 - note : 8 mots maximum.`;
 
 async function shrinkForVision(buf) {

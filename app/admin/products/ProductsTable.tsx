@@ -14,6 +14,7 @@ export default function ProductsTable({ products, analyticsMap }: ProductsTableP
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const handleDelete = async (product: Product) => {
     if (!confirm(`Supprimer "${product.name}" ? Cette action est irréversible.`)) return;
@@ -32,11 +33,25 @@ export default function ProductsTable({ products, analyticsMap }: ProductsTableP
   const handleToggleActive = async (product: Product) => {
     setTogglingId(product.id);
     try {
-      await fetch(`/api/products/${product.id}`, {
+      const res = await fetch(`/api/products/${product.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !product.active }),
       });
+      // Les autres marchés du même produit suivent ; ceux qui ne sont pas prêts (lien neutre, pas de photo) restent en brouillon.
+      const data = await res.json().catch(() => null);
+      const sync = data?.sync as
+        | { activated: { market: string }[]; deactivated: { market: string }[]; skipped: { market: string; reasons: string[] }[] }
+        | undefined;
+      if (sync) {
+        const parts: string[] = [];
+        const moved = [...sync.activated, ...sync.deactivated].map((x) => x.market.toUpperCase());
+        if (moved.length) parts.push(`${product.active ? 'Désactivé' : 'Activé'} aussi sur : ${moved.join(', ')}.`);
+        for (const s of sync.skipped) parts.push(`${s.market.toUpperCase()} resté en brouillon (${s.reasons.join(', ')}).`);
+        setNotice(parts.length ? parts.join(' ') : null);
+      } else {
+        setNotice(null);
+      }
       router.refresh();
     } finally {
       setTogglingId(null);
@@ -45,6 +60,12 @@ export default function ProductsTable({ products, analyticsMap }: ProductsTableP
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      {notice && (
+        <div className="px-6 py-3 text-sm bg-amber-50 text-amber-800 border-b border-amber-200 flex items-start justify-between gap-4">
+          <span>{notice}</span>
+          <button type="button" onClick={() => setNotice(null)} className="text-amber-700 font-semibold shrink-0">Fermer</button>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
