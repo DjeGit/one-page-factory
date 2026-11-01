@@ -157,17 +157,21 @@ async function shrinkForVision(buf) {
 
 export function parseClassification(text, count) {
   const m = text.match(/\[[\s\S]*\]/);
-  if (!m) throw new Error('réponse de Claude sans tableau JSON');
+  if (!m) throw new Error(`réponse sans tableau JSON : ${text.slice(0, 200)}`);
   const arr = JSON.parse(m[0]);
-  const byIndex = new Map(arr.map((o) => [Number(o.index), o]));
+  const idx = arr.map((o) => Number(o?.index));
+  // Les modèles numérotent parfois à partir de 1, ou omettent l'index : on se rabat sur l'ordre du tableau.
+  const zeroBased = idx.length > 0 && idx.every((n, i) => n === i);
+  const byIndex = new Map(arr.map((o, i) => [zeroBased ? Number(o.index) : i, o]));
+  const bool = (v) => v === true || v === 'true';
   return Array.from({ length: count }, (_, i) => {
     const o = byIndex.get(i) || {};
     return {
       index: i,
-      usable: o.usable === true,
+      usable: bool(o.usable),
       kind: typeof o.kind === 'string' ? o.kind : 'other',
       text: ['none', 'light', 'heavy'].includes(o.text) ? o.text : 'heavy',
-      watermark: o.watermark === true,
+      watermark: bool(o.watermark),
       score: Math.min(5, Math.max(1, Number(o.score) || 1)),
       note: typeof o.note === 'string' ? o.note.slice(0, 80) : '',
     };
@@ -372,7 +376,10 @@ export async function processProduct(row, opts = {}) {
     if (!v.usable) report.rejected.push({ url: unique[v.index].url, kind: v.kind, text: v.text, note: v.note });
   }
   const chosen = report.classified ? pickBest(verdicts) : verdicts.slice(0, MAX_PHOTOS);
-  if (chosen.length < MIN_PHOTOS) throw new Error(`seulement ${chosen.length} photo(s) exploitable(s) (minimum ${MIN_PHOTOS})`);
+  if (chosen.length < MIN_PHOTOS) {
+    const detail = verdicts.map((v) => `#${v.index} ${v.usable ? 'ok' : 'écartée'} ${v.kind}/texte ${v.text}${v.note ? ' — ' + v.note : ''}`).join(' | ');
+    throw new Error(`seulement ${chosen.length} photo(s) exploitable(s) (minimum ${MIN_PHOTOS}). Verdicts : ${detail}`);
+  }
 
   const photos = [];
   const previews = [];

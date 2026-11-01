@@ -63,6 +63,10 @@ describe('photos pipeline', () => {
     expect(r[1].usable).toBe(false);
     expect(r[1].text).toBe('heavy');
     expect(() => parseClassification('rien', 1)).toThrow();
+    // numérotation à partir de 1 : repli sur l'ordre du tableau ; booléens en texte acceptés
+    const r1 = parseClassification('[{"index":1,"usable":"true","kind":"detail","text":"none","score":3},{"index":2,"usable":true,"kind":"product_white","text":"light","score":4}]', 2);
+    expect(r1.map((x: any) => x.kind)).toEqual(['detail', 'product_white']);
+    expect(r1[0].usable).toBe(true);
   });
 
   it('processProduct (dry-run, classification simulée) : 5 photos carrées, rejette les images écartées', async () => {
