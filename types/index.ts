@@ -47,6 +47,10 @@ export interface Product {
   description: string | null;
   price: number | null;
   original_price: number | null;
+  // Prix affiché par le marchand le jour de la recherche (affiché avec astérisque + mention).
+  price_currency?: 'EUR' | 'GBP' | null;
+  price_checked_at?: string | null; // date (ISO) du relevé du prix
+  free_shipping?: boolean | null;
   affiliate_url: string;
   redirect_code: string;
   image_url: string | null;

@@ -36,6 +36,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
     commission_rate: product?.commission_rate != null ? String(Math.round(product.commission_rate * 1000) / 10) : '',
     affiliate_url: product?.affiliate_url || '',
     video_url: product?.video_url || '',
+    price_currency: product?.price_currency || '',
+    price_checked_at: product?.price_checked_at?.slice(0, 10) || '',
+    free_shipping: product?.free_shipping ?? false,
     active: product?.active ?? true,
     slug: product?.slug || '',
     category_id: product?.category_id || '',
@@ -197,6 +200,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
         commission_rate: form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
         affiliate_url: form.affiliate_url,
         video_url: form.video_url.trim() || null,
+        price_currency: form.price_currency || null,
+        price_checked_at: form.price_checked_at || null,
+        free_shipping: !!form.free_shipping,
         // images[0] = couverture, recopiée dans image_url (voir plus haut).
         image_url: images[0] || null,
         images,
@@ -371,6 +377,39 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
                 placeholder="59.99"
               />
             </div>
+          </div>
+
+          <div className="grid sm:grid-cols-3 gap-5">
+            <div>
+              <label className={labelClass}>Devise du prix</label>
+              <select
+                value={form.price_currency}
+                onChange={(e) => handleChange('price_currency', e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Par défaut du marché</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Date du relevé du prix</label>
+              <input
+                type="date"
+                value={form.price_checked_at}
+                onChange={(e) => handleChange('price_checked_at', e.target.value)}
+                className={inputClass}
+              />
+              <p className="text-xs text-gray-500 mt-1">Sans date, le prix reste masqué sur le site.</p>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mt-7">
+              <input
+                type="checkbox"
+                checked={!!form.free_shipping}
+                onChange={(e) => handleChange('free_shipping', e.target.checked)}
+              />
+              Livraison gratuite
+            </label>
           </div>
 
           <div>

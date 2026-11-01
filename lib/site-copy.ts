@@ -62,6 +62,7 @@ interface SiteCopy {
   };
   common: {
     priceAtMerchant: string;
+    freeShipping: string;
     seeArrow: string;
     topPrefix: string;
   };
@@ -137,6 +138,8 @@ interface SiteCopy {
     redirectNote: string;
     securePayment: string;
     deliveryMerchant: string;
+    freeShippingSub: string;
+    priceNote: (date: string) => string;
     tabDescription: string;
     tabPoints: string;
     tabFaq: string;
@@ -236,6 +239,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     },
     common: {
       priceAtMerchant: 'Prix chez le marchand',
+      freeShipping: 'Livraison gratuite',
       seeArrow: 'Voir →',
       topPrefix: 'Top',
     },
@@ -321,6 +325,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
         "Vous serez redirigé vers le site du marchand. Tendpick peut percevoir une commission, sans surcoût pour vous.",
       securePayment: 'Paiement sécurisé par le marchand',
       deliveryMerchant: 'Livraison par le marchand',
+      freeShippingSub: 'Frais de port offerts sur cette offre',
+      priceNote: (date) => `* Prix affiché par le marchand le ${date}. Prix à confirmer avec le revendeur.`,
       tabDescription: 'Description',
       tabPoints: 'Points forts',
       tabFaq: 'Questions fréquentes',
@@ -419,6 +425,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     },
     common: {
       priceAtMerchant: 'Precio en la tienda',
+      freeShipping: 'Envío gratis',
       seeArrow: 'Ver →',
       topPrefix: 'Top',
     },
@@ -504,6 +511,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
         'Serás redirigido al sitio del vendedor. Tendpick puede recibir una comisión, sin coste adicional para ti.',
       securePayment: 'Pago seguro gestionado por el vendedor',
       deliveryMerchant: 'Envío gestionado por el vendedor',
+      freeShippingSub: 'Gastos de envío incluidos en esta oferta',
+      priceNote: (date) => `* Precio mostrado por el vendedor el ${date}. Precio por confirmar con el vendedor.`,
       tabDescription: 'Descripción',
       tabPoints: 'Puntos fuertes',
       tabFaq: 'Preguntas frecuentes',
@@ -602,6 +611,7 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
     },
     common: {
       priceAtMerchant: 'Price at merchant',
+      freeShipping: 'Free delivery',
       seeArrow: 'View →',
       topPrefix: 'Top',
     },
@@ -687,6 +697,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
         "You'll be redirected to the merchant's site. Tendpick may earn a commission at no extra cost to you.",
       securePayment: 'Secure payment handled by the merchant',
       deliveryMerchant: 'Delivery by the merchant',
+      freeShippingSub: 'Shipping costs included in this offer',
+      priceNote: (date) => `* Price shown by the merchant on ${date}. Price to be confirmed with the seller.`,
       tabDescription: 'Description',
       tabPoints: 'Key features',
       tabFaq: 'FAQ',

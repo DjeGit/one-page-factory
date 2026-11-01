@@ -28,7 +28,8 @@ import { SITE_COPY } from '@/lib/site-copy';
 import { isValidMarket, DEFAULT_MARKET, getMarketLabel, getCurrencyForMarket } from '@/lib/market';
 import type { Market } from '@/lib/market';
 import type { ABTest, Category, Product } from '@/types';
-import { SHOW_PRICES } from '@/lib/flags';
+import { getDisplayPrice } from '@/lib/pricing';
+import FreeShippingBadge from '@/components/product/FreeShippingBadge';
 
 interface Props {
   params: { slug: string };
@@ -213,14 +214,17 @@ export default async function ProductPage({ params }: Props) {
   const source = getProductSource(product.affiliate_url);
   const sourceLabel = TOP_VENTES_SOURCES.find((s) => s.key === source)?.label ?? null;
 
-  const fmt = new Intl.NumberFormat(p.locale, { style: 'currency', currency: getCurrencyForMarket(market) });
-  const priceLabel = SHOW_PRICES && product.price ? fmt.format(product.price) : null;
-  const originalLabel =
-    product.original_price && product.price && product.original_price > product.price
-      ? fmt.format(product.original_price)
-      : null;
+  const display = getDisplayPrice(product, p.locale, market);
+  const priceLabel = display?.label ?? null;
+  const priceNote = display?.merchantPrice && display.checkedAt ? p.priceNote(display.checkedAt) : null;
+  const withOriginal = !!(display && product.original_price && product.price && product.original_price > product.price);
+  const fmt = new Intl.NumberFormat(p.locale, {
+    style: 'currency',
+    currency: product.price_currency || getCurrencyForMarket(market),
+  });
+  const originalLabel = withOriginal && product.original_price ? fmt.format(product.original_price) : null;
   const discount =
-    product.original_price && product.price && product.original_price > product.price
+    withOriginal && product.original_price && product.price
       ? Math.round(((product.original_price - product.price) / product.original_price) * 100)
       : null;
 
@@ -310,6 +314,14 @@ export default async function ProductPage({ params }: Props) {
                   )}
                 </div>
               )}
+
+              {priceNote && (
+                <p className="text-xs leading-normal text-site-text-secondary border border-site-border rounded-lg px-3 py-2 bg-site-surface/40">
+                  {priceNote}
+                </p>
+              )}
+
+              {product.free_shipping && <FreeShippingBadge label={t.common.freeShipping} sub={p.freeShippingSub} />}
 
               {benefits.length > 0 && (
                 <ul className="flex flex-col gap-2.5 text-[15px]">
@@ -491,11 +503,15 @@ export default async function ProductPage({ params }: Props) {
                       <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
                         {r.hero_title || r.name}
                       </p>
-                      {SHOW_PRICES && r.price ? (
-                        <span className="text-site-cta font-bold text-base">{fmt.format(r.price)}</span>
-                      ) : (
-                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
-                      )}
+                      {(() => {
+                        const rd = getDisplayPrice(r, p.locale, market);
+                        return rd ? (
+                          <span className="text-site-cta font-bold text-base">{rd.label}</span>
+                        ) : (
+                          <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                        );
+                      })()}
+                      {r.free_shipping && <FreeShippingBadge size="small" label={t.common.freeShipping} />}
                     </Link>
                   );
                 })}

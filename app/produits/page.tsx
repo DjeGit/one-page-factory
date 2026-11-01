@@ -14,7 +14,8 @@ import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
 import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
-import { SHOW_PRICES } from '@/lib/flags';
+import { getDisplayPrice } from '@/lib/pricing';
+import FreeShippingBadge from '@/components/product/FreeShippingBadge';
 
 export const dynamic = 'force-dynamic';
 
@@ -157,12 +158,16 @@ export default async function ProduitsPage({ searchParams }: Props) {
                     <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
                       {p.hero_title || p.name}
                     </p>
+                    {p.free_shipping && <FreeShippingBadge size="small" label={t.common.freeShipping} />}
                     <div className="flex items-center justify-between mt-1">
-                      {SHOW_PRICES && p.price ? (
-                        <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
-                      ) : (
-                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
-                      )}
+                      {(() => {
+                        const d = getDisplayPrice(p, t.product.locale, market);
+                        return d ? (
+                          <span className="text-site-cta font-bold text-sm">{d.label}</span>
+                        ) : (
+                          <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                        );
+                      })()}
                       <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
                         {t.common.seeArrow}
                       </span>

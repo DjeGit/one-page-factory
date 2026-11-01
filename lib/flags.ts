@@ -13,3 +13,12 @@
  */
 export const SHOW_PRICES = false;
 export const SHOW_TESTIMONIALS = false;
+
+/**
+ * SHOW_MERCHANT_PRICES = true : on affiche le prix relevé chez le marchand
+ * (AliExpress…) UNIQUEMENT si le produit a une date de relevé
+ * (price_checked_at). Le prix est suivi d'un astérisque et d'une mention
+ * encadrée « prix à confirmer avec le revendeur » (décision du 01/11/2026).
+ * Les produits Amazon restent masqués tant que SHOW_PRICES = false.
+ */
+export const SHOW_MERCHANT_PRICES = true;
