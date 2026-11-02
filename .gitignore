@@ -37,3 +37,7 @@ CREDENTIALS.md
 
 # Aperçus du script photos (serveur)
 tmp-photos/
+
+__pycache__/
+*.pyc
+commande terminal/
