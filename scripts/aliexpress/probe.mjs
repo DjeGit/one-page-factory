@@ -20,7 +20,7 @@ try {
     console.log('\nEssai des variantes de signature (même requête, une variante après l\'autre) :');
     for (const v of SIGN_VARIANTS) {
       try {
-        await callApi('aliexpress.affiliate.productdetail.get', { product_ids: id, fields: 'sale_price', country: 'FR', target_currency: 'EUR', target_language: 'FR', tracking_id: c.trackingId }, { creds: c, signMethod: v.signMethod, timestampUnit: v.timestampUnit, extras: v.extras });
+        await callApi('aliexpress.affiliate.productdetail.get', { product_ids: id, fields: 'sale_price', country: 'FR', target_currency: 'EUR', target_language: 'FR', tracking_id: c.trackingId }, { creds: c, signMethod: v.signMethod, timestampUnit: v.timestampUnit, extras: v.extras, gateway: v.gateway });
         console.log(`  ACCEPTÉE  ${v.name}`);
       } catch (e) {
         console.log(`  ${v.name} -> ${e.message.replace('API AliExpress : ', '').slice(0, 110)}`);

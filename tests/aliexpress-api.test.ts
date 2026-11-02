@@ -32,6 +32,18 @@ describe('aliexpress api', () => {
     expect([c.appKey, c.appSecret]).toEqual(['123', 'abc']);
   });
 
+  it('callApi : passerelle TOP + variantes d\'extras', async () => {
+    let url = '';
+    let sent: URLSearchParams | null = null;
+    const fetchImpl = async (u: string, init: any) => { url = u; sent = new URLSearchParams(init.body); return new Response('{}', { status: 200 }); };
+    const creds = { appKey: 'k', appSecret: 's', trackingId: 't' };
+    await callApi('m', {}, { creds, fetchImpl: fetchImpl as any, gateway: 'https://gw.api.taobao.com/router/rest', extras: 'top', timestampUnit: 'datetime', now: () => Date.UTC(2026, 10, 2, 0, 0, 0) });
+    expect(url).toBe('https://gw.api.taobao.com/router/rest');
+    expect(sent!.get('partner_id')).toBeNull();
+    expect(sent!.get('v')).toBe('2.0');
+    expect(sent!.get('timestamp')).toBe('2026-11-02 08:00:00'); // heure de Shanghai
+  });
+
   it('parseRate', () => {
     expect(parseRate('7.0%')).toBe(0.07);
     expect(parseRate('8')).toBe(0.08);

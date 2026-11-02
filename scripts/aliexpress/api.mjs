@@ -5,6 +5,8 @@
 import { createHash, createHmac } from 'node:crypto';
 
 const GATEWAY = 'https://api-sg.aliexpress.com/sync';
+/** Ancienne passerelle « TOP » (applications à clé de 6 chiffres) : MD5, date de Shanghai, v=2.0, format=json. */
+export const TOP_GATEWAY = 'https://gw.api.taobao.com/router/rest';
 
 /** Paramètres de l'API par marché : pays de livraison, devise et langue des textes. */
 export const MARKET_PARAMS = {
@@ -48,13 +50,20 @@ export function getCredentials(env = process.env) {
  * (kit « python-aliexpress-api ») : MD5, horodatage en ms, avec v=2.0, format=json et partner_id=top-apitools.
  */
 export const SIGN_VARIANTS = [
-  { name: 'md5 + ms + v/format/partner_id (kit officiel)', signMethod: 'md5', timestampUnit: 'ms', extras: true },
-  { name: 'sha256 + ms + v/format/partner_id', signMethod: 'sha256', timestampUnit: 'ms', extras: true },
-  { name: 'md5 + date AAAA-MM-JJ hh:mm:ss + v/format/partner_id', signMethod: 'md5', timestampUnit: 'datetime', extras: true },
-  { name: 'sha256 + date + v/format/partner_id', signMethod: 'sha256', timestampUnit: 'datetime', extras: true },
-  { name: 'md5 + secondes + v/format/partner_id', signMethod: 'md5', timestampUnit: 's', extras: true },
-  { name: 'md5 + ms sans extras', signMethod: 'md5', timestampUnit: 'ms', extras: false },
+  { name: 'sync · md5 + ms + v/format/partner_id (kit officiel)', gateway: GATEWAY, signMethod: 'md5', timestampUnit: 'ms', extras: 'full' },
+  { name: 'sync · sha256 + ms (IOP)', gateway: GATEWAY, signMethod: 'sha256', timestampUnit: 'ms', extras: false },
+  { name: 'sync · sha256 + ms + v=2.0', gateway: GATEWAY, signMethod: 'sha256', timestampUnit: 'ms', extras: 'v' },
+  { name: 'TOP · md5 + date Shanghai + v/format', gateway: TOP_GATEWAY, signMethod: 'md5', timestampUnit: 'datetime', extras: 'top' },
+  { name: 'TOP · md5 + date Shanghai + v/format/partner_id', gateway: TOP_GATEWAY, signMethod: 'md5', timestampUnit: 'datetime', extras: 'full' },
+  { name: 'TOP · md5 + ms + v/format', gateway: TOP_GATEWAY, signMethod: 'md5', timestampUnit: 'ms', extras: 'top' },
+  { name: 'TOP · sha256 + date Shanghai + v/format', gateway: TOP_GATEWAY, signMethod: 'sha256', timestampUnit: 'datetime', extras: 'top' },
 ];
+
+const EXTRAS = {
+  full: { v: '2.0', format: 'json', partner_id: 'top-apitools' },
+  top: { v: '2.0', format: 'json' },
+  v: { v: '2.0' },
+};
 
 function formatTimestamp(unit, ms) {
   if (unit === 's') return String(Math.floor(ms / 1000));
@@ -62,18 +71,18 @@ function formatTimestamp(unit, ms) {
   return String(ms);
 }
 
-export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'md5', timestampUnit = 'ms', extras = true } = {}) {
+export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'md5', timestampUnit = 'ms', extras = 'full', gateway = GATEWAY } = {}) {
   const c = creds || getCredentials();
   const all = {
     app_key: c.appKey,
     timestamp: formatTimestamp(timestampUnit, now()),
     sign_method: signMethod,
     method,
-    ...(extras ? { v: '2.0', format: 'json', partner_id: 'top-apitools' } : {}),
+    ...(EXTRAS[extras === true ? 'full' : extras] || {}),
     ...params,
   };
   all.sign = signParams(all, c.appSecret, signMethod);
-  const res = await fetchImpl(GATEWAY, {
+  const res = await fetchImpl(gateway, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded;charset=utf-8' },
     body: new URLSearchParams(all).toString(),
