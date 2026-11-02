@@ -2,7 +2,7 @@
 // Pur Node, aucune dépendance : réutilisable par les scripts du serveur (photos, cron hebdomadaire…).
 // Variables d'environnement (.env.local du serveur, jamais dans git) :
 //   ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET, ALIEXPRESS_TRACKING_ID
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 const GATEWAY = 'https://api-sg.aliexpress.com/sync';
 
@@ -15,35 +15,59 @@ export const MARKET_PARAMS = {
 
 // ─── Signature ──────────────────────────────────────────────────────────────
 
-/** Signature HMAC-SHA256 : paramètres triés par nom, concaténés « nomvaleur », en majuscules hexadécimales. */
-export function signParams(params, secret) {
-  const base = Object.keys(params)
-    .filter((k) => k !== 'sign' && params[k] !== undefined && params[k] !== null && params[k] !== '')
-    .sort()
-    .map((k) => `${k}${params[k]}`)
-    .join('');
+/**
+ * Signature des requêtes. sha256 (défaut) : HMAC-SHA256 du secret sur « nomvaleur » triés par nom, en majuscules hexadécimales.
+ * md5 : MD5(secret + chaîne + secret). `prefix` : chemin d'API ajouté devant la chaîne (API de type REST).
+ */
+export function signParams(params, secret, method = 'sha256', prefix = '') {
+  const base =
+    prefix +
+    Object.keys(params)
+      .filter((k) => k !== 'sign' && params[k] !== undefined && params[k] !== null && params[k] !== '')
+      .sort()
+      .map((k) => `${k}${params[k]}`)
+      .join('');
+  if (method === 'md5') return createHash('md5').update(secret + base + secret, 'utf8').digest('hex').toUpperCase();
   return createHmac('sha256', secret).update(base, 'utf8').digest('hex').toUpperCase();
 }
 
+/** Retire espaces, retours chariot et guillemets autour d'une valeur lue dans .env.local. */
+const clean = (v) => (v == null ? v : String(v).trim().replace(/^["']|["']$/g, '').trim());
+
 export function getCredentials(env = process.env) {
-  const appKey = env.ALIEXPRESS_APP_KEY;
-  const appSecret = env.ALIEXPRESS_APP_SECRET;
-  const trackingId = env.ALIEXPRESS_TRACKING_ID;
+  const appKey = clean(env.ALIEXPRESS_APP_KEY);
+  const appSecret = clean(env.ALIEXPRESS_APP_SECRET);
+  const trackingId = clean(env.ALIEXPRESS_TRACKING_ID);
   const missing = [!appKey && 'ALIEXPRESS_APP_KEY', !appSecret && 'ALIEXPRESS_APP_SECRET', !trackingId && 'ALIEXPRESS_TRACKING_ID'].filter(Boolean);
   if (missing.length) throw new Error(`variables manquantes dans .env.local : ${missing.join(', ')}`);
   return { appKey, appSecret, trackingId };
 }
 
-export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now } = {}) {
+/** Variantes de signature essayées par `probe.mjs --variants` pour trouver celle que la plateforme accepte. */
+export const SIGN_VARIANTS = [
+  { name: 'sha256 + horodatage en ms', signMethod: 'sha256', timestampUnit: 'ms' },
+  { name: 'sha256 + horodatage en secondes', signMethod: 'sha256', timestampUnit: 's' },
+  { name: 'sha256 + date AAAA-MM-JJ hh:mm:ss', signMethod: 'sha256', timestampUnit: 'datetime' },
+  { name: 'md5 + horodatage en ms', signMethod: 'md5', timestampUnit: 'ms' },
+  { name: 'md5 + date AAAA-MM-JJ hh:mm:ss', signMethod: 'md5', timestampUnit: 'datetime' },
+];
+
+function formatTimestamp(unit, ms) {
+  if (unit === 's') return String(Math.floor(ms / 1000));
+  if (unit === 'datetime') return new Date(ms + 8 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+  return String(ms);
+}
+
+export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'sha256', timestampUnit = 'ms' } = {}) {
   const c = creds || getCredentials();
   const all = {
     app_key: c.appKey,
-    timestamp: String(now()),
-    sign_method: 'sha256',
+    timestamp: formatTimestamp(timestampUnit, now()),
+    sign_method: signMethod,
     method,
     ...params,
   };
-  all.sign = signParams(all, c.appSecret);
+  all.sign = signParams(all, c.appSecret, signMethod);
   const res = await fetchImpl(GATEWAY, {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded;charset=utf-8' },

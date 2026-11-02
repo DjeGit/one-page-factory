@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Test de l'API AliExpress sur le serveur (rien n'est enregistré, aucune clé n'est affichée) :
 //   node --env-file=.env.local scripts/aliexpress/probe.mjs <aliexpress_id> [fr|es|uk ...]
-import { getCredentials, getProductForMarket, verifyAffiliateLink, MARKET_PARAMS } from './api.mjs';
+import { getCredentials, getProductForMarket, verifyAffiliateLink, callApi, MARKET_PARAMS, SIGN_VARIANTS } from './api.mjs';
 
-const [id, ...rest] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const variantsMode = argv.includes('--variants');
+const [id, ...rest] = argv.filter((a) => !a.startsWith('--'));
 if (!id || !/^\d{8,}$/.test(id)) {
   console.log('Usage : node --env-file=.env.local scripts/aliexpress/probe.mjs <aliexpress_id> [fr|es|uk ...]');
   process.exit(1);
@@ -12,7 +14,20 @@ const markets = rest.length ? rest : Object.keys(MARKET_PARAMS);
 
 try {
   const c = getCredentials();
-  console.log(`Identifiants présents (clé ${c.appKey.slice(0, 3)}…, suivi ${c.trackingId}).`);
+  const shape = (v) => `${v.length} car., ${/^\d+$/.test(v) ? 'chiffres' : /^[A-Za-z0-9]+$/.test(v) ? 'lettres/chiffres' : 'autres signes présents'}`;
+  console.log(`Identifiants présents : clé ${c.appKey.slice(0, 3)}… (${shape(c.appKey)}), secret (${shape(c.appSecret)}), suivi ${c.trackingId}.`);
+  if (variantsMode) {
+    console.log('\nEssai des variantes de signature (même requête, une variante après l\'autre) :');
+    for (const v of SIGN_VARIANTS) {
+      try {
+        await callApi('aliexpress.affiliate.productdetail.get', { product_ids: id, fields: 'sale_price', country: 'FR', target_currency: 'EUR', target_language: 'FR', tracking_id: c.trackingId }, { creds: c, signMethod: v.signMethod, timestampUnit: v.timestampUnit });
+        console.log(`  ACCEPTÉE  ${v.name}`);
+      } catch (e) {
+        console.log(`  ${v.name} -> ${e.message.replace('API AliExpress : ', '').slice(0, 110)}`);
+      }
+    }
+    process.exit(0);
+  }
 } catch (e) {
   console.log(`ERREUR : ${e.message}`);
   process.exit(1);

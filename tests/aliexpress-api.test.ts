@@ -25,6 +25,13 @@ describe('aliexpress api', () => {
     expect(signParams({ a: '1', b: '2' }, 'autre')).not.toBe(a);
   });
 
+  it('signParams md5 et préfixe, getCredentials nettoie les guillemets', () => {
+    expect(signParams({ a: '1' }, 's', 'md5')).toMatch(/^[0-9A-F]{32}$/);
+    expect(signParams({ a: '1' }, 's', 'sha256', '/x')).not.toBe(signParams({ a: '1' }, 's', 'sha256'));
+    const c = getCredentials({ ALIEXPRESS_APP_KEY: ' "123" ', ALIEXPRESS_APP_SECRET: "'abc'\r", ALIEXPRESS_TRACKING_ID: 't' });
+    expect([c.appKey, c.appSecret]).toEqual(['123', 'abc']);
+  });
+
   it('parseRate', () => {
     expect(parseRate('7.0%')).toBe(0.07);
     expect(parseRate('8')).toBe(0.08);
