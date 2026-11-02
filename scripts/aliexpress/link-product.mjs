@@ -2,16 +2,18 @@
 // Génère et vérifie les liens affiliés d'un produit pour chaque marché où il existe, puis met à jour les fiches.
 //   node --env-file=.env.local scripts/aliexpress/link-product.mjs <aliexpress_id>           (simulation : rien n'est écrit)
 //   node --env-file=.env.local scripts/aliexpress/link-product.mjs <aliexpress_id> --apply   (enregistre liens, prix du jour, commission)
+//   node --env-file=.env.local scripts/aliexpress/link-product.mjs --all [--apply]            (toutes les fiches dont le lien est encore neutre)
 // Un lien n'est enregistré que s'il passe tous les contrôles (bon produit, bonne devise, prix cohérent).
 import { createClient } from '@supabase/supabase-js';
 import { getProductForMarket, verifyAffiliateLink, MARKET_PARAMS } from './api.mjs';
 import { planUpdate } from './link.mjs';
 
 const args = process.argv.slice(2);
-const id = args.find((a) => /^\d{8,}$/.test(a));
+const oneId = args.find((a) => /^\d{8,}$/.test(a));
+const all = args.includes('--all');
 const apply = args.includes('--apply');
-if (!id) {
-  console.log('Usage : node --env-file=.env.local scripts/aliexpress/link-product.mjs <aliexpress_id> [--apply]');
+if (!oneId && !all) {
+  console.log('Usage : node --env-file=.env.local scripts/aliexpress/link-product.mjs <aliexpress_id> [--apply]   ou   --all [--apply]');
   process.exit(1);
 }
 
@@ -24,6 +26,9 @@ if (!url || !key) {
 const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' });
 
+let problems = 0;
+
+async function linkOne(id) {
 const { data: rows, error } = await supabase
   .from('products')
   .select('id, slug, market, price, price_currency, seller_name, commission_rate, affiliate_url, active')
@@ -31,11 +36,11 @@ const { data: rows, error } = await supabase
 if (error) throw error;
 if (!rows.length) {
   console.log(`Aucune fiche avec aliexpress_id = ${id}. Lance d'abord la migration 20261102000001_products_aliexpress_id.sql.`);
-  process.exit(1);
+  problems++;
+  return;
 }
 
-console.log(`${apply ? 'ENREGISTREMENT' : 'SIMULATION'} — produit ${id}, ${rows.length} fiche(s)\n`);
-let problems = 0;
+console.log(`\n${apply ? 'ENREGISTREMENT' : 'SIMULATION'} — produit ${id}, ${rows.length} fiche(s)`);
 for (const row of rows) {
   const market = row.market;
   console.log(`== ${market.toUpperCase()} — ${row.slug}`);
@@ -67,4 +72,15 @@ for (const row of rows) {
     console.log(`  ERREUR : ${e.message}`);
   }
 }
+}
+
+let ids = [oneId];
+if (all) {
+  const { data, error } = await supabase.from('products').select('aliexpress_id, affiliate_url').not('aliexpress_id', 'is', null);
+  if (error) throw error;
+  // Seules les fiches dont le lien est encore l'adresse neutre sont traitées.
+  ids = [...new Set(data.filter((r) => /\/item\//.test(r.affiliate_url || '')).map((r) => r.aliexpress_id))];
+  console.log(`${ids.length} produit(s) avec un lien encore neutre.`);
+}
+for (const id of ids) await linkOne(id);
 console.log(problems ? `\n${problems} marché(s) à traiter.` : '\nTous les marchés sont prêts.');

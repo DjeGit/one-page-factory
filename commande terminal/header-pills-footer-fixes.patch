@@ -1,0 +1,260 @@
+From 49a026afe0805acd3342a9b3e71d5f5cc6501a3e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 2 Oct 2026 22:58:01 +0200
+Subject: [PATCH] =?UTF-8?q?fix:=20hero=20compact,=20pastilles=20cat=C3=A9g?=
+ =?UTF-8?q?ories=20retir=C3=A9es,=20pills=20sans=20ic=C3=B4ne,=20footer=20?=
+ =?UTF-8?q?complet?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Demande Jerome du 02/10 (3 captures à l'appui) :
+
+- Hero : padding vertical réduit (py-14/20 → py-10/14) pour une hauteur plus
+  proportionnée au reste du site. Titre "Les meilleurs produits du moment"
+  resserré (plus de max-width qui forçait le retour à la ligne) pour tenir
+  sur une seule ligne en desktop ; reste sur 2 lignes en mobile, attendu vu
+  la largeur d'écran.
+- Rangée de catégories avec icônes sous le header (sur /produits et
+  /c/[slug]) retirée entièrement : doublon avec le menu principal qui liste
+  déjà les mêmes catégories.
+- Pills "Top Amazon / Top Rakuten / Top AliExpress" (accueil + /top-ventes) :
+  icônes retirées, format aligné sur la capture fournie (texte "Top <nom>"
+  uniquement, mêmes couleurs actif/inactif).
+- Footer : toutes les catégories affichées (8, sur 2 colonnes) au lieu de 3
+  seulement — la maquette n'en montrait que 3 à titre d'exemple mais
+  Tendpick en a 8. Colonne élargie (grille 5 colonnes desktop au lieu de 4)
+  pour rester lisible.
+
+Vérifié : npx tsc --noEmit + npm run build sans erreur, rendu visuel via
+serveur local + Playwright (desktop et mobile), titre du hero confirmé sur
+une seule ligne à 1440px.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ app/c/[slug]/page.tsx            | 23 +++--------------------
+ app/page.tsx                     | 23 +++++++++++++----------
+ app/produits/page.tsx            | 19 +++----------------
+ app/top-ventes/page.tsx          | 13 ++++++-------
+ components/layout/SiteFooter.tsx | 31 ++++++++++++++++++-------------
+ 5 files changed, 43 insertions(+), 66 deletions(-)
+
+diff --git a/app/c/[slug]/page.tsx b/app/c/[slug]/page.tsx
+index 21a4807..c6f9340 100644
+--- a/app/c/[slug]/page.tsx
++++ b/app/c/[slug]/page.tsx
+@@ -51,26 +51,9 @@ export default async function CategoryPage({ params }: Props) {
+     <div className="min-h-screen bg-site-bg text-site-text">
+       <SiteHeader categories={allCategories} market={market} />
+ 
+-      {allCategories.length > 1 && (
+-        <div className="border-b border-site-border bg-white">
+-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-2">
+-            {allCategories.map((c) => (
+-              <Link
+-                key={c.id}
+-                href={`/c/${c.slug}`}
+-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+-                  c.slug === category.slug
+-                    ? 'bg-site-secondary/10 border-site-secondary text-site-secondary'
+-                    : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
+-                }`}
+-              >
+-                {c.icon ? `${c.icon} ` : ''}
+-                {categoryName(c, market)}
+-              </Link>
+-            ))}
+-          </div>
+-        </div>
+-      )}
++      {/* La rangée de pastilles catégories (avec icônes) sous le header a
++          été retirée (02/10, demande Jerome) : les catégories sont déjà
++          accessibles depuis le menu, doublon inutile. */}
+ 
+       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+         <div className="mb-10">
+diff --git a/app/page.tsx b/app/page.tsx
+index e327fac..e4769b4 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -123,16 +123,20 @@ export default async function HomePage({ searchParams }: Props) {
+ 
+       {/* Hero — demande Jerome du 02/10 (2 captures à l'appui) : garder le
+           cadre actuel (bandeau navy plein largeur) mais y remettre le texte
+-          et les CTA de l'ancienne version, centrés dans le bandeau. */}
+-      <section className="bg-site-primary px-6 py-14 sm:py-20 flex flex-col items-center text-center gap-2">
+-        <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm text-white/80 mb-4">
++          et les CTA de l'ancienne version, centrés dans le bandeau.
++          Ajustement du 02/10 (2e passe) : hauteur réduite (moins de
++          padding vertical) pour rester proportionnée au reste du site, et
++          taille du titre resserrée (+ sans max-width qui forçait le retour
++          à la ligne) pour tenir sur une seule ligne en desktop. */}
++      <section className="bg-site-primary px-6 py-10 sm:py-14 flex flex-col items-center text-center gap-2">
++        <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 rounded-full px-4 py-1.5 text-sm text-white/80 mb-3">
+           <span className="w-2 h-2 rounded-full bg-site-cta animate-pulse" />
+           Sélection mise à jour chaque semaine
+         </div>
+-        <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-4 leading-tight text-white max-w-3xl">
++        <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-3 leading-tight text-white whitespace-normal sm:whitespace-nowrap">
+           Les meilleurs produits <span className="text-site-cta">du moment</span>
+         </h1>
+-        <p className="text-lg sm:text-xl text-white/70 max-w-2xl mb-8">
++        <p className="text-base sm:text-lg text-white/70 max-w-2xl mb-6">
+           Nous analysons les meilleures ventes en ligne pour vous présenter
+           uniquement les produits qui valent vraiment votre attention — avec une
+           fiche complète pour chaque article.
+@@ -160,19 +164,18 @@ export default async function HomePage({ searchParams }: Props) {
+       <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+         <h2 className="text-2xl sm:text-3xl font-bold text-site-primary mb-6">Top Ventes</h2>
+ 
+-        <div className="flex flex-wrap gap-2 mb-8">
++        <div className="flex flex-wrap gap-3 mb-8">
+           {TOP_VENTES_SOURCES.map((s) => (
+             <Link
+               key={s.key}
+               href={`/?source=${s.key}#top-ventes`}
+-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
++              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
+                 activeSource === s.key
+                   ? 'bg-site-primary border-site-primary text-white'
+-                  : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
++                  : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+               }`}
+             >
+-              <span>{s.icon}</span>
+-              {s.label}
++              Top {s.label}
+             </Link>
+           ))}
+         </div>
+diff --git a/app/produits/page.tsx b/app/produits/page.tsx
+index 13dba14..982037b 100644
+--- a/app/produits/page.tsx
++++ b/app/produits/page.tsx
+@@ -61,22 +61,9 @@ export default async function ProduitsPage({ searchParams }: Props) {
+     <div className="min-h-screen bg-site-bg text-site-text">
+       <SiteHeader categories={categories} market={market} />
+ 
+-      {categories.length > 0 && (
+-        <div className="border-b border-site-border bg-white">
+-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-2">
+-            {categories.map((c) => (
+-              <Link
+-                key={c.id}
+-                href={`/c/${c.slug}`}
+-                className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary"
+-              >
+-                {c.icon ? `${c.icon} ` : ''}
+-                {categoryName(c, market)}
+-              </Link>
+-            ))}
+-          </div>
+-        </div>
+-      )}
++      {/* La rangée de pastilles catégories (avec icônes) sous le header a
++          été retirée (02/10, demande Jerome) : les catégories sont déjà
++          accessibles depuis le menu, doublon inutile. */}
+ 
+       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+         <div className="mb-10">
+diff --git a/app/top-ventes/page.tsx b/app/top-ventes/page.tsx
+index 0b760d8..364f959 100644
+--- a/app/top-ventes/page.tsx
++++ b/app/top-ventes/page.tsx
+@@ -70,13 +70,13 @@ export default async function TopVentesPage({ searchParams }: Props) {
+           </p>
+         </div>
+ 
+-        <div className="flex flex-wrap gap-2 mb-10">
++        <div className="flex flex-wrap gap-3 mb-10">
+           <Link
+             href="/top-ventes"
+-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
++            className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
+               !activeSource
+                 ? 'bg-site-primary border-site-primary text-white'
+-                : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
++                : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+             }`}
+           >
+             Tout
+@@ -85,14 +85,13 @@ export default async function TopVentesPage({ searchParams }: Props) {
+             <Link
+               key={s.key}
+               href={`/top-ventes?source=${s.key}`}
+-              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
++              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
+                 activeSource === s.key
+                   ? 'bg-site-primary border-site-primary text-white'
+-                  : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
++                  : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+               }`}
+             >
+-              <span>{s.icon}</span>
+-              {s.label}
++              Top {s.label}
+             </Link>
+           ))}
+         </div>
+diff --git a/components/layout/SiteFooter.tsx b/components/layout/SiteFooter.tsx
+index 91a7b6b..38a7b36 100644
+--- a/components/layout/SiteFooter.tsx
++++ b/components/layout/SiteFooter.tsx
+@@ -13,9 +13,14 @@ function categoryName(c: Category, market: Market): string {
+   return c.name_fr;
+ }
+ 
+-// Footer — design validé (Design.html) : fond navy, 4 colonnes, newsletter,
+-// mentions légales en bas. Repris tel quel sur toutes les pages du site
+-// (30/09) au lieu d'un footer simplifié différent par page.
++// Footer — design validé (Design.html) : fond navy, newsletter, mentions
++// légales en bas. Repris tel quel sur toutes les pages du site (30/09) au
++// lieu d'un footer simplifié différent par page.
++//
++// Ajustement du 02/10 (demande Jerome) : la maquette ne montre que 3
++// catégories à titre d'exemple, mais Tendpick en a 8 — on les affiche
++// toutes (sur 2 colonnes pour rester lisible), colonne élargie en
++// conséquence (grille 5 colonnes au lieu de 4 en desktop).
+ //
+ // Écarts assumés vs la maquette : la maquette liste "CGV / Livraison /
+ // Contact" dans la colonne "Aide" — CGV et Livraison n'existent pas encore
+@@ -25,25 +30,25 @@ function categoryName(c: Category, market: Market): string {
+ // utilisé ailleurs sur le site). Le formulaire newsletter est visuel pour
+ // l'instant (pas encore branché à /api/leads) — à connecter ensuite.
+ export default function SiteFooter({ categories, market }: Props) {
+-  const footerCategories = categories.slice(0, 3);
+-
+   return (
+     <footer className="bg-site-primary text-white">
+       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 flex flex-col gap-8">
+-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-8">
++        <div className="grid grid-cols-2 sm:grid-cols-5 gap-8">
+           <div className="flex flex-col gap-2 col-span-2 sm:col-span-1">
+             <span className="font-extrabold text-lg lowercase">tendpick</span>
+             <span className="text-xs text-white/60">Le comparateur des produits tendance, tous marchés.</span>
+           </div>
+ 
+-          <div className="flex flex-col gap-2">
++          <div className="flex flex-col gap-2 col-span-2 sm:col-span-2">
+             <span className="text-xs font-bold text-white">Catégories</span>
+-            {footerCategories.length > 0 ? (
+-              footerCategories.map((c) => (
+-                <Link key={c.id} href={`/c/${c.slug}`} className="text-xs text-white/60 hover:text-white transition-colors">
+-                  {categoryName(c, market)}
+-                </Link>
+-              ))
++            {categories.length > 0 ? (
++              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
++                {categories.map((c) => (
++                  <Link key={c.id} href={`/c/${c.slug}`} className="text-xs text-white/60 hover:text-white transition-colors">
++                    {categoryName(c, market)}
++                  </Link>
++                ))}
++              </div>
+             ) : (
+               <Link href="/produits" className="text-xs text-white/60 hover:text-white transition-colors">
+                 Tout le catalogue
+-- 
+2.43.0
+

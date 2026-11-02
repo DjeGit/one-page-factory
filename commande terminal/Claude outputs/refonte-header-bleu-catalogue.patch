@@ -1,0 +1,1332 @@
+From 3b5a163f0f0673a73f9895cffd76ffb5e4761a4c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 30 Sep 2026 18:40:08 +0200
+Subject: [PATCH] =?UTF-8?q?Refonte=20visuelle=20claire=20"Confiance=20mode?=
+ =?UTF-8?q?rne"=20+=20hero=20bleu=20valid=C3=A9=20sur=20le=20catalogue?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Applique le thème clair (bleu marine/blanc, accent orange) sur l'accueil,
+/produits et nouvelles pages /top-ventes et /c/[slug], avec un nouveau
+SiteHeader partagé (nav + catégories). Le hero de l'accueil reprend le
+design bleu validé par Jerome (Design.html) : couleurs extraites des
+maquettes (#1A2541 / #FF602F).
+
+Construit le support manquant pour que ce design fonctionne réellement :
+- table `categories` (is_active, traductions fr/es/uk) + colonne
+  `products.category_id`, seed des 8 catégories validées (Best of Amazon,
+  Tech & Gadgets, Mode & Beauté, Maison & Déco, Sport & Bien-être, Gaming
+  Casino & Paris, Art & Design, Loisirs)
+- lib/top-ventes.ts : filtre "Top Ventes" par plateforme (Amazon/Rakuten/
+  AliExpress) déduit de affiliate_url, pas une catégorie stockée
+- getCategories/getActiveCategories/getCategoryBySlug/getActiveProductsByCategory
+  dans lib/supabase.ts
+
+CookieConsent restylé en cohérence (violet -> palette site).
+
+npx tsc --noEmit et npm run build passent sans erreur ; vérifié visuellement
+via un serveur local + Playwright.
+
+Reste à faire côté serveur avant mise en prod : appliquer la migration
+supabase/migrations/20260930000001_categories.sql sur la base réelle.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ app/c/[slug]/page.tsx                         | 151 +++++++++++++
+ app/layout.tsx                                |   2 +-
+ app/page.tsx                                  | 203 +++++++++++-------
+ app/produits/page.tsx                         |  91 +++++---
+ app/top-ventes/page.tsx                       | 170 +++++++++++++++
+ components/layout/CookieConsent.tsx           |  10 +-
+ components/layout/SiteHeader.tsx              | 140 ++++++++++++
+ lib/supabase.ts                               |  86 +++++++-
+ lib/top-ventes.ts                             |  41 ++++
+ .../migrations/20260930000001_categories.sql  |  51 +++++
+ tailwind.config.ts                            |  13 ++
+ types/index.ts                                |  21 ++
+ 12 files changed, 857 insertions(+), 122 deletions(-)
+ create mode 100644 app/c/[slug]/page.tsx
+ create mode 100644 app/top-ventes/page.tsx
+ create mode 100644 components/layout/SiteHeader.tsx
+ create mode 100644 lib/top-ventes.ts
+ create mode 100644 supabase/migrations/20260930000001_categories.sql
+
+diff --git a/app/c/[slug]/page.tsx b/app/c/[slug]/page.tsx
+new file mode 100644
+index 0000000..a5acb7d
+--- /dev/null
++++ b/app/c/[slug]/page.tsx
+@@ -0,0 +1,151 @@
++import Link from 'next/link';
++import Image from 'next/image';
++import { headers } from 'next/headers';
++import { notFound } from 'next/navigation';
++import { getCategoryBySlug, getActiveProductsByCategory, getActiveCategories } from '@/lib/supabase';
++import { getCloudinaryUrl } from '@/lib/cloudinary';
++import { getMarketFromHost } from '@/lib/market-from-host';
++import type { Metadata } from 'next';
++import SiteHeader from '@/components/layout/SiteHeader';
++
++export const dynamic = 'force-dynamic';
++
++interface Props {
++  params: { slug: string };
++}
++
++function categoryName(category: { name_fr: string; name_es: string; name_uk: string }, market: string): string {
++  if (market === 'es') return category.name_es;
++  if (market === 'uk') return category.name_uk;
++  return category.name_fr;
++}
++
++export async function generateMetadata({ params }: Props): Promise<Metadata> {
++  const category = await getCategoryBySlug(params.slug);
++  if (!category) return {};
++  const host = headers().get('host');
++  const market = getMarketFromHost(host);
++  const name = categoryName(category, market);
++  return {
++    title: `${name} — Tendpick`,
++    description: `Découvrez notre sélection ${name} sur Tendpick.`,
++  };
++}
++
++export default async function CategoryPage({ params }: Props) {
++  const category = await getCategoryBySlug(params.slug);
++  if (!category) notFound();
++
++  const host = headers().get('host');
++  const market = getMarketFromHost(host);
++  const [products, allCategories] = await Promise.all([
++    getActiveProductsByCategory(category.id, market),
++    getActiveCategories(),
++  ]);
++
++  const name = categoryName(category, market);
++
++  return (
++    <div className="min-h-screen bg-site-bg text-site-text">
++      <SiteHeader categories={allCategories} market={market} />
++
++      {allCategories.length > 1 && (
++        <div className="border-b border-site-border bg-white">
++          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-2">
++            {allCategories.map((c) => (
++              <Link
++                key={c.id}
++                href={`/c/${c.slug}`}
++                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
++                  c.slug === category.slug
++                    ? 'bg-site-secondary/10 border-site-secondary text-site-secondary'
++                    : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
++                }`}
++              >
++                {c.icon ? `${c.icon} ` : ''}
++                {categoryName(c, market)}
++              </Link>
++            ))}
++          </div>
++        </div>
++      )}
++
++      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
++        <div className="mb-10">
++          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">
++            {category.icon ? `${category.icon} ` : ''}
++            {name}
++          </h1>
++          <p className="text-site-text-secondary">
++            {products.length > 0
++              ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''}`
++              : 'Nouveaux produits bientôt disponibles dans cette catégorie'}
++          </p>
++        </div>
++
++        {products.length === 0 ? (
++          <div className="text-center py-24 text-site-text-secondary">
++            <div className="text-5xl mb-4">{category.icon || '📦'}</div>
++            <p className="text-lg">Sélection en cours de préparation…</p>
++            <p className="text-sm mt-2">Revenez dans quelques jours !</p>
++          </div>
++        ) : (
++          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
++            {products.map((p) => {
++              const img = p.image_url
++                ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
++                : null;
++              return (
++                <Link
++                  key={p.id}
++                  href={`/${p.slug}`}
++                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
++                >
++                  <div className="aspect-square relative bg-site-bg flex-shrink-0">
++                    {img ? (
++                      <Image
++                        src={img}
++                        alt={p.name}
++                        fill
++                        className="object-cover group-hover:scale-105 transition-transform duration-300"
++                        unoptimized={img.includes('/fetch/')}
++                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
++                      />
++                    ) : (
++                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
++                    )}
++                  </div>
++                  <div className="p-3 flex flex-col gap-1 flex-1">
++                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
++                      {p.hero_title || p.name}
++                    </p>
++                    <div className="flex items-center justify-between mt-1">
++                      {p.price ? (
++                        <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
++                      ) : (
++                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
++                      )}
++                      <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
++                        Voir →
++                      </span>
++                    </div>
++                  </div>
++                </Link>
++              );
++            })}
++          </div>
++        )}
++      </main>
++
++      <footer className="border-t border-site-border bg-white mt-16">
++        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-site-text-secondary">
++          <span>© {new Date().getFullYear()} Tendpick</span>
++          <div className="flex gap-6">
++            <Link href="/mentions-legales" className="hover:text-site-primary transition-colors">Mentions légales</Link>
++            <Link href="/politique-confidentialite" className="hover:text-site-primary transition-colors">Confidentialité</Link>
++          </div>
++        </div>
++      </footer>
++    </div>
++  );
++}
+diff --git a/app/layout.tsx b/app/layout.tsx
+index 2fe2d0e..038a039 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -30,7 +30,7 @@ export default function RootLayout({
+ 
+   return (
+     <html lang={HTML_LANG[market]}>
+-      <body className="bg-gray-950 text-white">
++      <body className="bg-site-bg text-site-text">
+         {children}
+       </body>
+     </html>
+diff --git a/app/page.tsx b/app/page.tsx
+index 3f0c072..50db9b5 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -1,18 +1,32 @@
+ import Link from 'next/link';
+ import Image from 'next/image';
+-import { getSupabaseAdmin } from '@/lib/supabase';
++import { getSupabaseAdmin, getActiveCategories } from '@/lib/supabase';
+ import type { Product } from '@/types';
+ import { getCloudinaryUrl } from '@/lib/cloudinary';
++import { headers } from 'next/headers';
++import { getMarketFromHost } from '@/lib/market-from-host';
++import type { Market } from '@/lib/market';
++import CookieConsent from '@/components/layout/CookieConsent';
++import PixelInjector from '@/components/landing/PixelInjector';
++import SiteHeader from '@/components/layout/SiteHeader';
++import { TOP_VENTES_SOURCES } from '@/lib/top-ventes';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+-async function getFeaturedProducts(): Promise<Product[]> {
++function categoryName(c: { name_fr: string; name_es: string; name_uk: string }, market: Market): string {
++  if (market === 'es') return c.name_es;
++  if (market === 'uk') return c.name_uk;
++  return c.name_fr;
++}
++
++async function getFeaturedProducts(market: Market): Promise<Product[]> {
+   try {
+     const sb = getSupabaseAdmin();
+     const { data } = await sb
+       .from('products')
+       .select('*')
+       .eq('active', true)
++      .eq('market', market)
+       .order('updated_at', { ascending: false })
+       .limit(6);
+     return (data as Product[]) || [];
+@@ -22,71 +36,83 @@ async function getFeaturedProducts(): Promise<Product[]> {
+ }
+ 
+ export default async function HomePage() {
+-  const featured = await getFeaturedProducts();
++  // Marché déduit du domaine (pas de produit ici pour le déduire autrement),
++  // même logique que app/layout.tsx (lib/market-from-host.ts).
++  const market = getMarketFromHost(headers().get('host'));
++  const [featured, categories] = await Promise.all([
++    getFeaturedProducts(market),
++    getActiveCategories(),
++  ]);
+ 
+   return (
+-    <div className="min-h-screen bg-gray-950 text-white">
+-
+-      {/* ── Navigation ─────────────────────────────────────────── */}
+-      <header className="border-b border-white/10 sticky top-0 z-50 bg-gray-950/95 backdrop-blur-sm">
+-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight">
+-            <span className="text-2xl">⚡</span>
+-            <span className="bg-gradient-to-r from-violet-400 to-amber-400 bg-clip-text text-transparent">
+-              Tendpick
+-            </span>
+-          </Link>
+-          <nav className="flex items-center gap-6">
+-            <Link href="/produits" className="text-sm text-gray-300 hover:text-white transition-colors hidden sm:block">
+-              Catalogue
+-            </Link>
+-            <Link
+-              href="/produits"
+-              className="text-sm bg-violet-600 hover:bg-violet-500 transition-colors px-4 py-2 rounded-lg font-medium"
+-            >
+-              Voir les produits
+-            </Link>
+-          </nav>
+-        </div>
+-      </header>
++    <div className="min-h-screen bg-site-bg text-site-text">
++      <SiteHeader categories={categories} market={market} />
+ 
+-      {/* ── Hero ───────────────────────────────────────────────── */}
+-      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-20 pb-16 text-center">
+-        <div className="inline-flex items-center gap-2 bg-violet-950/60 border border-violet-500/30 rounded-full px-4 py-1.5 text-sm text-violet-300 mb-6">
+-          <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+-          Sélection mise à jour chaque semaine
+-        </div>
+-        <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
+-          Les meilleurs produits{' '}
+-          <span className="bg-gradient-to-r from-violet-400 via-pink-400 to-amber-400 bg-clip-text text-transparent">
+-            du moment
+-          </span>
+-        </h1>
+-        <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10">
+-          Nous analysons les meilleures ventes Amazon pour vous présenter uniquement
+-          les produits qui valent vraiment votre attention — avec une fiche complète
+-          pour chaque article.
+-        </p>
+-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
++      {/* Hero — design bleu validé (Design.html) */}
++      <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-16">
++        <div className="bg-site-primary rounded-2xl px-6 sm:px-12 py-14 sm:py-20">
++          <p className="text-xs sm:text-sm font-semibold uppercase tracking-widest text-white/50 mb-4">
++            Comparateur multi-plateformes
++          </p>
++          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight mb-5 leading-tight text-white max-w-2xl">
++            Les meilleures ventes tendance, comparées pour vous
++          </h1>
++          <p className="text-base sm:text-lg text-white/70 max-w-xl mb-8">
++            Amazon, Rakuten, AliExpress et bientôt d&apos;autres sources — un seul
++            endroit pour comparer avant d&apos;acheter.
++          </p>
+           <Link
+-            href="/produits"
+-            className="bg-violet-600 hover:bg-violet-500 transition-colors px-8 py-3.5 rounded-xl font-semibold text-base w-full sm:w-auto text-center"
++            href="/top-ventes"
++            className="inline-flex items-center gap-2 bg-site-cta hover:bg-site-cta-hover transition-colors px-6 py-3 rounded-xl font-semibold text-sm sm:text-base text-white shadow-sm"
+           >
+-            Découvrir les produits →
++            Découvrir le Top Ventes
+           </Link>
+-          <a
+-            href="#comment"
+-            className="text-gray-400 hover:text-white transition-colors text-sm underline underline-offset-4"
+-          >
+-            Comment ça marche ?
+-          </a>
+         </div>
+       </section>
+ 
+-      {/* ── Featured products ──────────────────────────────────── */}
++      {/* Top Ventes teaser */}
++      <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
++        <div className="bg-site-primary rounded-2xl px-6 sm:px-10 py-10 text-center">
++          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">Top Ventes</h2>
++          <p className="text-white/70 mb-8">Les produits les plus populaires, classés par plateforme</p>
++          <div className="flex flex-wrap items-center justify-center gap-3">
++            {TOP_VENTES_SOURCES.map((s) => (
++              <Link
++                key={s.key}
++                href={`/top-ventes?source=${s.key}`}
++                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 transition-colors px-5 py-2.5 rounded-full text-white text-sm font-medium"
++              >
++                <span>{s.icon}</span>
++                {s.label}
++              </Link>
++            ))}
++          </div>
++        </div>
++      </section>
++
++      {/* Categories grid */}
++      {categories.length > 0 && (
++        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
++          <h2 className="text-xl font-bold text-site-primary mb-6">Parcourir par catégorie</h2>
++          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
++            {categories.map((c) => (
++              <Link
++                key={c.id}
++                href={`/c/${c.slug}`}
++                className="bg-white border border-site-border rounded-xl p-5 flex flex-col items-center gap-2 text-center hover:border-site-secondary hover:shadow-md transition-all"
++              >
++                <span className="text-3xl">{c.icon || '📦'}</span>
++                <span className="text-sm font-medium text-site-text">{categoryName(c, market)}</span>
++              </Link>
++            ))}
++          </div>
++        </section>
++      )}
++
++      {/* Featured products */}
+       {featured.length > 0 && (
+         <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+-          <h2 className="text-xl font-bold text-gray-200 mb-6">Sélection du moment</h2>
++          <h2 className="text-xl font-bold text-site-primary mb-6">Sélection du moment</h2>
+           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+             {featured.map((p) => {
+               const img = p.image_url
+@@ -96,9 +122,9 @@ export default async function HomePage() {
+                 <Link
+                   key={p.id}
+                   href={`/${p.slug}`}
+-                  className="bg-gray-900 border border-white/10 rounded-xl overflow-hidden hover:border-violet-500/50 transition-all hover:-translate-y-0.5 group"
++                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group"
+                 >
+-                  <div className="aspect-square relative bg-gray-800">
++                  <div className="aspect-square relative bg-site-bg">
+                     {img ? (
+                       <Image
+                         src={img}
+@@ -109,15 +135,15 @@ export default async function HomePage() {
+                         sizes="(max-width: 640px) 50vw, 33vw"
+                       />
+                     ) : (
+-                      <div className="w-full h-full flex items-center justify-center text-4xl text-gray-600">📦</div>
++                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
+                     )}
+                   </div>
+                   <div className="p-3">
+-                    <p className="text-sm font-medium text-gray-200 line-clamp-2 leading-snug mb-1">
++                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug mb-1">
+                       {p.hero_title || p.name}
+                     </p>
+                     {p.price && (
+-                      <p className="text-violet-400 font-bold text-sm">{p.price.toFixed(2)} €</p>
++                      <p className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</p>
+                     )}
+                   </div>
+                 </Link>
+@@ -126,7 +152,7 @@ export default async function HomePage() {
+           </div>
+           {featured.length >= 6 && (
+             <div className="text-center mt-8">
+-              <Link href="/produits" className="text-violet-400 hover:text-violet-300 font-medium transition-colors">
++              <Link href="/produits" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
+                 Voir tous les produits →
+               </Link>
+             </div>
+@@ -134,56 +160,67 @@ export default async function HomePage() {
+         </section>
+       )}
+ 
+-      {/* ── Comment ça marche ──────────────────────────────────── */}
+-      <section id="comment" className="bg-gray-900/50 border-y border-white/5 py-20">
++      {/* Comment ça marche */}
++      <section id="comment" className="bg-white border-y border-site-border py-20">
+         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
+-          <h2 className="text-2xl sm:text-3xl font-bold mb-12">Comment ça marche</h2>
++          <h2 className="text-2xl sm:text-3xl font-bold mb-12 text-site-primary">Comment ça marche</h2>
+           <div className="grid sm:grid-cols-3 gap-8">
+             {[
+-              { emoji: '🔍', title: 'On analyse', desc: 'Chaque semaine, nous passons en revue les meilleures ventes Amazon pour trouver les produits les plus populaires et les mieux notés.' },
++              { emoji: '🔍', title: 'On analyse', desc: 'Chaque semaine, nous passons en revue les meilleures ventes en ligne pour trouver les produits les plus populaires et les mieux notés.' },
+               { emoji: '✍️', title: 'On rédige', desc: 'Pour chaque produit, nous créons une fiche complète : avantages clés, FAQ, avis clients et conseils d\'achat pour vous aider à décider.' },
+-              { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement sur Amazon. Prix Amazon garanti, livraison Prime disponible, retours facilités.' },
++              { emoji: '🛒', title: 'Vous achetez', desc: 'Un clic sur le bouton vous emmène directement chez le marchand, en toute sécurité, au meilleur prix disponible.' },
+             ].map((s) => (
+               <div key={s.title} className="flex flex-col items-center gap-4">
+-                <div className="w-16 h-16 rounded-2xl bg-violet-950/60 border border-violet-500/30 flex items-center justify-center text-3xl">
++                <div className="w-16 h-16 rounded-2xl bg-site-bg border border-site-border flex items-center justify-center text-3xl">
+                   {s.emoji}
+                 </div>
+-                <h3 className="font-bold text-lg">{s.title}</h3>
+-                <p className="text-gray-400 text-sm leading-relaxed">{s.desc}</p>
++                <h3 className="font-bold text-lg text-site-primary">{s.title}</h3>
++                <p className="text-site-text-secondary text-sm leading-relaxed">{s.desc}</p>
+               </div>
+             ))}
+           </div>
+         </div>
+       </section>
+ 
+-      {/* ── CTA final ──────────────────────────────────────────── */}
++      {/* CTA final */}
+       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-20 text-center">
+-        <h2 className="text-2xl sm:text-3xl font-bold mb-4">Prêt à découvrir nos coups de cœur ?</h2>
+-        <p className="text-gray-400 mb-8">Une sélection de produits mise à jour chaque semaine.</p>
++        <h2 className="text-2xl sm:text-3xl font-bold mb-4 text-site-primary">Prêt à découvrir nos coups de cœur ?</h2>
++        <p className="text-site-text-secondary mb-8">Une sélection de produits mise à jour chaque semaine.</p>
+         <Link
+           href="/produits"
+-          className="inline-flex items-center gap-2 bg-gradient-to-r from-violet-600 to-pink-600 hover:from-violet-500 hover:to-pink-500 transition-all px-8 py-3.5 rounded-xl font-semibold text-base"
++          className="inline-flex items-center gap-2 bg-site-cta hover:bg-site-cta-hover transition-colors px-8 py-3.5 rounded-xl font-semibold text-base text-white shadow-sm"
+         >
+           Voir tous les produits →
+         </Link>
+       </section>
+ 
+-      {/* ── Footer ─────────────────────────────────────────────── */}
+-      <footer className="border-t border-white/10 bg-gray-950">
+-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
++      {/* Footer */}
++      <footer className="border-t border-site-border bg-white">
++        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-site-text-secondary">
+           <div className="flex items-center gap-2">
+-            <span>⚡</span>
+-            <span className="font-semibold text-gray-400">Tendpick</span>
+-            <span>— Sélection de produits Amazon</span>
++            <span className="w-2 h-2 rounded-full bg-site-cta" />
++            <span className="font-semibold text-site-primary">Tendpick</span>
+           </div>
+           <div className="flex items-center gap-6">
+-            <Link href="/produits" className="hover:text-gray-300 transition-colors">Catalogue</Link>
+-            <Link href="/mentions-legales" className="hover:text-gray-300 transition-colors">Mentions légales</Link>
+-            <Link href="/politique-confidentialite" className="hover:text-gray-300 transition-colors">Confidentialité</Link>
++            <Link href="/produits" className="hover:text-site-primary transition-colors">Catalogue</Link>
++            <Link href="/top-ventes" className="hover:text-site-primary transition-colors">Top Ventes</Link>
++            <Link href="/mentions-legales" className="hover:text-site-primary transition-colors">Mentions légales</Link>
++            <Link href="/politique-confidentialite" className="hover:text-site-primary transition-colors">Confidentialité</Link>
+           </div>
+           <p>© {new Date().getFullYear()} Tendpick</p>
+         </div>
+       </footer>
++
++      {/* Tracking site (audit 24/09) : home/catalogue n'ont pas de produit
++          unique, donc pas de pixel_meta/pixel_tiktok/pixel_gtm par produit —
++          on utilise des IDs de pixel globaux (env), avec le même gating de
++          consentement que sur les pages produit. */}
++      <CookieConsent market={market} />
++      <PixelInjector
++        pixelMeta={process.env.SITE_PIXEL_META}
++        pixelTiktok={process.env.SITE_PIXEL_TIKTOK}
++        pixelGtm={process.env.SITE_PIXEL_GTM}
++      />
+     </div>
+   );
+ }
+diff --git a/app/produits/page.tsx b/app/produits/page.tsx
+index 86af194..5cf1cf9 100644
+--- a/app/produits/page.tsx
++++ b/app/produits/page.tsx
+@@ -1,24 +1,37 @@
+ import Link from 'next/link';
+ import Image from 'next/image';
+-import { getSupabaseAdmin } from '@/lib/supabase';
++import { getSupabaseAdmin, getActiveCategories } from '@/lib/supabase';
+ import type { Product } from '@/types';
+ import { getCloudinaryUrl } from '@/lib/cloudinary';
+ import type { Metadata } from 'next';
++import { headers } from 'next/headers';
++import { getMarketFromHost } from '@/lib/market-from-host';
++import type { Market } from '@/lib/market';
++import CookieConsent from '@/components/layout/CookieConsent';
++import PixelInjector from '@/components/landing/PixelInjector';
++import SiteHeader from '@/components/layout/SiteHeader';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+ export const metadata: Metadata = {
+   title: 'Catalogue produits — Tendpick',
+-  description: 'Découvrez tous les produits sélectionnés par Tendpick : les meilleures ventes Amazon avec des fiches détaillées.',
++  description: 'Découvrez tous les produits sélectionnés par Tendpick : les meilleures ventes en ligne avec des fiches détaillées.',
+ };
+ 
+-async function getAllActive(): Promise<Product[]> {
++function categoryName(c: { name_fr: string; name_es: string; name_uk: string }, market: Market): string {
++  if (market === 'es') return c.name_es;
++  if (market === 'uk') return c.name_uk;
++  return c.name_fr;
++}
++
++async function getAllActive(market: Market): Promise<Product[]> {
+   try {
+     const sb = getSupabaseAdmin();
+     const { data } = await sb
+       .from('products')
+       .select('*')
+       .eq('active', true)
++      .eq('market', market)
+       .order('updated_at', { ascending: false });
+     return (data as Product[]) || [];
+   } catch {
+@@ -27,30 +40,38 @@ async function getAllActive(): Promise<Product[]> {
+ }
+ 
+ export default async function ProduitsPage() {
+-  const products = await getAllActive();
++  // Marché déduit du domaine (pas de produit unique sur cette page),
++  // même logique que app/layout.tsx (lib/market-from-host.ts).
++  const market = getMarketFromHost(headers().get('host'));
++  const [products, categories] = await Promise.all([getAllActive(market), getActiveCategories()]);
+ 
+   return (
+-    <div className="min-h-screen bg-gray-950 text-white">
++    <div className="min-h-screen bg-site-bg text-site-text">
++      <SiteHeader categories={categories} market={market} />
+ 
+-      {/* Navigation */}
+-      <header className="border-b border-white/10 sticky top-0 z-50 bg-gray-950/95 backdrop-blur-sm">
+-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight">
+-            <span className="text-2xl">⚡</span>
+-            <span className="bg-gradient-to-r from-violet-400 to-amber-400 bg-clip-text text-transparent">Tendpick</span>
+-          </Link>
+-          <nav className="flex items-center gap-6">
+-            <span className="text-sm text-violet-400 font-medium hidden sm:block">Catalogue</span>
+-          </nav>
++      {categories.length > 0 && (
++        <div className="border-b border-site-border bg-white">
++          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-2">
++            {categories.map((c) => (
++              <Link
++                key={c.id}
++                href={`/c/${c.slug}`}
++                className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors border border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary"
++              >
++                {c.icon ? `${c.icon} ` : ''}
++                {categoryName(c, market)}
++              </Link>
++            ))}
++          </div>
+         </div>
+-      </header>
++      )}
+ 
+       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+         <div className="mb-10">
+-          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3">
++          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">
+             Notre sélection
+           </h1>
+-          <p className="text-gray-400">
++          <p className="text-site-text-secondary">
+             {products.length > 0
+               ? `${products.length} produit${products.length > 1 ? 's' : ''} sélectionné${products.length > 1 ? 's' : ''} — mis à jour chaque semaine`
+               : 'Nouveaux produits bientôt disponibles'}
+@@ -58,7 +79,7 @@ export default async function ProduitsPage() {
+         </div>
+ 
+         {products.length === 0 ? (
+-          <div className="text-center py-24 text-gray-500">
++          <div className="text-center py-24 text-site-text-secondary">
+             <div className="text-5xl mb-4">📦</div>
+             <p className="text-lg">Première sélection en cours de préparation…</p>
+             <p className="text-sm mt-2">Revenez dans quelques heures !</p>
+@@ -73,9 +94,9 @@ export default async function ProduitsPage() {
+                 <Link
+                   key={p.id}
+                   href={`/${p.slug}`}
+-                  className="bg-gray-900 border border-white/10 rounded-xl overflow-hidden hover:border-violet-500/50 transition-all hover:-translate-y-0.5 group flex flex-col"
++                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
+                 >
+-                  <div className="aspect-square relative bg-gray-800 flex-shrink-0">
++                  <div className="aspect-square relative bg-site-bg flex-shrink-0">
+                     {img ? (
+                       <Image
+                         src={img}
+@@ -86,20 +107,20 @@ export default async function ProduitsPage() {
+                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                       />
+                     ) : (
+-                      <div className="w-full h-full flex items-center justify-center text-4xl text-gray-600">📦</div>
++                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
+                     )}
+                   </div>
+                   <div className="p-3 flex flex-col gap-1 flex-1">
+-                    <p className="text-sm font-medium text-gray-200 line-clamp-2 leading-snug flex-1">
++                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
+                       {p.hero_title || p.name}
+                     </p>
+                     <div className="flex items-center justify-between mt-1">
+                       {p.price ? (
+-                        <span className="text-violet-400 font-bold text-sm">{p.price.toFixed(2)} €</span>
++                        <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
+                       ) : (
+-                        <span className="text-gray-500 text-xs">Prix sur Amazon</span>
++                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
+                       )}
+-                      <span className="text-xs text-gray-500 group-hover:text-violet-400 transition-colors">
++                      <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
+                         Voir →
+                       </span>
+                     </div>
+@@ -111,16 +132,22 @@ export default async function ProduitsPage() {
+         )}
+       </main>
+ 
+-      {/* Footer */}
+-      <footer className="border-t border-white/10 mt-16">
+-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-gray-500">
+-          <span>© {new Date().getFullYear()} Tendpick — Partenaire Amazon</span>
++      <footer className="border-t border-site-border bg-white mt-16">
++        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-site-text-secondary">
++          <span>© {new Date().getFullYear()} Tendpick</span>
+           <div className="flex gap-6">
+-            <Link href="/mentions-legales" className="hover:text-gray-300 transition-colors">Mentions légales</Link>
+-            <Link href="/politique-confidentialite" className="hover:text-gray-300 transition-colors">Confidentialité</Link>
++            <Link href="/mentions-legales" className="hover:text-site-primary transition-colors">Mentions légales</Link>
++            <Link href="/politique-confidentialite" className="hover:text-site-primary transition-colors">Confidentialité</Link>
+           </div>
+         </div>
+       </footer>
++
++      <CookieConsent market={market} />
++      <PixelInjector
++        pixelMeta={process.env.SITE_PIXEL_META}
++        pixelTiktok={process.env.SITE_PIXEL_TIKTOK}
++        pixelGtm={process.env.SITE_PIXEL_GTM}
++      />
+     </div>
+   );
+ }
+diff --git a/app/top-ventes/page.tsx b/app/top-ventes/page.tsx
+new file mode 100644
+index 0000000..59785d9
+--- /dev/null
++++ b/app/top-ventes/page.tsx
+@@ -0,0 +1,170 @@
++import Link from 'next/link';
++import Image from 'next/image';
++import { headers } from 'next/headers';
++import { getSupabaseAdmin, getActiveCategories } from '@/lib/supabase';
++import type { Product } from '@/types';
++import { getCloudinaryUrl } from '@/lib/cloudinary';
++import { getMarketFromHost } from '@/lib/market-from-host';
++import type { Market } from '@/lib/market';
++import type { Metadata } from 'next';
++import SiteHeader from '@/components/layout/SiteHeader';
++import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
++
++export const dynamic = 'force-dynamic';
++
++export const metadata: Metadata = {
++  title: 'Top Ventes — Tendpick',
++  description: 'Les produits les plus populaires, classés par plateforme : Amazon, Rakuten, AliExpress.',
++};
++
++interface Props {
++  searchParams: { source?: string };
++}
++
++async function getActiveProducts(market: Market): Promise<Product[]> {
++  try {
++    const sb = getSupabaseAdmin();
++    const { data } = await sb
++      .from('products')
++      .select('*')
++      .eq('active', true)
++      .eq('market', market)
++      .order('updated_at', { ascending: false });
++    return (data as Product[]) || [];
++  } catch {
++    return [];
++  }
++}
++
++export default async function TopVentesPage({ searchParams }: Props) {
++  const market = getMarketFromHost(headers().get('host'));
++  const [allProducts, categories] = await Promise.all([
++    getActiveProducts(market),
++    getActiveCategories(),
++  ]);
++
++  const withSource = allProducts
++    .map((p) => ({ product: p, source: getProductSource(p.affiliate_url) }))
++    .filter((x): x is { product: Product; source: TopVentesSource } => x.source !== null);
++
++  const activeSource = TOP_VENTES_SOURCES.some((s) => s.key === searchParams.source)
++    ? (searchParams.source as TopVentesSource)
++    : null;
++
++  const filtered = activeSource
++    ? withSource.filter((x) => x.source === activeSource)
++    : withSource;
++
++  return (
++    <div className="min-h-screen bg-site-bg text-site-text">
++      <SiteHeader categories={categories} market={market} />
++
++      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
++        <div className="mb-8">
++          <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">Top Ventes</h1>
++          <p className="text-site-text-secondary">
++            {filtered.length > 0
++              ? `${filtered.length} produit${filtered.length > 1 ? 's' : ''} parmi les plus populaires`
++              : 'Sélection en cours de préparation'}
++          </p>
++        </div>
++
++        <div className="flex flex-wrap gap-2 mb-10">
++          <Link
++            href="/top-ventes"
++            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
++              !activeSource
++                ? 'bg-site-primary border-site-primary text-white'
++                : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
++            }`}
++          >
++            Tout
++          </Link>
++          {TOP_VENTES_SOURCES.map((s) => (
++            <Link
++              key={s.key}
++              href={`/top-ventes?source=${s.key}`}
++              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
++                activeSource === s.key
++                  ? 'bg-site-primary border-site-primary text-white'
++                  : 'border-site-border text-site-text-secondary hover:text-site-primary hover:border-site-secondary'
++              }`}
++            >
++              <span>{s.icon}</span>
++              {s.label}
++            </Link>
++          ))}
++        </div>
++
++        {filtered.length === 0 ? (
++          <div className="text-center py-24 text-site-text-secondary">
++            <div className="text-5xl mb-4">📦</div>
++            <p className="text-lg">Aucun produit pour le moment sur cette plateforme.</p>
++          </div>
++        ) : (
++          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
++            {filtered.map(({ product: p, source }) => {
++              const img = p.image_url
++                ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
++                : null;
++              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === source);
++              return (
++                <Link
++                  key={p.id}
++                  href={`/${p.slug}`}
++                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
++                >
++                  <div className="aspect-square relative bg-site-bg flex-shrink-0">
++                    {img ? (
++                      <Image
++                        src={img}
++                        alt={p.name}
++                        fill
++                        className="object-cover group-hover:scale-105 transition-transform duration-300"
++                        unoptimized={img.includes('/fetch/')}
++                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
++                      />
++                    ) : (
++                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
++                    )}
++                    {sourceMeta && (
++                      <span className="absolute top-2 left-2 bg-white/95 border border-site-border rounded-full px-2 py-0.5 text-xs font-medium text-site-text-secondary flex items-center gap-1">
++                        <span>{sourceMeta.icon}</span>
++                        {sourceMeta.label}
++                      </span>
++                    )}
++                  </div>
++                  <div className="p-3 flex flex-col gap-1 flex-1">
++                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
++                      {p.hero_title || p.name}
++                    </p>
++                    <div className="flex items-center justify-between mt-1">
++                      {p.price ? (
++                        <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
++                      ) : (
++                        <span className="text-site-text-secondary text-xs">Prix chez le marchand</span>
++                      )}
++                      <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
++                        Voir →
++                      </span>
++                    </div>
++                  </div>
++                </Link>
++              );
++            })}
++          </div>
++        )}
++      </main>
++
++      <footer className="border-t border-site-border bg-white mt-16">
++        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-site-text-secondary">
++          <span>© {new Date().getFullYear()} Tendpick</span>
++          <div className="flex gap-6">
++            <Link href="/mentions-legales" className="hover:text-site-primary transition-colors">Mentions légales</Link>
++            <Link href="/politique-confidentialite" className="hover:text-site-primary transition-colors">Confidentialité</Link>
++          </div>
++        </div>
++      </footer>
++    </div>
++  );
++}
+diff --git a/components/layout/CookieConsent.tsx b/components/layout/CookieConsent.tsx
+index eeeab64..ce854a7 100644
+--- a/components/layout/CookieConsent.tsx
++++ b/components/layout/CookieConsent.tsx
+@@ -39,12 +39,12 @@ export default function CookieConsent({ market }: CookieConsentProps) {
+       aria-label={copy.title}
+       className="fixed bottom-0 left-0 right-0 z-[100] p-4 sm:p-6"
+     >
+-      <div className="max-w-3xl mx-auto bg-gray-900 border border-white/15 rounded-2xl shadow-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
++      <div className="max-w-3xl mx-auto bg-site-primary border border-white/10 rounded-2xl shadow-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+         <div className="flex-1 min-w-0">
+           <p className="text-sm font-semibold text-white mb-1">{copy.title}</p>
+-          <p className="text-xs text-gray-400 leading-relaxed">
++          <p className="text-xs text-white/60 leading-relaxed">
+             {copy.body}{' '}
+-            <a href="/politique-confidentialite" className="underline hover:text-gray-200 transition-colors">
++            <a href="/politique-confidentialite" className="underline hover:text-white transition-colors">
+               {copy.learnMore}
+             </a>
+           </p>
+@@ -52,13 +52,13 @@ export default function CookieConsent({ market }: CookieConsentProps) {
+         <div className="flex gap-3 flex-shrink-0 w-full sm:w-auto">
+           <button
+             onClick={() => setConsent('declined')}
+-            className="flex-1 sm:flex-none text-xs text-gray-400 hover:text-white border border-white/15 hover:border-white/30 transition-colors px-4 py-2 rounded-lg"
++            className="flex-1 sm:flex-none text-xs text-white/70 hover:text-white border border-white/15 hover:border-white/30 transition-colors px-4 py-2 rounded-lg"
+           >
+             {copy.decline}
+           </button>
+           <button
+             onClick={() => setConsent('accepted')}
+-            className="flex-1 sm:flex-none text-xs bg-violet-600 hover:bg-violet-500 transition-colors text-white font-semibold px-4 py-2 rounded-lg"
++            className="flex-1 sm:flex-none text-xs bg-site-cta hover:bg-site-cta-hover transition-colors text-white font-semibold px-4 py-2 rounded-lg"
+           >
+             {copy.accept}
+           </button>
+diff --git a/components/layout/SiteHeader.tsx b/components/layout/SiteHeader.tsx
+new file mode 100644
+index 0000000..473462e
+--- /dev/null
++++ b/components/layout/SiteHeader.tsx
+@@ -0,0 +1,140 @@
++'use client';
++
++import { useState } from 'react';
++import Link from 'next/link';
++import { Menu, X, ChevronDown } from 'lucide-react';
++import type { Category } from '@/types';
++import type { Market } from '@/lib/market';
++import { TOP_VENTES_SOURCES } from '@/lib/top-ventes';
++
++interface Props {
++  categories: Category[];
++  market: Market;
++}
++
++function categoryName(c: Category, market: Market): string {
++  if (market === 'es') return c.name_es;
++  if (market === 'uk') return c.name_uk;
++  return c.name_fr;
++}
++
++export default function SiteHeader({ categories, market }: Props) {
++  const [mobileOpen, setMobileOpen] = useState(false);
++  const [topVentesOpen, setTopVentesOpen] = useState(false);
++
++  return (
++    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-site-border">
++      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
++        <Link href="/" className="flex items-center gap-2 font-extrabold text-xl tracking-tight text-site-primary shrink-0">
++          <span className="w-2.5 h-2.5 rounded-full bg-site-cta" />
++          Tendpick
++        </Link>
++
++        <nav className="hidden md:flex items-center gap-5 overflow-x-auto">
++          <div
++            className="relative shrink-0"
++            onMouseEnter={() => setTopVentesOpen(true)}
++            onMouseLeave={() => setTopVentesOpen(false)}
++          >
++            <button
++              type="button"
++              className="flex items-center gap-1 text-sm font-medium text-site-text hover:text-site-primary transition-colors whitespace-nowrap"
++            >
++              Top Ventes
++              <ChevronDown className="w-4 h-4" />
++            </button>
++            {topVentesOpen && (
++              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-56">
++                <div className="bg-white rounded-xl border border-site-border shadow-lg py-2">
++                  <Link
++                    href="/top-ventes"
++                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-site-text hover:bg-site-bg transition-colors"
++                  >
++                    Tout voir
++                  </Link>
++                  <div className="my-1 border-t border-site-border" />
++                  {TOP_VENTES_SOURCES.map((s) => (
++                    <Link
++                      key={s.key}
++                      href={`/top-ventes?source=${s.key}`}
++                      className="flex items-center gap-2 px-4 py-2.5 text-sm text-site-text hover:bg-site-bg transition-colors"
++                    >
++                      <span>{s.icon}</span>
++                      {s.label}
++                    </Link>
++                  ))}
++                </div>
++              </div>
++            )}
++          </div>
++
++          {categories.map((c) => (
++            <Link
++              key={c.id}
++              href={`/c/${c.slug}`}
++              className="flex items-center gap-1.5 text-sm font-medium text-site-text hover:text-site-primary transition-colors whitespace-nowrap shrink-0"
++            >
++              <span>{c.icon || '📦'}</span>
++              {categoryName(c, market)}
++            </Link>
++          ))}
++        </nav>
++
++        <div className="hidden md:block shrink-0">
++          <Link
++            href="/produits"
++            className="inline-flex items-center gap-2 bg-site-cta hover:bg-site-cta-hover text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition-colors"
++          >
++            Voir le catalogue
++          </Link>
++        </div>
++
++        <button
++          type="button"
++          onClick={() => setMobileOpen((v) => !v)}
++          className="md:hidden p-2 -mr-2 text-site-text"
++          aria-label="Menu"
++        >
++          {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
++        </button>
++      </div>
++
++      {mobileOpen && (
++        <div className="md:hidden border-t border-site-border bg-white max-h-[75vh] overflow-y-auto">
++          <div className="px-4 py-4 flex flex-col gap-1">
++            <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">Top Ventes</p>
++            <Link href="/top-ventes" onClick={() => setMobileOpen(false)} className="px-2 py-2.5 text-sm font-medium text-site-text rounded-lg hover:bg-site-bg">
++              Tout voir
++            </Link>
++            {TOP_VENTES_SOURCES.map((s) => (
++              <Link
++                key={s.key}
++                href={`/top-ventes?source=${s.key}`}
++                onClick={() => setMobileOpen(false)}
++                className="flex items-center gap-2 px-2 py-2.5 text-sm text-site-text rounded-lg hover:bg-site-bg"
++              >
++                <span>{s.icon}</span>
++                {s.label}
++              </Link>
++            ))}
++
++            <div className="mt-2 pt-2 border-t border-site-border">
++              <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">Catégories</p>
++              {categories.map((c) => (
++                <Link
++                  key={c.id}
++                  href={`/c/${c.slug}`}
++                  onClick={() => setMobileOpen(false)}
++                  className="flex items-center gap-2 px-2 py-2.5 text-sm text-site-text rounded-lg hover:bg-site-bg"
++                >
++                  <span>{c.icon || '📦'}</span>
++                  {categoryName(c, market)}
++                </Link>
++              ))}
++            </div>
++          </div>
++        </div>
++      )}
++    </header>
++  );
++}
+diff --git a/lib/supabase.ts b/lib/supabase.ts
+index bcc4984..00920ee 100644
+--- a/lib/supabase.ts
++++ b/lib/supabase.ts
+@@ -1,5 +1,5 @@
+ import { createClient, SupabaseClient } from '@supabase/supabase-js';
+-import type { Product, AnalyticsData, DashboardStats } from '@/types';
++import type { Product, AnalyticsData, DashboardStats, Category } from '@/types';
+ import type { Market } from '@/lib/market';
+ import { NextRequest } from 'next/server';
+ import { createHash } from 'crypto';
+@@ -360,3 +360,87 @@ export async function getDashboardStats(market: Market): Promise<DashboardStats>
+     total_views: totalViews || 0,
+   };
+ }
++
++// =====================
++// Category operations (30/09, refonte header/nav)
++//
++// getCategories() : toutes les catégories, pour l'admin (gestion complète,
++// y compris masquées). getActiveCategories() : uniquement is_active=true,
++// pour toutes les pages publiques (SiteHeader, accueil, /produits,
++// /c/[slug]) — permet à Jerome de masquer une catégorie sans supprimer
++// les produits qui y sont rattachés.
++// =====================
++
++export async function getCategories(): Promise<Category[]> {
++  const { data, error } = await supabaseAdmin
++    .from('categories')
++    .select('*')
++    .order('sort_order', { ascending: true });
++
++  if (error || !data) return [];
++  return data as Category[];
++}
++
++export async function getActiveCategories(): Promise<Category[]> {
++  const { data, error } = await supabaseAdmin
++    .from('categories')
++    .select('*')
++    .eq('is_active', true)
++    .order('sort_order', { ascending: true });
++
++  if (error || !data) return [];
++  return data as Category[];
++}
++
++export async function getCategoryBySlug(slug: string): Promise<Category | null> {
++  const { data, error } = await supabaseAdmin
++    .from('categories')
++    .select('*')
++    .eq('slug', slug)
++    .eq('is_active', true)
++    .maybeSingle();
++
++  if (error || !data) return null;
++  return data as Category;
++}
++
++export async function createCategory(input: Omit<Category, 'id' | 'created_at'>): Promise<Category | null> {
++  const { data, error } = await supabaseAdmin
++    .from('categories')
++    .insert(input)
++    .select()
++    .single();
++
++  if (error || !data) return null;
++  return data as Category;
++}
++
++export async function updateCategory(id: string, input: Partial<Omit<Category, 'id' | 'created_at'>>): Promise<Category | null> {
++  const { data, error } = await supabaseAdmin
++    .from('categories')
++    .update(input)
++    .eq('id', id)
++    .select()
++    .single();
++
++  if (error || !data) return null;
++  return data as Category;
++}
++
++export async function deleteCategory(id: string): Promise<boolean> {
++  const { error } = await supabaseAdmin.from('categories').delete().eq('id', id);
++  return !error;
++}
++
++export async function getActiveProductsByCategory(categoryId: string, market: Market): Promise<Product[]> {
++  const { data, error } = await supabaseAdmin
++    .from('products')
++    .select('*')
++    .eq('active', true)
++    .eq('market', market)
++    .eq('category_id', categoryId)
++    .order('updated_at', { ascending: false });
++
++  if (error || !data) return [];
++  return data as Product[];
++}
+diff --git a/lib/top-ventes.ts b/lib/top-ventes.ts
+new file mode 100644
+index 0000000..11d1c6d
+--- /dev/null
++++ b/lib/top-ventes.ts
+@@ -0,0 +1,41 @@
++/**
++ * Top Ventes — sources multi-plateformes (30/09, refonte header/nav).
++ *
++ * Pas de colonne dédiée en base : la plateforme d'un produit est déduite
++ * de son affiliate_url (déjà présente sur chaque produit), ce qui évite
++ * une migration et garde une seule source de vérité.
++ */
++
++export type TopVentesSource = 'amazon' | 'rakuten' | 'aliexpress';
++
++export interface TopVentesSourceMeta {
++  key: TopVentesSource;
++  label: string;
++  icon: string;
++}
++
++export const TOP_VENTES_SOURCES: TopVentesSourceMeta[] = [
++  { key: 'amazon', label: 'Amazon', icon: '📦' },
++  { key: 'rakuten', label: 'Rakuten', icon: '🛍️' },
++  { key: 'aliexpress', label: 'AliExpress', icon: '🚀' },
++];
++
++/**
++ * Déduit la plateforme depuis le nom d'hôte de l'URL d'affiliation.
++ * Retourne null si l'URL est absente, invalide, ou d'une plateforme pas
++ * encore reconnue (ex. future source ajoutée au registre d'intégrations
++ * mais pas encore ici) — le produit est alors simplement exclu du filtre
++ * par source sans faire planter la page.
++ */
++export function getProductSource(affiliateUrl: string | null | undefined): TopVentesSource | null {
++  if (!affiliateUrl) return null;
++  try {
++    const host = new URL(affiliateUrl).hostname.toLowerCase();
++    if (host.includes('amazon.')) return 'amazon';
++    if (host.includes('rakuten.')) return 'rakuten';
++    if (host.includes('aliexpress.')) return 'aliexpress';
++    return null;
++  } catch {
++    return null;
++  }
++}
+diff --git a/supabase/migrations/20260930000001_categories.sql b/supabase/migrations/20260930000001_categories.sql
+new file mode 100644
+index 0000000..2f6b779
+--- /dev/null
++++ b/supabase/migrations/20260930000001_categories.sql
+@@ -0,0 +1,51 @@
++-- Catégories de navigation catalogue (30/09, refonte header "Confiance
++-- moderne" + menu site). Une ligne = une catégorie, traduite fr/es/uk —
++-- pas de catégorie par marché. is_active permet de la masquer côté public
++-- (nav, accueil, /produits, /c/[slug]) sans supprimer les produits qui y
++-- sont déjà rattachés.
++--
++-- "Top Ventes" (Amazon/Rakuten/AliExpress) N'EST PAS une catégorie stockée
++-- ici : c'est un filtre transversal calculé depuis products.affiliate_url
++-- (voir lib/top-ventes.ts) — décision Jerome, pas dupliqué en base.
++
++CREATE TABLE IF NOT EXISTS categories (
++  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++  slug text NOT NULL UNIQUE,
++  name_fr text NOT NULL,
++  name_es text NOT NULL,
++  name_uk text NOT NULL,
++  icon text,
++  sort_order integer NOT NULL DEFAULT 0,
++  is_active boolean NOT NULL DEFAULT true,
++  created_at timestamptz NOT NULL DEFAULT now()
++);
++
++CREATE INDEX IF NOT EXISTS idx_categories_active ON categories(is_active);
++
++ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
++
++-- RLS calquée sur le reste du projet (Sprint 0, 18/09) : service_role
++-- uniquement, aucun accès direct depuis le client public (les pages
++-- publiques lisent via getSupabaseAdmin(), côté serveur).
++DROP POLICY IF EXISTS "service_role_all_categories" ON categories;
++CREATE POLICY "service_role_all_categories" ON categories
++  FOR ALL USING (auth.role() = 'service_role');
++
++-- Rattachement produit → catégorie, nullable (un produit non classé reste
++-- visible dans le catalogue général, juste absent des pages /c/[slug]).
++ALTER TABLE products ADD COLUMN IF NOT EXISTS category_id uuid REFERENCES categories(id);
++CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
++
++-- Seed : les 8 catégories validées par Jerome (27-28/09), conservées
++-- telles quelles plutôt que réduites. Idempotent (ON CONFLICT DO NOTHING)
++-- pour pouvoir rejouer la migration sans dupliquer si déjà présentes.
++INSERT INTO categories (slug, name_fr, name_es, name_uk, icon, sort_order) VALUES
++  ('best-of-amazon',       'Best of Amazon',          'Best of Amazon',                 'Best of Amazon',            '🏆', 1),
++  ('tech-gadgets',         'Tech & Gadgets',          'Tecnología y Gadgets',           'Tech & Gadgets',            '💻', 2),
++  ('mode-beaute',          'Mode & Beauté',           'Moda y Belleza',                 'Fashion & Beauty',          '👗', 3),
++  ('maison-deco',          'Maison & Déco',           'Hogar y Decoración',             'Home & Decor',              '🏠', 4),
++  ('sport-bien-etre',      'Sport & Bien-être',       'Deporte y Bienestar',            'Sport & Wellness',          '🏃', 5),
++  ('gaming-casino-paris',  'Gaming, Casino & Paris',  'Gaming, Casino y Apuestas',      'Gaming, Casino & Betting',  '🎮', 6),
++  ('art-design',           'Art & Design',            'Arte y Diseño',                  'Art & Design',              '🎨', 7),
++  ('loisirs',              'Loisirs',                 'Ocio',                           'Leisure',                   '🎯', 8)
++ON CONFLICT (slug) DO NOTHING;
+diff --git a/tailwind.config.ts b/tailwind.config.ts
+index 7e23bae..6837438 100644
+--- a/tailwind.config.ts
++++ b/tailwind.config.ts
+@@ -34,6 +34,19 @@ const config: Config = {
+           800: '#92400e',
+           900: '#78350f',
+         },
++        // Thème "site" — refonte visuelle claire validée sur Design.html
++        // (header bleu foncé + fond clair), utilisée par SiteHeader et les
++        // pages publiques (home, produits, top-ventes, catégories).
++        site: {
++          bg: '#f6f8fc',
++          border: '#e2e5eb',
++          primary: '#1a2541',
++          secondary: '#3b5b8c',
++          text: '#1a2541',
++          'text-secondary': '#515967',
++          cta: '#ff602f',
++          'cta-hover': '#e5501f',
++        },
+       },
+       fontFamily: {
+         sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+diff --git a/types/index.ts b/types/index.ts
+index 4eec1fb..131d635 100644
+--- a/types/index.ts
++++ b/types/index.ts
+@@ -1,5 +1,21 @@
+ import type { Market } from '@/lib/market';
+ 
++// Catégorie de navigation (menu site, /c/[slug], grille accueil) — 30/09,
++// refonte header. Traductions portées directement sur la ligne (pas de
++// catégorie par marché) ; is_active permet de la masquer sans supprimer
++// les produits qui y sont rattachés (demande Jerome).
++export interface Category {
++  id: string;
++  slug: string;
++  name_fr: string;
++  name_es: string;
++  name_uk: string;
++  icon: string | null;
++  sort_order: number;
++  is_active: boolean;
++  created_at: string;
++}
++
+ export interface PainPoint {
+   emoji: string;
+   title: string;
+@@ -75,6 +91,11 @@ export interface Product {
+ 
+   // Multi-marché (Sprint 1) — un produit = un marché strict.
+   market: Market;
++
++  // Catégorie de navigation (30/09) — nullable : un produit peut ne pas
++  // encore être classé, il reste alors visible dans le catalogue général
++  // mais absent des pages /c/[slug].
++  category_id?: string | null;
+   source_product_ref?: string | null; // lien optionnel vers le même produit physique sur un autre marché
+   product_source?: 'auto_discovered' | 'manual_affiliate' | 'own_product' | null;
+ 
+-- 
+2.43.0
+

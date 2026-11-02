@@ -1,0 +1,151 @@
+From 11c3a7a00e99b8eb65e1cbda51a332f162e413b1 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 16 Oct 2026 16:14:31 +0200
+Subject: [PATCH] =?UTF-8?q?fix(admin/blog):=20la=20liste=20ne=20se=20vide?=
+ =?UTF-8?q?=20plus=20au=20retour=20depuis=20l'=C3=A9dition?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- getAllBlogPostsAdmin ne renvoie plus [] en silence sur erreur Supabase
+  (affichait « Aucun article ») : nouvelle tentative + bandeau d'erreur
+- liste sans le contenu markdown (payload allégé)
+- pages new/[id] en force-dynamic
+- staleTimes.dynamic = 0 : plus de cache client périmé au retour
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ app/admin/blog/[id]/page.tsx |  2 ++
+ app/admin/blog/new/page.tsx  |  2 ++
+ app/admin/blog/page.tsx      | 12 ++++++++++--
+ app/api/blog/route.ts        |  3 ++-
+ lib/blog.ts                  | 25 +++++++++++++++++++++----
+ next.config.js               |  4 ++++
+ 6 files changed, 41 insertions(+), 7 deletions(-)
+
+diff --git a/app/admin/blog/[id]/page.tsx b/app/admin/blog/[id]/page.tsx
+index 0607fc1..eaa9a8c 100644
+--- a/app/admin/blog/[id]/page.tsx
++++ b/app/admin/blog/[id]/page.tsx
+@@ -8,6 +8,8 @@ interface Props {
+   params: { id: string };
+ }
+ 
++export const dynamic = 'force-dynamic';
++
+ export default async function EditBlogPostPage({ params }: Props) {
+   const post = await getBlogPostByIdAdmin(params.id);
+   if (!post) notFound();
+diff --git a/app/admin/blog/new/page.tsx b/app/admin/blog/new/page.tsx
+index 81dacc6..700eb6a 100644
+--- a/app/admin/blog/new/page.tsx
++++ b/app/admin/blog/new/page.tsx
+@@ -3,6 +3,8 @@ import BlogPostForm from '@/components/admin/BlogPostForm';
+ import { getAllProducts } from '@/lib/supabase';
+ import { getBlogCategories } from '@/lib/blog';
+ 
++export const dynamic = 'force-dynamic';
++
+ export default async function NewBlogPostPage() {
+   const [products, categories] = await Promise.all([getAllProducts(), getBlogCategories()]);
+ 
+diff --git a/app/admin/blog/page.tsx b/app/admin/blog/page.tsx
+index 2b57d35..f9fe861 100644
+--- a/app/admin/blog/page.tsx
++++ b/app/admin/blog/page.tsx
+@@ -5,7 +5,7 @@ import BlogPostsTable from './BlogPostsTable';
+ export const dynamic = 'force-dynamic';
+ 
+ export default async function BlogAdminPage() {
+-  const posts = await getAllBlogPostsAdmin();
++  const { posts, error } = await getAllBlogPostsAdmin();
+ 
+   return (
+     <div className="p-8">
+@@ -36,7 +36,15 @@ export default async function BlogAdminPage() {
+         </div>
+       </div>
+ 
+-      {posts.length === 0 ? (
++      {error ? (
++        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-red-800">
++          <p className="font-bold mb-1">Impossible de charger les articles.</p>
++          <p className="text-sm mb-4">Vos articles ne sont pas supprimés — la lecture a échoué ({error}). Rechargez la page.</p>
++          <a href="/admin/blog" className="inline-block px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700">
++            Recharger
++          </a>
++        </div>
++      ) : posts.length === 0 ? (
+         <div className="bg-white rounded-2xl border border-gray-200 py-20 text-center">
+           <div className="text-5xl mb-4">📝</div>
+           <h3 className="text-lg font-bold text-gray-900 mb-2">Aucun article</h3>
+diff --git a/app/api/blog/route.ts b/app/api/blog/route.ts
+index b182275..280234d 100644
+--- a/app/api/blog/route.ts
++++ b/app/api/blog/route.ts
+@@ -10,7 +10,8 @@ export async function GET(req: NextRequest) {
+     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+   }
+   try {
+-    const posts = await getAllBlogPostsAdmin();
++    const { posts, error: listError } = await getAllBlogPostsAdmin();
++    if (listError) return NextResponse.json({ error: listError }, { status: 500 });
+     return NextResponse.json(posts);
+   } catch (error) {
+     console.error('GET /api/blog error:', error);
+diff --git a/lib/blog.ts b/lib/blog.ts
+index cd31a53..7f9db6b 100644
+--- a/lib/blog.ts
++++ b/lib/blog.ts
+@@ -89,11 +89,28 @@ export async function getBlogPostByIdAdmin(id: string): Promise<BlogPost | null>
+ }
+ 
+ /** Admin uniquement : tous les articles (brouillons + publies), plus recents d'abord. */
+-export async function getAllBlogPostsAdmin(): Promise<BlogPost[]> {
++/**
++ * Liste admin : on ne charge PAS le contenu markdown (inutile dans un
++ * tableau, et 12 articles longs alourdissaient inutilement la page). Et on
++ * ne renvoie plus silencieusement [] en cas d'erreur Supabase — la page
++ * affichait alors "Aucun article" comme si les articles avaient disparu.
++ * Une nouvelle tentative est faite avant de remonter l'erreur.
++ */
++const LIST_SELECT =
++  'id, slug, market, title, excerpt, cover_image_url, status, tags, category_id, linked_product_ids, author_name, generated_by_ai, published_at, created_at, updated_at, category:blog_categories(*)';
++
++export async function getAllBlogPostsAdmin(): Promise<{ posts: BlogPost[]; error: string | null }> {
+   const sb = getSupabaseAdmin();
+-  const { data, error } = await sb.from('blog_posts').select(POST_SELECT).order('created_at', { ascending: false });
+-  if (error || !data) return [];
+-  return data as unknown as BlogPost[];
++  let lastError = 'Erreur inconnue';
++  for (let attempt = 0; attempt < 2; attempt++) {
++    const { data, error } = await sb.from('blog_posts').select(LIST_SELECT).order('created_at', { ascending: false });
++    if (!error && data) {
++      return { posts: (data as unknown as BlogPost[]).map((p) => ({ ...p, content: '' })), error: null };
++    }
++    lastError = error?.message ?? lastError;
++    console.error('[blog] getAllBlogPostsAdmin a échoué (tentative ' + (attempt + 1) + ') :', lastError);
++  }
++  return { posts: [], error: lastError };
+ }
+ 
+ function toInsertPayload(form: BlogPostFormData) {
+diff --git a/next.config.js b/next.config.js
+index 9d86754..e969593 100644
+--- a/next.config.js
++++ b/next.config.js
+@@ -30,6 +30,10 @@ const nextConfig = {
+     ],
+   },
+   experimental: {
++    // Cache client des pages dynamiques désactivé : au retour (bouton Retour,
++    // flèche) l'admin recharge toujours les données au lieu d'afficher une
++    // vue périmée ou vide.
++    staleTimes: { dynamic: 0, static: 30 },
+     serverActions: {
+       allowedOrigins: ['localhost:3000', 'tendpick.com', 'www.tendpick.com'],
+     },
+-- 
+2.43.0
+

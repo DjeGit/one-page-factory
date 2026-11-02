@@ -1,0 +1,135 @@
+From ad524c213988f3ece048d69be451675d7f282901 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Tue, 22 Sep 2026 13:55:35 +0200
+Subject: [PATCH] =?UTF-8?q?fix:=20retire=20les=20derniers=20=C3=A9l=C3=A9m?=
+ =?UTF-8?q?ents=20d'urgence/stock=20fictifs=20(Design=20Studio=20+=20legac?=
+ =?UTF-8?q?y)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Le compte à rebours et le badge stock du legacy JSX (app/[slug]/page.tsx)
+avaient déjà été retirés le 21/09 pour risque de pratique commerciale
+trompeuse, mais deux éléments équivalents subsistaient ailleurs, toujours
+avec des valeurs 100% fictives et figées :
+- TemplateRenderer.tsx (Design Studio) : bloc "Offre limitée — se termine
+  dans 02:34:21" (jamais réellement décompté) et bloc "Plus que 7 unités
+  disponibles" (jamais lié au stock réel), tous deux activables via un
+  toggle admin.
+- HeroSection.tsx (legacy) : badge "Tendance — Stock limité" affiché sans
+  condition sur tout produit.
+
+Retrait des trois + des deux toggles "Compte à rebours"/"Stock limité"
+dans EditorPanel.tsx (Design Studio) qui ne pilotaient plus rien.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ components/admin/design/EditorPanel.tsx   | 14 +++-----
+ components/landing/HeroSection.tsx        |  9 +++--
+ components/templates/TemplateRenderer.tsx | 44 ++++-------------------
+ 3 files changed, 14 insertions(+), 53 deletions(-)
+
+diff --git a/components/admin/design/EditorPanel.tsx b/components/admin/design/EditorPanel.tsx
+index bd5f0c4..7a4231c 100644
+--- a/components/admin/design/EditorPanel.tsx
++++ b/components/admin/design/EditorPanel.tsx
+@@ -192,16 +192,10 @@ export default function EditorPanel({ overrides, onChange, template, productSlug
+                 onChange={(v) => updateSection('faq', v)}
+                 label="FAQ"
+               />
+-              <Toggle
+-                checked={overrides.sections.countdown}
+-                onChange={(v) => updateSection('countdown', v)}
+-                label="Compte à rebours"
+-              />
+-              <Toggle
+-                checked={overrides.sections.stock}
+-                onChange={(v) => updateSection('stock', v)}
+-                label="Stock limité"
+-              />
++              {/* Compte à rebours / Stock limité retirés (22/09) : ces
++                  sections affichaient des valeurs fictives et figées
++                  ("02:34:21", "7 unités") sans donnée réelle derrière —
++                  risque de pratique commerciale trompeuse. */}
+             </div>
+           </div>
+         )}
+diff --git a/components/landing/HeroSection.tsx b/components/landing/HeroSection.tsx
+index cd8a050..062a7a8 100644
+--- a/components/landing/HeroSection.tsx
++++ b/components/landing/HeroSection.tsx
+@@ -31,11 +31,10 @@ export default function HeroSection({ product, heroTitle, heroSubtitle, heroCta
+         <div className="grid lg:grid-cols-2 gap-12 items-center">
+           {/* Left: Content */}
+           <div className="order-2 lg:order-1 text-center lg:text-left">
+-            {/* Badge */}
+-            <div className="inline-flex items-center gap-2 bg-accent-500/20 border border-accent-500/30 text-accent-400 px-4 py-2 rounded-full text-sm font-semibold mb-6 animate-pulse-slow">
+-              <span>⚡</span>
+-              <span>Tendance — Stock limité</span>
+-            </div>
++            {/* Badge "Tendance — Stock limité" retiré (22/09) : affirmation
++                fictive affichée sur tout produit sans donnée réelle
++                derrière — risque de pratique commerciale trompeuse, même
++                décision que pour le compte à rebours/stock du Design Studio. */}
+ 
+             {/* Main Title */}
+             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-white leading-tight mb-6">
+diff --git a/components/templates/TemplateRenderer.tsx b/components/templates/TemplateRenderer.tsx
+index b8d39a4..6799698 100644
+--- a/components/templates/TemplateRenderer.tsx
++++ b/components/templates/TemplateRenderer.tsx
+@@ -332,44 +332,12 @@ export default function TemplateRenderer({ product, template, overrides, scale,
+       {/* HERO */}
+       {renderHero()}
+ 
+-      {/* COUNTDOWN */}
+-      {sections.countdown && (
+-        <section style={{ ...sectionStyle, background: template.accentColor, borderTop: 'none' }}>
+-          <div style={{ textAlign: 'center' }}>
+-            <p style={{ color: '#fff', fontWeight: 700, fontSize: '14px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+-              ⏱ Offre limitée — se termine dans
+-            </p>
+-            <div style={{ display: 'flex', justifyContent: 'center', gap: '16px' }}>
+-              {[['02', 'heures'], ['34', 'min'], ['21', 'sec']].map(([val, label]) => (
+-                <div key={label} style={{ textAlign: 'center' }}>
+-                  <div style={{
+-                    backgroundColor: 'rgba(0,0,0,0.25)',
+-                    color: '#fff',
+-                    fontSize: '2rem',
+-                    fontWeight: 900,
+-                    borderRadius: '8px',
+-                    padding: '8px 16px',
+-                    minWidth: '64px',
+-                    lineHeight: 1,
+-                  }}>{val}</div>
+-                  <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: '11px', marginTop: '4px', textTransform: 'uppercase' }}>{label}</div>
+-                </div>
+-              ))}
+-            </div>
+-          </div>
+-        </section>
+-      )}
+-
+-      {/* STOCK */}
+-      {sections.stock && (
+-        <section style={{ padding: '16px 48px', background: isDark ? 'rgba(220,38,38,0.15)' : '#fef2f2', borderTop: `1px solid ${isDark ? 'rgba(220,38,38,0.3)' : '#fecaca'}` }}>
+-          <div style={{ textAlign: 'center' }}>
+-            <span style={{ color: '#dc2626', fontWeight: 700, fontSize: '14px' }}>
+-              🔴 Attention : Plus que <strong>7 unités</strong> disponibles — commandez maintenant avant rupture de stock !
+-            </span>
+-          </div>
+-        </section>
+-      )}
++      {/* COUNTDOWN et STOCK retirés (22/09) : valeurs 100% fictives et figées
++          ("02:34:21", "7 unités") sans aucune donnée réelle derrière — même
++          risque de pratique commerciale trompeuse déjà écarté sur le
++          parcours legacy (cf. app/[slug]/page.tsx). sections.countdown /
++          sections.stock restent dans le type le temps de nettoyer les
++          template_config existants, mais ne sont plus lus ici. */}
+ 
+       {/* PAIN POINTS */}
+       {sections.painPoints && product.pain_points && product.pain_points.length > 0 && (
+-- 
+2.43.0
+

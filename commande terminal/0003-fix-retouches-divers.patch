@@ -1,0 +1,570 @@
+From 93ba842851cec6ba5b5c95d6e7fb1220c12d72dd Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 11:36:39 +0200
+Subject: [PATCH] fix: retouches accueil/admin/header + upload image produit
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Remet "Explorer par catégorie" sur l'accueil (sous "Sélection du
+  moment"), repointée vers les articles de blog par catégorie.
+- Retire les kickers "Classement"/"Fraîchement ajouté" (garde les
+  marges), aligne la couleur de "Voir tous les produits"/"Voir tout le
+  top ventes" sur celle des titres.
+- Simplifie les pastilles de catégorie du blog public (même format que
+  Top Ventes/Tout, sans icône ni couleur par catégorie).
+- Corrige /api/categories/[id] : la bascule Actif/Masqué n'écrase plus
+  les autres champs (icône notamment) en ne mettant à jour que les
+  champs réellement envoyés.
+- Met à jour les mentions légales (programmes d'affiliation
+  Amazon/Rakuten/AliExpress, nouvelle section contenu éditorial/blog).
+- Survol du menu header en orange Tendpick (au lieu de bleu/navy).
+- Ajoute l'upload direct d'image produit (app/api/upload, signé
+  Cloudinary) : recadrage carré 1200x1200 automatique à l'envoi, en plus
+  du format/qualité déjà optimisés à l'affichage.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ app/api/categories/[id]/route.ts | 26 +++++----
+ app/api/upload/route.ts          | 93 ++++++++++++++++++++++++++++++++
+ app/blog/page.tsx                | 10 ++--
+ app/mentions-legales/page.tsx    | 24 ++++++---
+ app/page.tsx                     | 54 +++++++++++++++----
+ components/admin/ProductForm.tsx | 82 ++++++++++++++++++++++++----
+ components/layout/SiteHeader.tsx |  6 +--
+ lib/site-copy.ts                 | 16 +++---
+ 8 files changed, 260 insertions(+), 51 deletions(-)
+ create mode 100644 app/api/upload/route.ts
+
+diff --git a/app/api/categories/[id]/route.ts b/app/api/categories/[id]/route.ts
+index bb6aa96..5497885 100644
+--- a/app/api/categories/[id]/route.ts
++++ b/app/api/categories/[id]/route.ts
+@@ -1,6 +1,7 @@
+ import { NextRequest, NextResponse } from 'next/server';
+ import { updateCategory, deleteCategory } from '@/lib/supabase';
+ import { isAuthorizedRequest } from '@/lib/admin-auth';
++import type { Category } from '@/types';
+ 
+ export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+   if (!isAuthorizedRequest(req)) {
+@@ -9,15 +10,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
+   try {
+     const body = await req.json();
+ 
+-    const category = await updateCategory(params.id, {
+-      slug: body.slug,
+-      name_fr: body.name_fr,
+-      name_es: body.name_es,
+-      name_uk: body.name_uk,
+-      icon: body.icon ?? null,
+-      sort_order: body.sort_order,
+-      is_active: body.is_active,
+-    });
++    // Mise à jour partielle (05/10, fix) : le bouton Actif/Masqué de
++    // CategoriesManager.tsx n'envoie QUE { is_active }. Avant ce correctif,
++    // les autres champs (slug/name_*/sort_order non envoyés -> undefined,
++    // mais `icon: body.icon ?? null` forçait explicitement icon à null)
++    // étaient écrasés à chaque bascule Actif/Masqué. On ne touche
++    // désormais que les champs réellement présents dans la requête.
++    const update: Partial<Category> = {};
++    if (body.slug !== undefined) update.slug = body.slug;
++    if (body.name_fr !== undefined) update.name_fr = body.name_fr;
++    if (body.name_es !== undefined) update.name_es = body.name_es;
++    if (body.name_uk !== undefined) update.name_uk = body.name_uk;
++    if (body.icon !== undefined) update.icon = body.icon ?? null;
++    if (body.sort_order !== undefined) update.sort_order = body.sort_order;
++    if (body.is_active !== undefined) update.is_active = body.is_active;
++
++    const category = await updateCategory(params.id, update);
+ 
+     if (!category) {
+       return NextResponse.json({ error: 'Erreur lors de la mise à jour de la catégorie' }, { status: 500 });
+diff --git a/app/api/upload/route.ts b/app/api/upload/route.ts
+new file mode 100644
+index 0000000..40d2adc
+--- /dev/null
++++ b/app/api/upload/route.ts
+@@ -0,0 +1,93 @@
++import { NextRequest, NextResponse } from 'next/server';
++import { createHash } from 'crypto';
++import { isAuthorizedRequest } from '@/lib/admin-auth';
++
++/**
++ * Upload direct d'image produit vers Cloudinary (05/10, demande Jerome :
++ * "je dois pouvoir ajouter des images par produits ... sans devoir passer
++ * par un logiciel tiers"). Avant cette route, le champ Image du formulaire
++ * produit n'acceptait qu'une URL déjà hébergée ailleurs.
++ *
++ * Deux choses sont normalisées automatiquement à l'upload, sans action de
++ * Jerome :
++ * - Format/qualité : déjà fait à l'AFFICHAGE par lib/cloudinary.ts
++ *   (f_auto/q_auto sur chaque <Image>) — pas dupliqué ici.
++ * - Dimensions : recadrage carré 1200x1200 (c_fill, g_auto = cadrage
++ *   intelligent sur le sujet principal) appliqué à l'upload, pour que
++ *   toutes les images produit aient le même format quel que soit le
++ *   fichier d'origine envoyé.
++ *
++ * Upload SIGNÉ (jamais de preset "unsigned" exposé publiquement) : la
++ * signature est calculée côté serveur avec CLOUDINARY_API_SECRET, jamais
++ * transmise au client.
++ */
++export async function POST(req: NextRequest) {
++  if (!isAuthorizedRequest(req)) {
++    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
++  }
++
++  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
++  const apiKey = process.env.CLOUDINARY_API_KEY;
++  const apiSecret = process.env.CLOUDINARY_API_SECRET;
++
++  if (!cloudName || !apiKey || !apiSecret) {
++    return NextResponse.json(
++      { error: "Upload d'image non configuré : CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET manquants sur le serveur." },
++      { status: 500 }
++    );
++  }
++
++  try {
++    const form = await req.formData();
++    const file = form.get('file');
++
++    if (!(file instanceof Blob)) {
++      return NextResponse.json({ error: 'Aucun fichier reçu' }, { status: 400 });
++    }
++    if (!file.type.startsWith('image/')) {
++      return NextResponse.json({ error: 'Le fichier doit être une image' }, { status: 400 });
++    }
++    const MAX_BYTES = 10 * 1024 * 1024;
++    if (file.size > MAX_BYTES) {
++      return NextResponse.json({ error: 'Image trop lourde (10 Mo max)' }, { status: 400 });
++    }
++
++    const timestamp = Math.round(Date.now() / 1000);
++    const folder = 'products';
++    const transformation = 'c_fill,w_1200,h_1200,g_auto';
++
++    // Signature Cloudinary : sha1 des paramètres (hors file/api_key/signature),
++    // triés par clé, concaténés "k=v&k2=v2", suivis du secret.
++    // https://cloudinary.com/documentation/signatures
++    const toSign = `folder=${folder}&timestamp=${timestamp}&transformation=${transformation}${apiSecret}`;
++    const signature = createHash('sha1').update(toSign).digest('hex');
++
++    const uploadForm = new FormData();
++    uploadForm.append('file', file);
++    uploadForm.append('api_key', apiKey);
++    uploadForm.append('timestamp', String(timestamp));
++    uploadForm.append('signature', signature);
++    uploadForm.append('folder', folder);
++    uploadForm.append('transformation', transformation);
++
++    const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
++      method: 'POST',
++      body: uploadForm,
++    });
++
++    const data = await cloudinaryRes.json();
++
++    if (!cloudinaryRes.ok) {
++      console.error('Cloudinary upload error:', data);
++      return NextResponse.json({ error: data?.error?.message || "Échec de l'upload vers Cloudinary" }, { status: 502 });
++    }
++
++    // public_id suffit pour lib/cloudinary.ts (getCloudinaryUrl ré-applique
++    // f_auto/q_auto + le recadrage voulu à chaque affichage) — on renvoie
++    // aussi secure_url au cas où un usage futur en a besoin tel quel.
++    return NextResponse.json({ public_id: data.public_id, url: data.secure_url });
++  } catch (error) {
++    console.error('POST /api/upload error:', error);
++    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
++  }
++}
+diff --git a/app/blog/page.tsx b/app/blog/page.tsx
+index 14f61a3..4ad28e8 100644
+--- a/app/blog/page.tsx
++++ b/app/blog/page.tsx
+@@ -69,14 +69,16 @@ export default async function BlogIndexPage({ searchParams }: Props) {
+                 <Link
+                   key={cat.id}
+                   href={href}
+-                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border inline-flex items-center gap-1.5 ${
++                  // Même format que les autres pastilles de filtre du site
++                  // (Tout, Top Ventes) — demande Jerome du 05/10 : pas
++                  // d'icône, pas de couleur par catégorie, juste le même
++                  // style navy/blanc partout.
++                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
+                     active
+-                      ? 'text-white'
++                      ? 'bg-site-primary border-site-primary text-white'
+                       : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+                   }`}
+-                  style={active ? { backgroundColor: cat.color || '#1B2A4A', borderColor: cat.color || '#1B2A4A' } : undefined}
+                 >
+-                  {cat.icon && <span>{cat.icon}</span>}
+                   {cat.name_fr}
+                 </Link>
+               );
+diff --git a/app/mentions-legales/page.tsx b/app/mentions-legales/page.tsx
+index d6e34b8..6bbb4f4 100644
+--- a/app/mentions-legales/page.tsx
++++ b/app/mentions-legales/page.tsx
+@@ -37,22 +37,32 @@ export default async function MentionsLegales() {
+           Industriestr. 25, 91710 Gunzenhausen, Allemagne
+         </p>
+ 
+-        <h2 className="text-lg font-semibold mt-8 mb-3">Programme d&apos;affiliation Amazon</h2>
++        <h2 className="text-lg font-semibold mt-8 mb-3">Programmes d&apos;affiliation</h2>
+         <p className="text-site-text-secondary">
+-          Tendpick participe au Programme Partenaires d&apos;Amazon EU, un programme d&apos;affiliation
+-          conçu pour permettre à des sites de percevoir une rémunération grâce à la création de
+-          liens vers Amazon.fr. En tant que Partenaire Amazon, nous réalisons des bénéfices sur
+-          les achats remplissant les conditions requises.
++          Tendpick participe à plusieurs programmes d&apos;affiliation, dont le Programme Partenaires
++          d&apos;Amazon EU, ainsi que des programmes équivalents avec Rakuten et AliExpress. Ces
++          programmes permettent à des sites de percevoir une rémunération grâce à la création de
++          liens vers ces marchands. En tant que partenaire affilié, nous réalisons des bénéfices sur
++          les achats remplissant les conditions requises, sans surcoût pour l&apos;acheteur.
+         </p>
+         <p className="text-site-text-secondary mt-2">
+           Les prix et la disponibilité des produits indiqués sur ce site sont susceptibles de
+-          changer. Le prix final applicable est celui affiché sur la page Amazon au moment de l&apos;achat.
++          changer. Le prix final applicable est celui affiché sur la page du marchand au moment de l&apos;achat.
++        </p>
++
++        <h2 className="text-lg font-semibold mt-8 mb-3">Contenu éditorial (Blog)</h2>
++        <p className="text-site-text-secondary">
++          Tendpick publie un blog consacré aux produits tendance, au high-tech et à des guides
++          d&apos;achat. Certains articles sont rédigés avec l&apos;assistance d&apos;outils d&apos;intelligence
++          artificielle ; dans tous les cas, chaque article est relu et validé avant publication.
++          Les produits mentionnés dans un article peuvent inclure des liens affiliés, soumis aux
++          mêmes programmes que ceux listés ci-dessus.
+         </p>
+ 
+         <h2 className="text-lg font-semibold mt-8 mb-3">Propriété intellectuelle</h2>
+         <p className="text-site-text-secondary">
+           L&apos;ensemble du contenu de ce site (textes, images, logos) est protégé par le droit
+-          d&apos;auteur. Les images des produits sont la propriété d&apos;Amazon et des vendeurs
++          d&apos;auteur. Les images des produits sont la propriété des marchands et des vendeurs
+           tiers. Toute reproduction est interdite sans autorisation écrite.
+         </p>
+ 
+diff --git a/app/page.tsx b/app/page.tsx
+index c47e2f0..658f0c7 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -13,7 +13,7 @@ import SiteFooter from '@/components/layout/SiteFooter';
+ import HeroCarousel from '@/components/landing/HeroCarousel';
+ import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
+ import { SITE_COPY } from '@/lib/site-copy';
+-import { getLatestPublishedBlogPosts } from '@/lib/blog';
++import { getLatestPublishedBlogPosts, getBlogCategories } from '@/lib/blog';
+ 
+ export const dynamic = 'force-dynamic';
+ 
+@@ -60,11 +60,12 @@ export default async function HomePage({ searchParams }: Props) {
+   // même logique que app/layout.tsx (lib/market-from-host.ts).
+   const market = getMarketFromHost(headers().get('host'));
+   const t = SITE_COPY[market];
+-  const [featured, categories, topVentesPool, latestBlogPosts] = await Promise.all([
++  const [featured, categories, topVentesPool, latestBlogPosts, blogCategories] = await Promise.all([
+     getFeaturedProducts(market),
+     getActiveCategories(),
+     getTopVentesPool(market),
+     getLatestPublishedBlogPosts(market, 3),
++    getBlogCategories(),
+   ]);
+ 
+   const topVentesWithSource = topVentesPool
+@@ -96,12 +97,10 @@ export default async function HomePage({ searchParams }: Props) {
+           aucun champ de note existe sur Product, cf. précédent du code qui a
+           justement retiré ces signaux de confiance factices ailleurs). */}
+       <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+-        {/* Titres de section (03/10, demande Jerome) : même format/taille sur
+-            Top Ventes, Sélection du moment et Depuis le blog — petit kicker
+-            orange en majuscules au-dessus d'un titre navy, plus marqué que
+-            le simple h2 bold d'avant. */}
++        {/* Titre de section (05/10, demande Jerome : retire le kicker
++            "Classement" au-dessus du titre) — le wrapper garde les mêmes
++            marges mb-6/mb-8 qu'avant pour ne pas resserrer la mise en page. */}
+         <div className="mb-6 sm:mb-8">
+-          <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.ranking}</span>
+           <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.nav.topVentes}</h2>
+         </div>
+ 
+@@ -173,7 +172,7 @@ export default async function HomePage({ searchParams }: Props) {
+         )}
+ 
+         <div className="text-center mt-8">
+-          <Link href="/top-ventes" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
++          <Link href="/top-ventes" className="text-site-primary hover:text-site-cta font-medium transition-colors">
+             {t.home.seeFullTopVentes}
+           </Link>
+         </div>
+@@ -188,7 +187,6 @@ export default async function HomePage({ searchParams }: Props) {
+       {featured.length > 0 && (
+         <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+           <div className="mb-6 sm:mb-8">
+-            <span className="block text-xs font-bold uppercase tracking-wider text-site-cta mb-1">{t.home.freshlyAdded}</span>
+             <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.momentSelection}</h2>
+           </div>
+           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+@@ -233,13 +231,49 @@ export default async function HomePage({ searchParams }: Props) {
+             })}
+           </div>
+           <div className="text-center mt-8">
+-            <Link href="/produits" className="text-site-secondary hover:text-site-primary font-medium transition-colors">
++            <Link href="/produits" className="text-site-primary hover:text-site-cta font-medium transition-colors">
+               {t.home.seeAllProducts}
+             </Link>
+           </div>
+         </section>
+       )}
+ 
++      {/* Explorer par catégorie (05/10, demande Jerome) : remet en place
++          l'ancienne section "Explorer par catégorie" (catégories produit,
++          retirée le 03/10 car doublon du menu) mais repointée vers le blog
++          par catégorie — chaque tuile mène aux articles de la catégorie,
++          pas aux pages produit. Même esprit visuel que l'ancienne version
++          (pastille pleine couleur, carte claire) en reprenant la couleur et
++          l'icône propres à chaque catégorie de blog. */}
++      {blogCategories.length > 0 && (
++        <section className="bg-white px-4 sm:px-16 py-16 flex flex-col gap-6">
++          <h2 className="max-w-6xl mx-auto w-full text-2xl sm:text-[28px] font-bold text-site-text">
++            {t.home.exploreByCategory}
++          </h2>
++          <div className="max-w-6xl mx-auto w-full grid grid-cols-2 sm:grid-cols-4 gap-6">
++            {blogCategories.map((c) => (
++              <Link
++                key={c.id}
++                href={`/blog?category=${encodeURIComponent(c.slug)}`}
++                className="bg-[#EAF2FB] rounded-2xl p-8 flex flex-col gap-3 hover:shadow-md transition-shadow"
++              >
++                {/* Couleur propre à la catégorie, ou bleu secondaire du site
++                    par défaut si aucune n'est définie (même comportement que
++                    l'ancienne pastille unie de la section produit). */}
++                <span
++                  className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
++                  style={{ backgroundColor: c.color || '#4A90D9' }}
++                >
++                  {c.icon}
++                </span>
++                <span className="text-lg font-bold text-site-text">{c.name_fr}</span>
++                <span className="text-[13px] text-site-text-secondary">{t.home.exploreCategoryDesc}</span>
++              </Link>
++            ))}
++          </div>
++        </section>
++      )}
++
+       {/* Depuis le blog — déplacée ici (03/10, demande Jerome) : prend la
+           place de l'ancienne section "Explorer par catégorie" (retirée,
+           doublon du menu), juste après les deux sections produits. Branchée
+diff --git a/components/admin/ProductForm.tsx b/components/admin/ProductForm.tsx
+index 56ce90b..07cdea0 100644
+--- a/components/admin/ProductForm.tsx
++++ b/components/admin/ProductForm.tsx
+@@ -1,10 +1,11 @@
+ 'use client';
+ 
+-import { useState, useMemo } from 'react';
++import { useState, useMemo, useRef } from 'react';
+ import { useRouter } from 'next/navigation';
+ import GenerateButton from './GenerateButton';
+ import type { Product, GeneratedContent, Category } from '@/types';
+ import { TEMPLATES } from '@/lib/templates';
++import { getCloudinaryUrl } from '@/lib/cloudinary';
+ 
+ interface ProductFormProps {
+   product?: Product;
+@@ -64,6 +65,35 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
+     setForm((prev) => ({ ...prev, [field]: !prev[field as keyof typeof prev] }));
+   };
+ 
++  // Upload direct d'image (05/10, demande Jerome : pouvoir ajouter une
++  // image sans passer par un outil tiers). Le format/recadrage uniforme
++  // (carré 1200x1200) et l'optimisation qualité/format sont gérés côté
++  // Cloudinary par app/api/upload — voir ce fichier pour le détail.
++  const [uploading, setUploading] = useState(false);
++  const [uploadError, setUploadError] = useState<string | null>(null);
++  const fileInputRef = useRef<HTMLInputElement>(null);
++
++  const handleFileUpload = async (file: File) => {
++    setUploading(true);
++    setUploadError(null);
++    try {
++      const body = new FormData();
++      body.append('file', file);
++      const res = await fetch('/api/upload', { method: 'POST', body });
++      if (!res.ok) {
++        const data = await res.json();
++        throw new Error(data.error || "Erreur lors de l'upload");
++      }
++      const data = await res.json();
++      handleChange('image_url', data.public_id || data.url);
++    } catch (err) {
++      setUploadError(err instanceof Error ? err.message : 'Erreur inconnue');
++    } finally {
++      setUploading(false);
++      if (fileInputRef.current) fileInputRef.current.value = '';
++    }
++  };
++
+   const handleChange = (field: string, value: string | boolean) => {
+     setForm((prev) => ({ ...prev, [field]: value }));
+   };
+@@ -346,15 +376,47 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
+           </div>
+ 
+           <div>
+-            <label className={labelClass}>URL de l&apos;image</label>
+-            <input
+-              type="text"
+-              value={form.image_url}
+-              onChange={(e) => handleChange('image_url', e.target.value)}
+-              className={inputClass}
+-              placeholder="https://res.cloudinary.com/... ou URL directe"
+-            />
+-            <p className="text-xs text-gray-400 mt-1">Cloudinary public ID ou URL complète</p>
++            <label className={labelClass}>Image du produit</label>
++            <div className="flex items-start gap-4">
++              {form.image_url && (
++                <div className="w-20 h-20 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0 bg-gray-50">
++                  {/* eslint-disable-next-line @next/next/no-img-element */}
++                  <img
++                    src={getCloudinaryUrl(form.image_url, { width: 160, height: 160, crop: 'fill', format: 'auto', quality: 'auto' })}
++                    alt=""
++                    className="w-full h-full object-cover"
++                  />
++                </div>
++              )}
++              <div className="flex-1 space-y-2">
++                <input
++                  type="text"
++                  value={form.image_url}
++                  onChange={(e) => handleChange('image_url', e.target.value)}
++                  className={inputClass}
++                  placeholder="https://res.cloudinary.com/... ou URL directe"
++                />
++                <div className="flex items-center gap-3">
++                  <input
++                    ref={fileInputRef}
++                    type="file"
++                    accept="image/*"
++                    disabled={uploading}
++                    onChange={(e) => {
++                      const file = e.target.files?.[0];
++                      if (file) handleFileUpload(file);
++                    }}
++                    className="text-sm text-gray-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 file:cursor-pointer disabled:opacity-60"
++                  />
++                  {uploading && <span className="text-xs text-gray-400">Envoi en cours...</span>}
++                </div>
++                {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
++                <p className="text-xs text-gray-400">
++                  Importer un fichier recadre automatiquement l&apos;image en carré et optimise son
++                  format/poids à l&apos;affichage — ou colle directement un Cloudinary public ID / une URL.
++                </p>
++              </div>
++            </div>
+           </div>
+ 
+           <div className="flex items-center gap-3">
+diff --git a/components/layout/SiteHeader.tsx b/components/layout/SiteHeader.tsx
+index 4560de3..ddee211 100644
+--- a/components/layout/SiteHeader.tsx
++++ b/components/layout/SiteHeader.tsx
+@@ -102,7 +102,7 @@ export default function SiteHeader({ categories, market }: Props) {
+               type="button"
+               onClick={() => setTopVentesOpen((v) => !v)}
+               aria-expanded={topVentesOpen}
+-              className="text-[15px] font-semibold text-site-primary hover:text-site-secondary transition-colors whitespace-nowrap"
++              className="text-[15px] font-semibold text-site-primary hover:text-site-cta transition-colors whitespace-nowrap"
+             >
+               {t.nav.topVentes}
+             </button>
+@@ -136,7 +136,7 @@ export default function SiteHeader({ categories, market }: Props) {
+             <Link
+               key={c.id}
+               href={`/c/${c.slug}`}
+-              className="text-[15px] text-site-text hover:text-site-primary transition-colors whitespace-nowrap shrink-0"
++              className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+             >
+               {categoryName(c, market)}
+             </Link>
+@@ -144,7 +144,7 @@ export default function SiteHeader({ categories, market }: Props) {
+ 
+           <Link
+             href="/blog"
+-            className="text-[15px] text-site-text hover:text-site-primary transition-colors whitespace-nowrap shrink-0"
++            className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+           >
+             {t.nav.blog}
+           </Link>
+diff --git a/lib/site-copy.ts b/lib/site-copy.ts
+index df162bd..92ca350 100644
+--- a/lib/site-copy.ts
++++ b/lib/site-copy.ts
+@@ -62,12 +62,12 @@ interface SiteCopy {
+     topPrefix: string;
+   };
+   home: {
+-    ranking: string;
+     emptyPlatform: string;
+     seeFullTopVentes: string;
+-    freshlyAdded: string;
+     momentSelection: string;
+     seeAllProducts: string;
++    exploreByCategory: string;
++    exploreCategoryDesc: string;
+     ourAdvice: string;
+     fromBlog: string;
+     blogImageAlt: string;
+@@ -188,12 +188,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
+       topPrefix: 'Top',
+     },
+     home: {
+-      ranking: 'Classement',
+       emptyPlatform: 'Sélection en cours de préparation pour cette plateforme.',
+       seeFullTopVentes: 'Voir tout le Top Ventes →',
+-      freshlyAdded: 'Fraîchement ajouté',
+       momentSelection: 'Sélection du moment',
+       seeAllProducts: 'Voir tous les produits →',
++      exploreByCategory: 'Explorer par catégorie',
++      exploreCategoryDesc: 'Nos articles dans cette catégorie',
+       ourAdvice: 'Nos conseils',
+       fromBlog: 'Depuis le blog',
+       blogImageAlt: 'Image article',
+@@ -317,12 +317,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
+       topPrefix: 'Top',
+     },
+     home: {
+-      ranking: 'Clasificación',
+       emptyPlatform: 'Selección en preparación para esta plataforma.',
+       seeFullTopVentes: 'Ver todo lo más vendido →',
+-      freshlyAdded: 'Recién añadido',
+       momentSelection: 'Selección del momento',
+       seeAllProducts: 'Ver todos los productos →',
++      exploreByCategory: 'Explorar por categoría',
++      exploreCategoryDesc: 'Nuestros artículos en esta categoría',
+       ourAdvice: 'Nuestros consejos',
+       fromBlog: 'Desde el blog',
+       blogImageAlt: 'Imagen del artículo',
+@@ -446,12 +446,12 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
+       topPrefix: 'Top',
+     },
+     home: {
+-      ranking: 'Ranking',
+       emptyPlatform: 'Selection coming soon for this platform.',
+       seeFullTopVentes: 'See all Best Sellers →',
+-      freshlyAdded: 'Freshly added',
+       momentSelection: 'Picked right now',
+       seeAllProducts: 'See all products →',
++      exploreByCategory: 'Explore by category',
++      exploreCategoryDesc: 'Our articles in this category',
+       ourAdvice: 'Our advice',
+       fromBlog: 'From the blog',
+       blogImageAlt: 'Article image',
+-- 
+2.43.0
+

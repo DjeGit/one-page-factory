@@ -1,0 +1,1241 @@
+From d151e322aa966cf8eb5c7d332dd31a8ac9ece831 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Mon, 5 Oct 2026 09:58:03 +0200
+Subject: [PATCH] =?UTF-8?q?feat(blog):=20ajout=20des=20cat=C3=A9gories=20d?=
+ =?UTF-8?q?e=20blog?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Table dédiée blog_categories (séparée des categories produit, logique
+éditoriale distincte) avec un rayon principal (category_id) par article,
+en complément des tags existants (gardés tels quels). CRUD admin
+(/admin/blog/categories), sélecteur dans le formulaire d'article, filtre
+par catégorie sur /blog (?category=), badge catégorie sur les cartes
+d'articles et la page article, articleSection dans le JSON-LD Article.
+
+Permet de dissocier/trier les articles par rayon dès maintenant ; le
+champ `color` sert de point d'accroche pour un futur design différent
+par catégorie, sans construire de système de template maintenant.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ app/admin/blog/BlogPostsTable.tsx             |  17 +
+ app/admin/blog/[id]/page.tsx                  |   6 +-
+ .../blog/categories/BlogCategoriesManager.tsx | 302 ++++++++++++++++++
+ app/admin/blog/categories/page.tsx            |  27 ++
+ app/admin/blog/new/page.tsx                   |   5 +-
+ app/admin/blog/page.tsx                       |  29 +-
+ app/api/blog-categories/[id]/route.ts         |  47 +++
+ app/api/blog-categories/route.ts              |  51 +++
+ app/api/blog/[id]/route.ts                    |   1 +
+ app/api/blog/route.ts                         |   1 +
+ app/blog/[slug]/page.tsx                      |  16 +-
+ app/blog/page.tsx                             |  83 +++--
+ components/admin/BlogPostForm.tsx             |  29 +-
+ components/landing/BlogStructuredData.tsx     |   3 +
+ lib/blog.ts                                   | 116 +++++--
+ .../20261005000001_blog_categories.sql        |  48 +++
+ types/index.ts                                |  26 +-
+ 17 files changed, 745 insertions(+), 62 deletions(-)
+ create mode 100644 app/admin/blog/categories/BlogCategoriesManager.tsx
+ create mode 100644 app/admin/blog/categories/page.tsx
+ create mode 100644 app/api/blog-categories/[id]/route.ts
+ create mode 100644 app/api/blog-categories/route.ts
+ create mode 100644 supabase/migrations/20261005000001_blog_categories.sql
+
+diff --git a/app/admin/blog/BlogPostsTable.tsx b/app/admin/blog/BlogPostsTable.tsx
+index 5df038a..e6d5694 100644
+--- a/app/admin/blog/BlogPostsTable.tsx
++++ b/app/admin/blog/BlogPostsTable.tsx
+@@ -46,6 +46,7 @@ export default function BlogPostsTable({ posts }: Props) {
+             <tr className="border-b border-gray-200 bg-gray-50">
+               <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Article</th>
+               <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Marché</th>
++              <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Catégorie</th>
+               <th className="text-left px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Tags</th>
+               <th className="text-center px-4 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Statut</th>
+               <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+@@ -62,6 +63,22 @@ export default function BlogPostsTable({ posts }: Props) {
+                   <div className="text-xs text-gray-400">/blog/{post.slug}</div>
+                 </td>
+                 <td className="px-4 py-4 hidden md:table-cell text-sm text-gray-600 uppercase">{post.market}</td>
++                <td className="px-4 py-4 hidden md:table-cell text-sm text-gray-600">
++                  {post.category ? (
++                    <span
++                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
++                      style={{
++                        backgroundColor: post.category.color ? `${post.category.color}1A` : '#F3F4F6',
++                        color: post.category.color || '#4B5563',
++                      }}
++                    >
++                      {post.category.icon && <span>{post.category.icon}</span>}
++                      {post.category.name_fr}
++                    </span>
++                  ) : (
++                    <span className="text-gray-400">—</span>
++                  )}
++                </td>
+                 <td className="px-4 py-4 hidden md:table-cell text-sm text-gray-600">{post.tags.join(', ') || '—'}</td>
+                 <td className="px-4 py-4 text-center">
+                   <span
+diff --git a/app/admin/blog/[id]/page.tsx b/app/admin/blog/[id]/page.tsx
+index 28f034c..0607fc1 100644
+--- a/app/admin/blog/[id]/page.tsx
++++ b/app/admin/blog/[id]/page.tsx
+@@ -1,6 +1,6 @@
+ import Link from 'next/link';
+ import { notFound } from 'next/navigation';
+-import { getBlogPostByIdAdmin } from '@/lib/blog';
++import { getBlogPostByIdAdmin, getBlogCategories } from '@/lib/blog';
+ import { getAllProducts } from '@/lib/supabase';
+ import BlogPostForm from '@/components/admin/BlogPostForm';
+ 
+@@ -12,7 +12,7 @@ export default async function EditBlogPostPage({ params }: Props) {
+   const post = await getBlogPostByIdAdmin(params.id);
+   if (!post) notFound();
+ 
+-  const products = await getAllProducts();
++  const [products, categories] = await Promise.all([getAllProducts(), getBlogCategories()]);
+ 
+   return (
+     <div className="p-8">
+@@ -43,7 +43,7 @@ export default async function EditBlogPostPage({ params }: Props) {
+       </div>
+ 
+       <div className="bg-white rounded-2xl border border-gray-200 p-8">
+-        <BlogPostForm mode="edit" post={post} products={products} />
++        <BlogPostForm mode="edit" post={post} products={products} categories={categories} />
+       </div>
+     </div>
+   );
+diff --git a/app/admin/blog/categories/BlogCategoriesManager.tsx b/app/admin/blog/categories/BlogCategoriesManager.tsx
+new file mode 100644
+index 0000000..6d7f76e
+--- /dev/null
++++ b/app/admin/blog/categories/BlogCategoriesManager.tsx
+@@ -0,0 +1,302 @@
++'use client';
++
++import { useState } from 'react';
++import { useRouter } from 'next/navigation';
++import type { BlogCategory } from '@/types';
++
++interface Props {
++  initialCategories: BlogCategory[];
++}
++
++interface CategoryDraft {
++  slug: string;
++  name_fr: string;
++  name_es: string;
++  name_uk: string;
++  icon: string;
++  color: string;
++  sort_order: string;
++}
++
++const emptyDraft: CategoryDraft = {
++  slug: '',
++  name_fr: '',
++  name_es: '',
++  name_uk: '',
++  icon: '',
++  color: '',
++  sort_order: '0',
++};
++
++export default function BlogCategoriesManager({ initialCategories }: Props) {
++  const router = useRouter();
++  const [categories, setCategories] = useState<BlogCategory[]>(initialCategories);
++  const [editingId, setEditingId] = useState<string | null>(null);
++  const [editDraft, setEditDraft] = useState<CategoryDraft>(emptyDraft);
++  const [creating, setCreating] = useState(false);
++  const [newDraft, setNewDraft] = useState<CategoryDraft>(emptyDraft);
++  const [error, setError] = useState<string | null>(null);
++  const [saving, setSaving] = useState(false);
++
++  const inputClass = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm text-gray-900';
++
++  const startEdit = (cat: BlogCategory) => {
++    setEditingId(cat.id);
++    setEditDraft({
++      slug: cat.slug,
++      name_fr: cat.name_fr,
++      name_es: cat.name_es,
++      name_uk: cat.name_uk,
++      icon: cat.icon || '',
++      color: cat.color || '',
++      sort_order: String(cat.sort_order ?? 0),
++    });
++    setError(null);
++  };
++
++  const cancelEdit = () => {
++    setEditingId(null);
++    setError(null);
++  };
++
++  const saveEdit = async (id: string) => {
++    setSaving(true);
++    setError(null);
++    try {
++      const res = await fetch(`/api/blog-categories/${id}`, {
++        method: 'PUT',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++          slug: editDraft.slug,
++          name_fr: editDraft.name_fr,
++          name_es: editDraft.name_es,
++          name_uk: editDraft.name_uk,
++          icon: editDraft.icon || null,
++          color: editDraft.color || null,
++          sort_order: parseInt(editDraft.sort_order, 10) || 0,
++        }),
++      });
++      if (!res.ok) {
++        const data = await res.json();
++        throw new Error(data.error || 'Erreur lors de la sauvegarde');
++      }
++      const updated = await res.json();
++      setCategories((prev) =>
++        prev
++          .map((c) => (c.id === id ? updated : c))
++          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
++      );
++      setEditingId(null);
++      router.refresh();
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Erreur inconnue');
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  const handleDelete = async (cat: BlogCategory) => {
++    if (!confirm(`Supprimer la catégorie "${cat.name_fr}" ? Les articles qui l'utilisent perdront leur catégorie (ils restent publiés).`)) {
++      return;
++    }
++    setSaving(true);
++    setError(null);
++    try {
++      const res = await fetch(`/api/blog-categories/${cat.id}`, { method: 'DELETE' });
++      if (!res.ok) {
++        const data = await res.json();
++        throw new Error(data.error || 'Erreur lors de la suppression');
++      }
++      setCategories((prev) => prev.filter((c) => c.id !== cat.id));
++      router.refresh();
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Erreur inconnue');
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  const handleCreate = async () => {
++    setSaving(true);
++    setError(null);
++    try {
++      const res = await fetch('/api/blog-categories', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json' },
++        body: JSON.stringify({
++          slug: newDraft.slug,
++          name_fr: newDraft.name_fr,
++          name_es: newDraft.name_es,
++          name_uk: newDraft.name_uk,
++          icon: newDraft.icon || null,
++          color: newDraft.color || null,
++          sort_order: parseInt(newDraft.sort_order, 10) || 0,
++        }),
++      });
++      if (!res.ok) {
++        const data = await res.json();
++        throw new Error(data.error || 'Erreur lors de la création');
++      }
++      const created = await res.json();
++      setCategories((prev) => [...prev, created].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
++      setCreating(false);
++      setNewDraft(emptyDraft);
++      router.refresh();
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Erreur inconnue');
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  return (
++    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
++      {error && (
++        <div className="m-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">
++          {error}
++        </div>
++      )}
++
++      <table className="w-full text-sm">
++        <thead>
++          <tr className="border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
++            <th className="px-4 py-3">Icône</th>
++            <th className="px-4 py-3">Couleur</th>
++            <th className="px-4 py-3">Slug</th>
++            <th className="px-4 py-3">Nom (FR)</th>
++            <th className="px-4 py-3">Nom (ES)</th>
++            <th className="px-4 py-3">Nom (UK)</th>
++            <th className="px-4 py-3">Ordre</th>
++            <th className="px-4 py-3 text-right">Actions</th>
++          </tr>
++        </thead>
++        <tbody className="divide-y divide-gray-100">
++          {categories.map((cat) => {
++            const isEditing = editingId === cat.id;
++            return (
++              <tr key={cat.id} className={isEditing ? 'bg-primary-50/30' : ''}>
++                {isEditing ? (
++                  <>
++                    <td className="px-4 py-2">
++                      <input className={inputClass} value={editDraft.icon} onChange={(e) => setEditDraft((d) => ({ ...d, icon: e.target.value }))} placeholder="📦" />
++                    </td>
++                    <td className="px-4 py-2">
++                      <input className={inputClass} value={editDraft.color} onChange={(e) => setEditDraft((d) => ({ ...d, color: e.target.value }))} placeholder="#FF6B35" />
++                    </td>
++                    <td className="px-4 py-2">
++                      <input className={inputClass} value={editDraft.slug} onChange={(e) => setEditDraft((d) => ({ ...d, slug: e.target.value }))} />
++                    </td>
++                    <td className="px-4 py-2">
++                      <input className={inputClass} value={editDraft.name_fr} onChange={(e) => setEditDraft((d) => ({ ...d, name_fr: e.target.value }))} />
++                    </td>
++                    <td className="px-4 py-2">
++                      <input className={inputClass} value={editDraft.name_es} onChange={(e) => setEditDraft((d) => ({ ...d, name_es: e.target.value }))} />
++                    </td>
++                    <td className="px-4 py-2">
++                      <input className={inputClass} value={editDraft.name_uk} onChange={(e) => setEditDraft((d) => ({ ...d, name_uk: e.target.value }))} />
++                    </td>
++                    <td className="px-4 py-2">
++                      <input type="number" className={inputClass} value={editDraft.sort_order} onChange={(e) => setEditDraft((d) => ({ ...d, sort_order: e.target.value }))} />
++                    </td>
++                    <td className="px-4 py-2 text-right whitespace-nowrap">
++                      <button disabled={saving} onClick={() => saveEdit(cat.id)} className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg mr-2 disabled:opacity-50">
++                        Enregistrer
++                      </button>
++                      <button disabled={saving} onClick={cancelEdit} className="px-3 py-1.5 border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50">
++                        Annuler
++                      </button>
++                    </td>
++                  </>
++                ) : (
++                  <>
++                    <td className="px-4 py-3 text-lg">{cat.icon || '—'}</td>
++                    <td className="px-4 py-3">
++                      {cat.color ? (
++                        <span className="inline-flex items-center gap-2">
++                          <span className="w-4 h-4 rounded-full border border-gray-200" style={{ backgroundColor: cat.color }} />
++                          <span className="font-mono text-xs text-gray-500">{cat.color}</span>
++                        </span>
++                      ) : '—'}
++                    </td>
++                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{cat.slug}</td>
++                    <td className="px-4 py-3 font-medium text-gray-900">{cat.name_fr}</td>
++                    <td className="px-4 py-3 text-gray-600">{cat.name_es}</td>
++                    <td className="px-4 py-3 text-gray-600">{cat.name_uk}</td>
++                    <td className="px-4 py-3 text-gray-500">{cat.sort_order}</td>
++                    <td className="px-4 py-3 text-right whitespace-nowrap">
++                      <button onClick={() => startEdit(cat)} className="px-3 py-1.5 border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 mr-2">
++                        Modifier
++                      </button>
++                      <button disabled={saving} onClick={() => handleDelete(cat)} className="px-3 py-1.5 border border-red-200 text-red-600 text-xs font-semibold rounded-lg hover:bg-red-50 disabled:opacity-50">
++                        Supprimer
++                      </button>
++                    </td>
++                  </>
++                )}
++              </tr>
++            );
++          })}
++
++          {creating && (
++            <tr className="bg-green-50/30">
++              <td className="px-4 py-2">
++                <input className={inputClass} value={newDraft.icon} onChange={(e) => setNewDraft((d) => ({ ...d, icon: e.target.value }))} placeholder="🎯" />
++              </td>
++              <td className="px-4 py-2">
++                <input className={inputClass} value={newDraft.color} onChange={(e) => setNewDraft((d) => ({ ...d, color: e.target.value }))} placeholder="#4A90D9" />
++              </td>
++              <td className="px-4 py-2">
++                <input className={inputClass} value={newDraft.slug} onChange={(e) => setNewDraft((d) => ({ ...d, slug: e.target.value }))} placeholder="ma-categorie" />
++              </td>
++              <td className="px-4 py-2">
++                <input className={inputClass} value={newDraft.name_fr} onChange={(e) => setNewDraft((d) => ({ ...d, name_fr: e.target.value }))} placeholder="Nom en français" />
++              </td>
++              <td className="px-4 py-2">
++                <input className={inputClass} value={newDraft.name_es} onChange={(e) => setNewDraft((d) => ({ ...d, name_es: e.target.value }))} placeholder="Nombre en español" />
++              </td>
++              <td className="px-4 py-2">
++                <input className={inputClass} value={newDraft.name_uk} onChange={(e) => setNewDraft((d) => ({ ...d, name_uk: e.target.value }))} placeholder="Name in English" />
++              </td>
++              <td className="px-4 py-2">
++                <input type="number" className={inputClass} value={newDraft.sort_order} onChange={(e) => setNewDraft((d) => ({ ...d, sort_order: e.target.value }))} />
++              </td>
++              <td className="px-4 py-2 text-right whitespace-nowrap">
++                <button
++                  disabled={saving || !newDraft.slug || !newDraft.name_fr || !newDraft.name_es || !newDraft.name_uk}
++                  onClick={handleCreate}
++                  className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg mr-2 disabled:opacity-50"
++                >
++                  Créer
++                </button>
++                <button
++                  disabled={saving}
++                  onClick={() => {
++                    setCreating(false);
++                    setNewDraft(emptyDraft);
++                  }}
++                  className="px-3 py-1.5 border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50"
++                >
++                  Annuler
++                </button>
++              </td>
++            </tr>
++          )}
++        </tbody>
++      </table>
++
++      {!creating && (
++        <div className="p-4 border-t border-gray-200">
++          <button
++            onClick={() => setCreating(true)}
++            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold text-sm rounded-xl transition-colors"
++          >
++            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
++            </svg>
++            Nouvelle catégorie
++          </button>
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/app/admin/blog/categories/page.tsx b/app/admin/blog/categories/page.tsx
+new file mode 100644
+index 0000000..4a51d1a
+--- /dev/null
++++ b/app/admin/blog/categories/page.tsx
+@@ -0,0 +1,27 @@
++import Link from 'next/link';
++import { getBlogCategories } from '@/lib/blog';
++import BlogCategoriesManager from './BlogCategoriesManager';
++
++export const dynamic = 'force-dynamic';
++
++export default async function BlogCategoriesPage() {
++  const categories = await getBlogCategories();
++
++  return (
++    <div className="p-8">
++      <div className="flex items-center gap-3 mb-2">
++        <Link href="/admin/blog" className="text-gray-500 hover:text-gray-700 transition-colors">
++          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
++          </svg>
++        </Link>
++        <h1 className="text-2xl font-black text-gray-900">Catégories du blog</h1>
++      </div>
++      <p className="text-gray-500 mb-8">
++        {categories.length} catégorie{categories.length !== 1 ? 's' : ''} — le rayon principal de chaque article (un seul par article), utilisé pour trier/filtrer le blog. Les tags restent des étiquettes libres en complément.
++      </p>
++
++      <BlogCategoriesManager initialCategories={categories} />
++    </div>
++  );
++}
+diff --git a/app/admin/blog/new/page.tsx b/app/admin/blog/new/page.tsx
+index 81f4388..81dacc6 100644
+--- a/app/admin/blog/new/page.tsx
++++ b/app/admin/blog/new/page.tsx
+@@ -1,9 +1,10 @@
+ import Link from 'next/link';
+ import BlogPostForm from '@/components/admin/BlogPostForm';
+ import { getAllProducts } from '@/lib/supabase';
++import { getBlogCategories } from '@/lib/blog';
+ 
+ export default async function NewBlogPostPage() {
+-  const products = await getAllProducts();
++  const [products, categories] = await Promise.all([getAllProducts(), getBlogCategories()]);
+ 
+   return (
+     <div className="p-8">
+@@ -20,7 +21,7 @@ export default async function NewBlogPostPage() {
+       </div>
+ 
+       <div className="bg-white rounded-2xl border border-gray-200 p-8">
+-        <BlogPostForm mode="create" products={products} />
++        <BlogPostForm mode="create" products={products} categories={categories} />
+       </div>
+     </div>
+   );
+diff --git a/app/admin/blog/page.tsx b/app/admin/blog/page.tsx
+index 0bdd0d2..2b57d35 100644
+--- a/app/admin/blog/page.tsx
++++ b/app/admin/blog/page.tsx
+@@ -14,15 +14,26 @@ export default async function BlogAdminPage() {
+           <h1 className="text-2xl font-black text-gray-900">Blog</h1>
+           <p className="text-gray-500 mt-1">{posts.length} article{posts.length !== 1 ? 's' : ''}</p>
+         </div>
+-        <Link
+-          href="/admin/blog/new"
+-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors shadow-sm"
+-        >
+-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+-          </svg>
+-          Nouvel article
+-        </Link>
++        <div className="flex items-center gap-3">
++          <Link
++            href="/admin/blog/categories"
++            className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors"
++          >
++            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 11V6a3 3 0 013-3z" />
++            </svg>
++            Catégories
++          </Link>
++          <Link
++            href="/admin/blog/new"
++            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors shadow-sm"
++          >
++            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
++            </svg>
++            Nouvel article
++          </Link>
++        </div>
+       </div>
+ 
+       {posts.length === 0 ? (
+diff --git a/app/api/blog-categories/[id]/route.ts b/app/api/blog-categories/[id]/route.ts
+new file mode 100644
+index 0000000..d66c6b1
+--- /dev/null
++++ b/app/api/blog-categories/[id]/route.ts
+@@ -0,0 +1,47 @@
++import { NextRequest, NextResponse } from 'next/server';
++import { updateBlogCategory, deleteBlogCategory } from '@/lib/blog';
++import { isAuthorizedRequest } from '@/lib/admin-auth';
++
++export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
++  if (!isAuthorizedRequest(req)) {
++    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
++  }
++  try {
++    const body = await req.json();
++
++    const { category, error } = await updateBlogCategory(params.id, {
++      slug: body.slug,
++      name_fr: body.name_fr,
++      name_es: body.name_es,
++      name_uk: body.name_uk,
++      icon: body.icon ?? null,
++      color: body.color ?? null,
++      sort_order: body.sort_order ?? 0,
++    });
++
++    if (!category) {
++      return NextResponse.json({ error: error || 'Erreur lors de la mise à jour de la catégorie' }, { status: 500 });
++    }
++
++    return NextResponse.json(category);
++  } catch (error) {
++    console.error('PUT /api/blog-categories/[id] error:', error);
++    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
++  }
++}
++
++export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
++  if (!isAuthorizedRequest(req)) {
++    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
++  }
++  try {
++    const { error } = await deleteBlogCategory(params.id);
++    if (error) {
++      return NextResponse.json({ error: error || 'Erreur lors de la suppression de la catégorie' }, { status: 500 });
++    }
++    return NextResponse.json({ success: true });
++  } catch (error) {
++    console.error('DELETE /api/blog-categories/[id] error:', error);
++    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
++  }
++}
+diff --git a/app/api/blog-categories/route.ts b/app/api/blog-categories/route.ts
+new file mode 100644
+index 0000000..347125c
+--- /dev/null
++++ b/app/api/blog-categories/route.ts
+@@ -0,0 +1,51 @@
++import { NextRequest, NextResponse } from 'next/server';
++import { getBlogCategories, createBlogCategory } from '@/lib/blog';
++import { isAuthorizedRequest } from '@/lib/admin-auth';
++
++export async function GET(req: NextRequest) {
++  if (!isAuthorizedRequest(req)) {
++    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
++  }
++  try {
++    const categories = await getBlogCategories();
++    return NextResponse.json(categories);
++  } catch (error) {
++    console.error('GET /api/blog-categories error:', error);
++    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
++  }
++}
++
++export async function POST(req: NextRequest) {
++  if (!isAuthorizedRequest(req)) {
++    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
++  }
++  try {
++    const body = await req.json();
++
++    if (!body.slug || !body.name_fr || !body.name_es || !body.name_uk) {
++      return NextResponse.json(
++        { error: 'Le slug et les noms (fr/es/uk) sont requis' },
++        { status: 400 }
++      );
++    }
++
++    const { category, error } = await createBlogCategory({
++      slug: body.slug,
++      name_fr: body.name_fr,
++      name_es: body.name_es,
++      name_uk: body.name_uk,
++      icon: body.icon || null,
++      color: body.color || null,
++      sort_order: body.sort_order ?? 0,
++    });
++
++    if (!category) {
++      return NextResponse.json({ error: error || 'Erreur lors de la création de la catégorie' }, { status: 500 });
++    }
++
++    return NextResponse.json(category, { status: 201 });
++  } catch (error) {
++    console.error('POST /api/blog-categories error:', error);
++    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
++  }
++}
+diff --git a/app/api/blog/[id]/route.ts b/app/api/blog/[id]/route.ts
+index 25ca9a4..4eab155 100644
+--- a/app/api/blog/[id]/route.ts
++++ b/app/api/blog/[id]/route.ts
+@@ -46,6 +46,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
+       cover_image_url: body.cover_image_url || '',
+       status: body.status === 'published' ? 'published' : 'draft',
+       tags: Array.isArray(body.tags) ? body.tags : [],
++      category_id: body.category_id || null,
+       linked_product_ids: Array.isArray(body.linked_product_ids) ? body.linked_product_ids : [],
+       author_name: body.author_name || '',
+       meta_title: body.meta_title || '',
+diff --git a/app/api/blog/route.ts b/app/api/blog/route.ts
+index 3398f6b..b182275 100644
+--- a/app/api/blog/route.ts
++++ b/app/api/blog/route.ts
+@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
+       cover_image_url: body.cover_image_url || '',
+       status: body.status === 'published' ? 'published' : 'draft',
+       tags: Array.isArray(body.tags) ? body.tags : [],
++      category_id: body.category_id || null,
+       linked_product_ids: Array.isArray(body.linked_product_ids) ? body.linked_product_ids : [],
+       author_name: body.author_name || '',
+       meta_title: body.meta_title || '',
+diff --git a/app/blog/[slug]/page.tsx b/app/blog/[slug]/page.tsx
+index 95f14c7..531a18a 100644
+--- a/app/blog/[slug]/page.tsx
++++ b/app/blog/[slug]/page.tsx
+@@ -59,7 +59,21 @@ export default async function BlogPostPage({ params }: Props) {
+           ← {t.nav.blog}
+         </Link>
+ 
+-        <h1 className="text-3xl sm:text-4xl font-extrabold mt-4 mb-2 text-site-primary">{post.title}</h1>
++        {post.category && (
++          <Link
++            href={`/blog?category=${encodeURIComponent(post.category.slug)}`}
++            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mt-4"
++            style={{
++              backgroundColor: post.category.color ? `${post.category.color}1A` : '#F3F4F6',
++              color: post.category.color || '#4B5563',
++            }}
++          >
++            {post.category.icon && <span>{post.category.icon}</span>}
++            {post.category.name_fr}
++          </Link>
++        )}
++
++        <h1 className="text-3xl sm:text-4xl font-extrabold mt-3 mb-2 text-site-primary">{post.title}</h1>
+ 
+         <div className="flex items-center gap-3 text-sm text-site-text-secondary mb-6">
+           {post.author_name && <span>{post.author_name}</span>}
+diff --git a/app/blog/page.tsx b/app/blog/page.tsx
+index 527e194..14f61a3 100644
+--- a/app/blog/page.tsx
++++ b/app/blog/page.tsx
+@@ -3,7 +3,7 @@ import Image from 'next/image';
+ import { headers } from 'next/headers';
+ import type { Metadata } from 'next';
+ import { getMarketFromHost } from '@/lib/market-from-host';
+-import { getPublishedBlogPosts } from '@/lib/blog';
++import { getPublishedBlogPosts, getBlogCategories } from '@/lib/blog';
+ import { getActiveCategories } from '@/lib/supabase';
+ import { getCloudinaryUrl } from '@/lib/cloudinary';
+ import SiteHeader from '@/components/layout/SiteHeader';
+@@ -22,17 +22,19 @@ export async function generateMetadata(): Promise<Metadata> {
+ }
+ 
+ interface Props {
+-  searchParams: { tag?: string };
++  searchParams: { tag?: string; category?: string };
+ }
+ 
+ export default async function BlogIndexPage({ searchParams }: Props) {
+   const market = getMarketFromHost(headers().get('host'));
+   const t = SITE_COPY[market];
+   const tag = searchParams.tag?.trim() || undefined;
++  const categorySlug = searchParams.category?.trim() || undefined;
+ 
+-  const [posts, categories] = await Promise.all([
+-    getPublishedBlogPosts(market, { tag }),
++  const [posts, categories, blogCategories] = await Promise.all([
++    getPublishedBlogPosts(market, { tag, categorySlug }),
+     getActiveCategories(),
++    getBlogCategories(),
+   ]);
+ 
+   // Tags disponibles calculés sur la page courante (volume faible au
+@@ -48,31 +50,58 @@ export default async function BlogIndexPage({ searchParams }: Props) {
+           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{t.nav.blog}</h1>
+         </div>
+ 
+-        {allTags.length > 0 && (
+-          <div className="flex flex-wrap gap-3 mb-10">
++        {blogCategories.length > 0 && (
++          <div className="flex flex-wrap gap-3 mb-6">
+             <Link
+-              href="/blog"
++              href={tag ? `/blog?tag=${encodeURIComponent(tag)}` : '/blog'}
+               className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
+-                !tag
++                !categorySlug
+                   ? 'bg-site-primary border-site-primary text-white'
+                   : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+               }`}
+             >
+               {t.blogPage.all}
+             </Link>
+-            {allTags.map((tg) => (
+-              <Link
+-                key={tg}
+-                href={`/blog?tag=${encodeURIComponent(tg)}`}
+-                className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
+-                  tag === tg
+-                    ? 'bg-site-primary border-site-primary text-white'
+-                    : 'bg-white border-site-border text-site-text hover:border-site-secondary'
+-                }`}
+-              >
+-                {tg}
+-              </Link>
+-            ))}
++            {blogCategories.map((cat) => {
++              const href = `/blog?category=${encodeURIComponent(cat.slug)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`;
++              const active = categorySlug === cat.slug;
++              return (
++                <Link
++                  key={cat.id}
++                  href={href}
++                  className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border inline-flex items-center gap-1.5 ${
++                    active
++                      ? 'text-white'
++                      : 'bg-white border-site-border text-site-text hover:border-site-secondary'
++                  }`}
++                  style={active ? { backgroundColor: cat.color || '#1B2A4A', borderColor: cat.color || '#1B2A4A' } : undefined}
++                >
++                  {cat.icon && <span>{cat.icon}</span>}
++                  {cat.name_fr}
++                </Link>
++              );
++            })}
++          </div>
++        )}
++
++        {allTags.length > 0 && (
++          <div className="flex flex-wrap gap-2 mb-10">
++            {allTags.map((tg) => {
++              const href = `/blog?tag=${encodeURIComponent(tg)}${categorySlug ? `&category=${encodeURIComponent(categorySlug)}` : ''}`;
++              return (
++                <Link
++                  key={tg}
++                  href={href}
++                  className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors border ${
++                    tag === tg
++                      ? 'bg-site-secondary border-site-secondary text-white'
++                      : 'bg-white border-site-border text-site-text-secondary hover:border-site-secondary'
++                  }`}
++                >
++                  #{tg}
++                </Link>
++              );
++            })}
+           </div>
+         )}
+ 
+@@ -108,6 +137,18 @@ export default async function BlogIndexPage({ searchParams }: Props) {
+                     )}
+                   </div>
+                   <div className="p-4 flex flex-col gap-1.5 flex-1">
++                    {post.category && (
++                      <span
++                        className="self-start inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold mb-0.5"
++                        style={{
++                          backgroundColor: post.category.color ? `${post.category.color}1A` : '#F3F4F6',
++                          color: post.category.color || '#4B5563',
++                        }}
++                      >
++                        {post.category.icon && <span>{post.category.icon}</span>}
++                        {post.category.name_fr}
++                      </span>
++                    )}
+                     <p className="text-base font-bold text-site-text group-hover:text-site-primary transition-colors leading-snug">
+                       {post.title}
+                     </p>
+diff --git a/components/admin/BlogPostForm.tsx b/components/admin/BlogPostForm.tsx
+index 289f997..d5c2782 100644
+--- a/components/admin/BlogPostForm.tsx
++++ b/components/admin/BlogPostForm.tsx
+@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
+ import dynamic from 'next/dynamic';
+ import { useRouter } from 'next/navigation';
+ import '@uiw/react-md-editor/markdown-editor.css';
+-import type { BlogPost, Product } from '@/types';
++import type { BlogPost, BlogCategory, Product } from '@/types';
+ import type { Market } from '@/lib/market';
+ import { slugifyBlogTitle } from '@/lib/slugify';
+ 
+@@ -17,6 +17,7 @@ interface BlogPostFormProps {
+   post?: BlogPost;
+   mode: 'create' | 'edit';
+   products: Pick<Product, 'id' | 'name' | 'slug'>[];
++  categories: BlogCategory[];
+ }
+ 
+ const MARKETS: { value: Market; label: string }[] = [
+@@ -25,7 +26,7 @@ const MARKETS: { value: Market; label: string }[] = [
+   { value: 'uk', label: 'International (tendpick.com)' },
+ ];
+ 
+-export default function BlogPostForm({ post, mode, products }: BlogPostFormProps) {
++export default function BlogPostForm({ post, mode, products, categories }: BlogPostFormProps) {
+   const router = useRouter();
+   const [saving, setSaving] = useState(false);
+   const [error, setError] = useState<string | null>(null);
+@@ -48,6 +49,7 @@ export default function BlogPostForm({ post, mode, products }: BlogPostFormProps
+     cover_image_url: post?.cover_image_url || '',
+     status: post?.status || 'draft',
+     tags: post?.tags?.join(', ') || '',
++    category_id: post?.category_id || ('' as string),
+     linked_product_ids: post?.linked_product_ids || ([] as string[]),
+     author_name: post?.author_name || 'Jerome',
+     meta_title: post?.meta_title || '',
+@@ -128,6 +130,7 @@ export default function BlogPostForm({ post, mode, products }: BlogPostFormProps
+         cover_image_url: form.cover_image_url,
+         status: form.status,
+         tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
++        category_id: form.category_id || null,
+         linked_product_ids: form.linked_product_ids,
+         author_name: form.author_name,
+         meta_title: form.meta_title,
+@@ -260,6 +263,28 @@ export default function BlogPostForm({ post, mode, products }: BlogPostFormProps
+         </div>
+       </div>
+ 
++      <div>
++        <label className={labelClass}>Catégorie</label>
++        <select
++          value={form.category_id}
++          onChange={(e) => handleChange('category_id', e.target.value)}
++          className={inputClass}
++        >
++          <option value="">— Aucune catégorie —</option>
++          {categories.map((c) => (
++            <option key={c.id} value={c.id}>
++              {c.icon ? `${c.icon} ` : ''}{c.name_fr}
++            </option>
++          ))}
++        </select>
++        <p className="text-xs text-gray-500 mt-1">
++          Le rayon principal de l&apos;article (un seul) — sert à trier/filtrer le blog. Gérer les catégories depuis{' '}
++          <a href="/admin/blog/categories" target="_blank" className="underline hover:text-primary-600">
++            /admin/blog/categories
++          </a>.
++        </p>
++      </div>
++
+       <div>
+         <label className={labelClass}>Extrait</label>
+         <textarea
+diff --git a/components/landing/BlogStructuredData.tsx b/components/landing/BlogStructuredData.tsx
+index 143155e..70e8322 100644
+--- a/components/landing/BlogStructuredData.tsx
++++ b/components/landing/BlogStructuredData.tsx
+@@ -29,6 +29,9 @@ export default function BlogStructuredData({ post }: BlogStructuredDataProps) {
+       name: 'Tendpick',
+     },
+     mainEntityOfPage: `${siteUrl}/blog/${post.slug}`,
++    // Categorie (05/10) : articleSection standard de schema.org pour le
++    // rayon editorial d'un article, rempli uniquement si l'article en a une.
++    articleSection: post.category?.name_fr ?? undefined,
+   };
+ 
+   return (
+diff --git a/lib/blog.ts b/lib/blog.ts
+index 420106f..cd31a53 100644
+--- a/lib/blog.ts
++++ b/lib/blog.ts
+@@ -1,25 +1,32 @@
+ /**
+- * Blog editorial — Sprint 1 du chantier "Blog + Vente directe" (04/10).
+- * Getters publics (homepage, /blog, /blog/[slug]) + CRUD admin, meme
+- * style que lib/supabase.ts (getAllProducts, getActiveCategories, ...).
+- * Toujours via getSupabaseAdmin() : RLS bloque la cle anon sur
+- * blog_posts (service_role only), comme le reste du schema.
++ * Blog editorial — Sprint 1 du chantier "Blog + Vente directe" (04/10),
++ * categories ajoutees le 05/10 (demande Jerome). Getters publics
++ * (homepage, /blog, /blog/[slug]) + CRUD admin, meme style que
++ * lib/supabase.ts (getAllProducts, getActiveCategories, ...). Toujours
++ * via getSupabaseAdmin() : RLS bloque la cle anon sur blog_posts et
++ * blog_categories (service_role only), comme le reste du schema.
+  */
+ import { getSupabaseAdmin } from '@/lib/supabase';
+-import type { BlogPost, BlogPostFormData } from '@/types';
++import type { BlogPost, BlogPostFormData, BlogCategory } from '@/types';
+ import type { Market } from '@/lib/market';
+ export { slugifyBlogTitle } from '@/lib/slugify';
+ 
++// Jointure systematique sur la categorie — un article affiche presque
++// toujours son badge de categorie (liste, article, admin), plus simple
++// d'inclure partout que de la refaire au cas par cas.
++const POST_SELECT = '*, category:blog_categories(*)';
++
+ interface GetPublishedOptions {
+   tag?: string;
++  categorySlug?: string;
+ }
+ 
+-/** Articles publies d'un marche, les plus recents d'abord. Filtre optionnel par tag. */
++/** Articles publies d'un marche, les plus recents d'abord. Filtres optionnels par tag et/ou categorie. */
+ export async function getPublishedBlogPosts(market: Market, options: GetPublishedOptions = {}): Promise<BlogPost[]> {
+   const sb = getSupabaseAdmin();
+   let query = sb
+     .from('blog_posts')
+-    .select('*')
++    .select(POST_SELECT)
+     .eq('market', market)
+     .eq('status', 'published')
+     .order('published_at', { ascending: false });
+@@ -27,10 +34,17 @@ export async function getPublishedBlogPosts(market: Market, options: GetPublishe
+   if (options.tag) {
+     query = query.contains('tags', [options.tag]);
+   }
++  if (options.categorySlug) {
++    const category = await getBlogCategoryBySlug(options.categorySlug);
++    // Slug inconnu -> aucun resultat plutot que d'ignorer le filtre
++    // silencieusement (un lien de categorie casse ne doit pas afficher
++    // "tous les articles" par erreur).
++    query = query.eq('category_id', category?.id || '00000000-0000-0000-0000-000000000000');
++  }
+ 
+   const { data, error } = await query;
+   if (error || !data) return [];
+-  return data as BlogPost[];
++  return data as unknown as BlogPost[];
+ }
+ 
+ /** Les N derniers articles publies — utilise par la section "Depuis le blog" de l'accueil. */
+@@ -38,14 +52,14 @@ export async function getLatestPublishedBlogPosts(market: Market, limit: number)
+   const sb = getSupabaseAdmin();
+   const { data, error } = await sb
+     .from('blog_posts')
+-    .select('*')
++    .select(POST_SELECT)
+     .eq('market', market)
+     .eq('status', 'published')
+     .order('published_at', { ascending: false })
+     .limit(limit);
+ 
+   if (error || !data) return [];
+-  return data as BlogPost[];
++  return data as unknown as BlogPost[];
+ }
+ 
+ /**
+@@ -57,29 +71,29 @@ export async function getPublishedBlogPostBySlug(slug: string): Promise<BlogPost
+   const sb = getSupabaseAdmin();
+   const { data, error } = await sb
+     .from('blog_posts')
+-    .select('*')
++    .select(POST_SELECT)
+     .eq('slug', slug)
+     .eq('status', 'published')
+     .maybeSingle();
+ 
+   if (error || !data) return null;
+-  return data as BlogPost;
++  return data as unknown as BlogPost;
+ }
+ 
+ /** Admin uniquement : un article quel que soit son statut (ecran d'edition). */
+ export async function getBlogPostByIdAdmin(id: string): Promise<BlogPost | null> {
+   const sb = getSupabaseAdmin();
+-  const { data, error } = await sb.from('blog_posts').select('*').eq('id', id).maybeSingle();
++  const { data, error } = await sb.from('blog_posts').select(POST_SELECT).eq('id', id).maybeSingle();
+   if (error || !data) return null;
+-  return data as BlogPost;
++  return data as unknown as BlogPost;
+ }
+ 
+ /** Admin uniquement : tous les articles (brouillons + publies), plus recents d'abord. */
+ export async function getAllBlogPostsAdmin(): Promise<BlogPost[]> {
+   const sb = getSupabaseAdmin();
+-  const { data, error } = await sb.from('blog_posts').select('*').order('created_at', { ascending: false });
++  const { data, error } = await sb.from('blog_posts').select(POST_SELECT).order('created_at', { ascending: false });
+   if (error || !data) return [];
+-  return data as BlogPost[];
++  return data as unknown as BlogPost[];
+ }
+ 
+ function toInsertPayload(form: BlogPostFormData) {
+@@ -92,6 +106,7 @@ function toInsertPayload(form: BlogPostFormData) {
+     cover_image_url: form.cover_image_url || null,
+     status: form.status,
+     tags: form.tags,
++    category_id: form.category_id || null,
+     linked_product_ids: form.linked_product_ids,
+     author_name: form.author_name || null,
+     meta_title: form.meta_title || null,
+@@ -106,9 +121,9 @@ function toInsertPayload(form: BlogPostFormData) {
+ 
+ export async function createBlogPost(form: BlogPostFormData): Promise<{ post: BlogPost | null; error: string | null }> {
+   const sb = getSupabaseAdmin();
+-  const { data, error } = await sb.from('blog_posts').insert(toInsertPayload(form)).select('*').single();
++  const { data, error } = await sb.from('blog_posts').insert(toInsertPayload(form)).select(POST_SELECT).single();
+   if (error || !data) return { post: null, error: error?.message || 'Erreur inconnue' };
+-  return { post: data as BlogPost, error: null };
++  return { post: data as unknown as BlogPost, error: null };
+ }
+ 
+ export async function updateBlogPost(
+@@ -124,9 +139,9 @@ export async function updateBlogPost(
+   if (existing?.status === 'published' && form.status === 'published') {
+     payload.published_at = existing.published_at;
+   }
+-  const { data, error } = await sb.from('blog_posts').update(payload).eq('id', id).select('*').single();
++  const { data, error } = await sb.from('blog_posts').update(payload).eq('id', id).select(POST_SELECT).single();
+   if (error || !data) return { post: null, error: error?.message || 'Erreur inconnue' };
+-  return { post: data as BlogPost, error: null };
++  return { post: data as unknown as BlogPost, error: null };
+ }
+ 
+ /** Bascule un brouillon en publie et fixe published_at a maintenant. */
+@@ -136,10 +151,10 @@ export async function publishBlogPost(id: string): Promise<{ post: BlogPost | nu
+     .from('blog_posts')
+     .update({ status: 'published', published_at: new Date().toISOString() })
+     .eq('id', id)
+-    .select('*')
++    .select(POST_SELECT)
+     .single();
+   if (error || !data) return { post: null, error: error?.message || 'Erreur inconnue' };
+-  return { post: data as BlogPost, error: null };
++  return { post: data as unknown as BlogPost, error: null };
+ }
+ 
+ export async function deleteBlogPost(id: string): Promise<{ error: string | null }> {
+@@ -147,3 +162,58 @@ export async function deleteBlogPost(id: string): Promise<{ error: string | null
+   const { error } = await sb.from('blog_posts').delete().eq('id', id);
+   return { error: error?.message || null };
+ }
++
++// ─── Categories de blog (05/10) ──────────────────────────────────────────────
++
++/** Toutes les categories de blog, triees pour l'affichage (admin + public). */
++export async function getBlogCategories(): Promise<BlogCategory[]> {
++  const sb = getSupabaseAdmin();
++  const { data, error } = await sb.from('blog_categories').select('*').order('sort_order', { ascending: true });
++  if (error || !data) return [];
++  return data as BlogCategory[];
++}
++
++export async function getBlogCategoryBySlug(slug: string): Promise<BlogCategory | null> {
++  const sb = getSupabaseAdmin();
++  const { data, error } = await sb.from('blog_categories').select('*').eq('slug', slug).maybeSingle();
++  if (error || !data) return null;
++  return data as BlogCategory;
++}
++
++export interface BlogCategoryInput {
++  slug: string;
++  name_fr: string;
++  name_es: string;
++  name_uk: string;
++  icon: string | null;
++  color: string | null;
++  sort_order: number;
++}
++
++export async function createBlogCategory(input: BlogCategoryInput): Promise<{ category: BlogCategory | null; error: string | null }> {
++  const sb = getSupabaseAdmin();
++  const { data, error } = await sb.from('blog_categories').insert(input).select('*').single();
++  if (error || !data) return { category: null, error: error?.message || 'Erreur inconnue' };
++  return { category: data as BlogCategory, error: null };
++}
++
++export async function updateBlogCategory(
++  id: string,
++  input: BlogCategoryInput
++): Promise<{ category: BlogCategory | null; error: string | null }> {
++  const sb = getSupabaseAdmin();
++  const { data, error } = await sb.from('blog_categories').update(input).eq('id', id).select('*').single();
++  if (error || !data) return { category: null, error: error?.message || 'Erreur inconnue' };
++  return { category: data as BlogCategory, error: null };
++}
++
++/**
++ * Supprime une categorie. Les articles qui la referencaient repassent a
++ * category_id = NULL (ON DELETE SET NULL, migration) — jamais supprimes
++ * avec elle.
++ */
++export async function deleteBlogCategory(id: string): Promise<{ error: string | null }> {
++  const sb = getSupabaseAdmin();
++  const { error } = await sb.from('blog_categories').delete().eq('id', id);
++  return { error: error?.message || null };
++}
+diff --git a/supabase/migrations/20261005000001_blog_categories.sql b/supabase/migrations/20261005000001_blog_categories.sql
+new file mode 100644
+index 0000000..e8e2fb7
+--- /dev/null
++++ b/supabase/migrations/20261005000001_blog_categories.sql
+@@ -0,0 +1,48 @@
++-- Categories du blog (05/10, demande Jerome : "je veux pouvoir dissocier
++-- les differents articles ... on devra pouvoir les trier et pourquoi pas
++-- envisager un design different selon les categories").
++--
++-- Table DEDIEE au blog, separee de `categories` (categories produit) —
++-- choix valide avec Jerome : logique editoriale differente de la logique
++-- merchandising produit, et c'est ce qui permettra plus tard un design
++-- different par categorie (le slug/color ci-dessous servent de point
++-- d'accroche pour ca, sans construire de systeme de template maintenant).
++--
++-- `tags` (text[] sur blog_posts, migration precedente) n'est PAS remplace
++-- par les categories — valide avec Jerome : la categorie est LE rayon
++-- principal de l'article (un seul, sert au tri/filtre/design), les tags
++-- restent des etiquettes libres en complement (plusieurs par article).
++--
++-- Meme schema que `categories` (name_fr/es/uk des maintenant, meme si le
++-- blog ne tourne qu'en FR pour l'instant — evite une migration de plus
++-- quand ES/UK ouvriront, comme deja fait pour categories/blog_posts).
++-- `color` optionnel (hex) : juste un accent visuel (badge) utilisable deja
++-- aujourd'hui, pas un systeme de theme — base simple si un design par
++-- categorie plus elabore est voulu plus tard.
++
++CREATE TABLE IF NOT EXISTS blog_categories (
++  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++  slug text NOT NULL UNIQUE,
++  name_fr text NOT NULL,
++  name_es text NOT NULL,
++  name_uk text NOT NULL,
++  icon text,
++  color text,
++  sort_order int NOT NULL DEFAULT 0,
++  created_at timestamptz NOT NULL DEFAULT now()
++);
++
++ALTER TABLE blog_categories ENABLE ROW LEVEL SECURITY;
++-- Aucune policy anon/authenticated : service_role uniquement, meme logique
++-- que le reste du schema.
++
++ALTER TABLE blog_posts ADD COLUMN IF NOT EXISTS category_id uuid REFERENCES blog_categories(id) ON DELETE SET NULL;
++CREATE INDEX IF NOT EXISTS idx_blog_posts_category_id ON blog_posts(category_id);
++
++-- Jeu de depart — a ajuster/completer dans l'admin (/admin/blog/categories).
++INSERT INTO blog_categories (slug, name_fr, name_es, name_uk, icon, color, sort_order) VALUES
++  ('produits-tendance', 'Produits tendance', 'Productos de tendencia', 'Trending products', '🔥', '#FF6B35', 0),
++  ('high-tech', 'High-tech', 'Tecnología', 'Tech', '💻', '#4A90D9', 1),
++  ('guides-achat', 'Guides d''achat', 'Guías de compra', 'Buying guides', '🧭', '#1B2A4A', 2),
++  ('actus-tests', 'Actus & tests', 'Noticias y pruebas', 'News & reviews', '📰', '#7C3AED', 3)
++ON CONFLICT (slug) DO NOTHING;
+diff --git a/types/index.ts b/types/index.ts
+index 9af6fa9..fe20231 100644
+--- a/types/index.ts
++++ b/types/index.ts
+@@ -270,13 +270,34 @@ export interface BlogDraftContent {
+   tags: string[];
+ }
+ 
++/**
++ * Categorie de blog (05/10, demande Jerome) — rayon editorial principal
++ * d'un article (un seul par article), distincte des `categories` produit
++ * (logique merchandising differente) et des tags (etiquettes libres,
++ * plusieurs par article). `color` est un simple accent visuel (badge),
++ * point d'accroche pour un futur design different par categorie.
++ */
++export interface BlogCategory {
++  id: string;
++  slug: string;
++  name_fr: string;
++  name_es: string;
++  name_uk: string;
++  icon: string | null;
++  color: string | null;
++  sort_order: number;
++  created_at: string;
++}
++
+ /**
+  * Article de blog (04/10, chantier "Blog + Vente directe"). `content` est
+  * du markdown brut (editeur @uiw/react-md-editor, rendu public via
+  * react-markdown — voir Sprint 2/4). `linked_product_ids` est une
+  * reference "molle" (pas de contrainte FK sur les elements d'un uuid[]),
+  * validee cote API a l'ecriture. Lance en 'fr' uniquement mais `market`
+- * existe deja pour ouvrir ES/UK sans nouvelle migration.
++ * existe deja pour ouvrir ES/UK sans nouvelle migration. `category_id`
++ * (05/10) est le rayon principal (optionnel) ; `category` est la version
++ * jointe, renvoyee uniquement par les getters publics qui en ont besoin.
+  */
+ export interface BlogPost {
+   id: string;
+@@ -288,6 +309,7 @@ export interface BlogPost {
+   cover_image_url: string | null;
+   status: BlogPostStatus;
+   tags: string[];
++  category_id: string | null;
+   linked_product_ids: string[];
+   author_name: string | null;
+   meta_title: string | null;
+@@ -296,6 +318,7 @@ export interface BlogPost {
+   published_at: string | null;
+   created_at: string;
+   updated_at: string;
++  category?: BlogCategory | null;
+ }
+ 
+ /** Donnees du formulaire admin (creation/edition) — id/timestamps gérés côté serveur. */
+@@ -308,6 +331,7 @@ export interface BlogPostFormData {
+   cover_image_url: string;
+   status: BlogPostStatus;
+   tags: string[];
++  category_id: string | null;
+   linked_product_ids: string[];
+   author_name: string;
+   meta_title: string;
+-- 
+2.43.0
+

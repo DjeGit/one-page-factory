@@ -1,0 +1,232 @@
+From e0f92cd47a8a3648c05fd0d6f72077533f908822 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sun, 20 Sep 2026 22:27:36 +0200
+Subject: [PATCH] =?UTF-8?q?feat:=20filtrage=20bots=20+=20d=C3=A9duplicatio?=
+ =?UTF-8?q?n=20des=20vues=20(Sprint=205,=20compl=C3=A9ment)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Jerome a demandé si les vues affichées par marché dans /admin étaient
+réelles ou fictives. Réponse : réelles (COUNT() sur page_views, alimenté
+en direct à chaque chargement de page), mais sans aucun filtrage bot ni
+déduplication — un crawler ou un simple rechargement de page comptait
+comme une vue.
+
+- lib/bot-detection.ts : isBotUserAgent(), liste de motifs (moteurs de
+  recherche, bots de preview de lien réseaux sociaux, bots IA, bots
+  SEO/scraping/monitoring, clients scriptés génériques) + User-Agent
+  absent = considéré comme un bot.
+- lib/supabase.ts : trackClick() et trackPageView() ignorent désormais les
+  requêtes identifiées comme bot. trackPageView() passe en plus d'un
+  insert() à un upsert(..., { onConflict: 'product_id,ip_hash,viewed_date',
+  ignoreDuplicates: true }) pour ne compter qu'une vue par IP hashée, par
+  produit, par jour (un même visiteur qui recharge la page plusieurs fois
+  ne compte qu'une fois ; il recompte le lendemain — c'est voulu, on
+  mesure du trafic réel, pas des visiteurs uniques all-time).
+- supabase/migrations/20260920000003_page_views_dedup.sql : colonne
+  générée viewed_date + index unique (product_id, ip_hash, viewed_date)
+  sur page_views, nécessaire pour l'upsert ci-dessus.
+
+trackClick() est filtré bot mais PAS dédupliqué : un clic répété reste un
+signal d'intention valide et sert au calcul de CTR/revenue_estimate — le
+dédupliquer fausserait ces calculs.
+
+Vérifié : npx tsc --noEmit propre, npm run build (67 routes) OK.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ lib/bot-detection.ts                          | 84 +++++++++++++++++++
+ lib/supabase.ts                               | 31 +++++--
+ .../20260920000003_page_views_dedup.sql       | 25 ++++++
+ 3 files changed, 132 insertions(+), 8 deletions(-)
+ create mode 100644 lib/bot-detection.ts
+ create mode 100644 supabase/migrations/20260920000003_page_views_dedup.sql
+
+diff --git a/lib/bot-detection.ts b/lib/bot-detection.ts
+new file mode 100644
+index 0000000..f5ee080
+--- /dev/null
++++ b/lib/bot-detection.ts
+@@ -0,0 +1,84 @@
++// Sprint 5 (complément demandé par Jerome) : filtrage des bots/crawlers
++// connus avant d'écrire une vue ou un clic dans les tables d'analytics
++// (page_views / clicks). Objectif : que les chiffres du dashboard par
++// marché reflètent du trafic humain, pas des crawlers SEO, des bots de
++// preview de lien sur les réseaux sociaux, ou des scrapers.
++//
++// Approche volontairement simple (liste de motifs sur le User-Agent) plutôt
++// qu'une lib tierce (isbot, ua-parser-js) : pas de nouvelle dépendance pour
++// un besoin qui reste "filtrer le bruit évident", pas "détection bot
++// exhaustive anti-fraude". À revisiter avec une vraie lib si le besoin
++// grandit (ex. détection de fraude au clic sur des campagnes payantes).
++const BOT_USER_AGENT_PATTERNS: RegExp[] = [
++  // Moteurs de recherche
++  /googlebot/i,
++  /bingbot/i,
++  /yandex(bot)?/i,
++  /baiduspider/i,
++  /duckduckbot/i,
++  /applebot/i,
++  /slurp/i, // Yahoo
++
++  // Bots de preview de lien / réseaux sociaux (Postiz publie sur ces
++  // réseaux — leurs bots viennent déclencher l'unfurl du lien juste après)
++  /facebookexternalhit/i,
++  /facebot/i,
++  /twitterbot/i,
++  /linkedinbot/i,
++  /whatsapp/i,
++  /telegrambot/i,
++  /discordbot/i,
++  /slackbot/i,
++  /pinterest/i,
++  /redditbot/i,
++  /skypeuripreview/i,
++  /vkshare/i,
++  /embedly/i,
++
++  // Bots IA (indexation / entraînement)
++  /gptbot/i,
++  /chatgpt-user/i,
++  /claudebot/i,
++  /anthropic-ai/i,
++  /perplexitybot/i,
++  /bytespider/i,
++  /ccbot/i,
++
++  // Bots SEO / scraping / monitoring
++  /ahrefsbot/i,
++  /semrushbot/i,
++  /mj12bot/i,
++  /dotbot/i,
++  /petalbot/i,
++  /screaming frog/i,
++  /uptimerobot/i,
++  /pingdom/i,
++  /site24x7/i,
++  /statuscake/i,
++
++  // Clients scriptés génériques (jamais un vrai navigateur)
++  /headlesschrome/i,
++  /phantomjs/i,
++  /python-requests/i,
++  /python-urllib/i,
++  /go-http-client/i,
++  /node-fetch/i,
++  /^axios\//i,
++  /curl\//i,
++  /wget\//i,
++  /postmanruntime/i,
++  /^okhttp/i,
++  /^bot\b/i,
++  /\bcrawler\b/i,
++  /\bspider\b/i,
++];
++
++/**
++ * true si le User-Agent correspond à un bot/crawler connu, ou est absent
++ * (un vrai navigateur envoie toujours un User-Agent — son absence trahit
++ * quasi systématiquement un script plutôt qu'un visiteur).
++ */
++export function isBotUserAgent(userAgent: string | null | undefined): boolean {
++  if (!userAgent || userAgent.trim() === '') return true;
++  return BOT_USER_AGENT_PATTERNS.some((pattern) => pattern.test(userAgent));
++}
+diff --git a/lib/supabase.ts b/lib/supabase.ts
+index 9c230ce..fa3109b 100644
+--- a/lib/supabase.ts
++++ b/lib/supabase.ts
+@@ -3,6 +3,7 @@ import type { Product, AnalyticsData, DashboardStats } from '@/types';
+ import type { Market } from '@/lib/market';
+ import { NextRequest } from 'next/server';
+ import { createHash } from 'crypto';
++import { isBotUserAgent } from '@/lib/bot-detection';
+ 
+ // Lazy singleton clients — created on first use so env vars are available
+ let _supabase: SupabaseClient | null = null;
+@@ -202,9 +203,13 @@ export async function deleteProduct(id: string): Promise<boolean> {
+ // =====================
+ 
+ export async function trackClick(productId: string, req: NextRequest): Promise<void> {
++  const userAgent = req.headers.get('user-agent') || null;
++  // Sprint 5 : un bot qui suit un lien /go/[code] (link-checker, crawler
++  // SEO) ne représente pas une intention d'achat — on ne le compte pas.
++  if (isBotUserAgent(userAgent)) return;
++
+   const ip = getIp(req);
+   const ipHash = hashIp(ip);
+-  const userAgent = req.headers.get('user-agent') || null;
+   const referer = req.headers.get('referer') || null;
+ 
+   await supabaseAdmin.from('clicks').insert({
+@@ -216,17 +221,27 @@ export async function trackClick(productId: string, req: NextRequest): Promise<v
+ }
+ 
+ export async function trackPageView(productId: string, req: NextRequest): Promise<void> {
++  const userAgent = req.headers.get('user-agent') || null;
++  // Sprint 5 (suite à la question de Jerome sur la fiabilité des vues) :
++  // deux filtres avant de compter une vue —
++  //  1. bots/crawlers connus (lib/bot-detection.ts) : jamais comptés.
++  //  2. déduplication IP+produit+jour, appliquée côté DB via l'upsert +
++  //     l'index unique de la migration 20260920000003 : un même visiteur
++  //     qui recharge la page plusieurs fois dans la journée ne compte que
++  //     pour une vue (il recompte le lendemain — c'est voulu, on mesure du
++  //     trafic, pas des visiteurs uniques all-time).
++  if (isBotUserAgent(userAgent)) return;
++
+   const ip = getIp(req);
+   const ipHash = hashIp(ip);
+-  const userAgent = req.headers.get('user-agent') || null;
+   const referer = req.headers.get('referer') || null;
+ 
+-  await supabaseAdmin.from('page_views').insert({
+-    product_id: productId,
+-    ip_hash: ipHash,
+-    user_agent: userAgent,
+-    referer: referer,
+-  });
++  await supabaseAdmin
++    .from('page_views')
++    .upsert(
++      { product_id: productId, ip_hash: ipHash, user_agent: userAgent, referer: referer },
++      { onConflict: 'product_id,ip_hash,viewed_date', ignoreDuplicates: true }
++    );
+ }
+ 
+ // market omis = agrégat tous marchés (compat pages publiques / anciens
+diff --git a/supabase/migrations/20260920000003_page_views_dedup.sql b/supabase/migrations/20260920000003_page_views_dedup.sql
+new file mode 100644
+index 0000000..f234a22
+--- /dev/null
++++ b/supabase/migrations/20260920000003_page_views_dedup.sql
+@@ -0,0 +1,25 @@
++-- Sprint 5 (complément demandé par Jerome le 20/09, suite à sa question sur
++-- la fiabilité des "vues" affichées par marché dans /admin) :
++--
++-- Constat : total_views (lib/supabase.ts:getDashboardStats) est un simple
++-- COUNT() sur page_views, alimenté sans aucun filtrage bot ni déduplication
++-- — un crawler ou un rechargement de page compte comme une vue au même
++-- titre qu'un vrai visiteur. Le filtrage des bots connus se fait côté
++-- application (lib/bot-detection.ts, appliqué avant l'insert). Cette
++-- migration ajoute le filet côté DB pour la déduplication : au plus une vue
++-- comptée par IP hashée, par produit, par jour.
++--
++-- viewed_date est une colonne générée (pas de backfill nécessaire, calculée
++-- à la volée y compris pour les lignes existantes) qui sert de clé de
++-- dédup grossière — un même visiteur qui revient le lendemain compte de
++-- nouveau comme une vue, ce qui est le comportement voulu (mesurer le
++-- trafic réel, pas des visiteurs uniques all-time).
++ALTER TABLE page_views
++  ADD COLUMN IF NOT EXISTS viewed_date date GENERATED ALWAYS AS ((viewed_at AT TIME ZONE 'utc')::date) STORED;
++
++-- Pas de clause WHERE (index non-partiel) : ip_hash n'est jamais NULL en
++-- pratique (hashIp() hache toujours une valeur, même 'unknown'), et un
++-- index non-partiel est ce que l'upsert onConflict de supabase-js sait
++-- cibler simplement côté PostgREST.
++CREATE UNIQUE INDEX IF NOT EXISTS idx_page_views_dedup
++  ON page_views (product_id, ip_hash, viewed_date);
+-- 
+2.43.0
+

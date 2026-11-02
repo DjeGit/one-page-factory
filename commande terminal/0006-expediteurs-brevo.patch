@@ -1,0 +1,66 @@
+From 0263bb310fc47362cb4086baf78df884a30d8751 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 7 Oct 2026 17:41:36 +0200
+Subject: [PATCH] =?UTF-8?q?fix:=20exp=C3=A9diteurs=20Brevo=20=E2=80=94=20h?=
+ =?UTF-8?q?ello@/contact@tendpick.fr=20(inexistants)=20remplac=C3=A9s=20pa?=
+ =?UTF-8?q?r=20contact@tendpick.com?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+hello@tendpick.fr (email de bienvenue, fonction non appelée) et
+contact@tendpick.fr (alertes baisse de prix vers l'admin) n'existent ni
+dans Zoho ni comme expéditeur Brevo : les alertes étaient rejetées.
+Les deux utilisent désormais contact@tendpick.com (vérifié, DKIM+DMARC).
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01WjpUBfSvPXsqZDsqFozq8g
+---
+ app/api/leads/route.ts | 10 +++++-----
+ lib/opf-notify.ts      |  2 +-
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/app/api/leads/route.ts b/app/api/leads/route.ts
+index 2c2e2a7..07c13f4 100644
+--- a/app/api/leads/route.ts
++++ b/app/api/leads/route.ts
+@@ -32,7 +32,7 @@ async function sendWelcomeEmail(email: string, market: string): Promise<void> {
+       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         to: [{ email }],
+-        sender: { name: 'Tendpick', email: 'hello@tendpick.fr' },
++        sender: { name: 'Tendpick', email: 'contact@tendpick.com' },
+         subject,
+         htmlContent: html,
+       }),
+@@ -195,10 +195,10 @@ export async function POST(req: NextRequest) {
+   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+ 
+   // Sync CRM (non bloquant, échec silencieux). Note : sendWelcomeEmail()
+-  // existe mais n'est délibérément pas appelée ici, comme sur le serveur —
+-  // l'e-mail de bienvenue est probablement déjà géré par une automatisation
+-  // Brevo déclenchée à l'ajout en liste. Ne pas l'activer sans vérifier
+-  // d'abord avec Jerome qu'il n'y a pas de double envoi.
++  // existe mais n'est pas appelée ici. Vérifié le 07/10 dans Brevo : il n'y
++  // a AUCUNE automatisation ni template, donc aucun e-mail de bienvenue
++  // n'est envoyé aujourd'hui. L'expéditeur de la fonction est maintenant
++  // contact@tendpick.com (vérifié) ; l'activer = décision de Jerome.
+   syncToBrevo(email, market, body.productName).catch(() => {});
+ 
+   return NextResponse.json({ success: true, data });
+diff --git a/lib/opf-notify.ts b/lib/opf-notify.ts
+index 9e7f2ba..1f3dbcf 100644
+--- a/lib/opf-notify.ts
++++ b/lib/opf-notify.ts
+@@ -141,7 +141,7 @@ async function sendBrevoEmail(
+   apiKey: string
+ ): Promise<void> {
+   const payload = {
+-    sender: { name: 'Tendpick Alerts', email: 'contact@tendpick.fr' },
++    sender: { name: 'Tendpick Alerts', email: 'contact@tendpick.com' },
+     to: [{ email: to }],
+     subject,
+     htmlContent: html,
+-- 
+2.43.0
+
