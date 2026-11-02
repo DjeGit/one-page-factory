@@ -44,6 +44,28 @@ describe('aliexpress api', () => {
     expect(sent!.get('timestamp')).toBe('2026-11-02 08:00:00'); // heure de Shanghai
   });
 
+  it('callApi : réessaie après ApiCallLimit puis réussit, et ne réessaie pas les autres erreurs', async () => {
+    const creds = { appKey: 'k', appSecret: 's', trackingId: 't' };
+    const limit = JSON.stringify({ error_response: { code: 'ApiCallLimit', msg: 'Api access frequency exceeds the limit. this ban will last 1 seconds' } });
+    let n = 0;
+    const waits: number[] = [];
+    const flaky = async () => new Response(++n <= 2 ? limit : '{"ok":true}', { status: 200 });
+    const out = await callApi('m', {}, { creds, fetchImpl: flaky as any, sleepImpl: async (ms: number) => { waits.push(ms); } });
+    expect(out).toEqual({ ok: true });
+    expect(n).toBe(3);
+    expect(waits).toEqual([1500, 3000]);
+
+    let m = 0;
+    const bad = async () => { m++; return new Response(JSON.stringify({ error_response: { code: '29', msg: 'Invalid app Key' } }), { status: 200 }); };
+    await expect(callApi('m', {}, { creds, fetchImpl: bad as any, sleepImpl: async () => {} })).rejects.toThrow(/Invalid app Key/);
+    expect(m).toBe(1);
+
+    let k = 0;
+    const always = async () => { k++; return new Response(limit, { status: 200 }); };
+    await expect(callApi('m', {}, { creds, fetchImpl: always as any, sleepImpl: async () => {}, retries: 2 })).rejects.toThrow(/ApiCallLimit/);
+    expect(k).toBe(3);
+  });
+
   it('callApi : modes GET et système dans l\'adresse', async () => {
     const calls: { url: string; init: any }[] = [];
     const fetchImpl = async (u: string, init: any) => { calls.push({ url: u, init }); return new Response('{}', { status: 200 }); };

@@ -71,7 +71,29 @@ function formatTimestamp(unit, ms) {
   return String(ms);
 }
 
-export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'md5', timestampUnit = 'ms', extras = 'full', gateway = GATEWAY, transport = 'body' } = {}) {
+let lastCallAt = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Appel API avec cadence minimale (vrai réseau seulement) et nouvel essai quand AliExpress répond ApiCallLimit. */
+export async function callApi(method, params, opts = {}) {
+  const { retries = 3, minGapMs = 500, sleepImpl = sleep } = opts;
+  const real = (opts.fetchImpl || fetch) === fetch;
+  for (let attempt = 0; ; attempt++) {
+    if (real && minGapMs) {
+      const wait = lastCallAt + minGapMs - Date.now();
+      if (wait > 0) await sleepImpl(wait);
+    }
+    lastCallAt = Date.now();
+    try {
+      return await callOnce(method, params, opts);
+    } catch (e) {
+      if (attempt >= retries || !/ApiCallLimit|frequency exceeds/i.test(String(e.message))) throw e;
+      await sleepImpl(1500 * (attempt + 1));
+    }
+  }
+}
+
+async function callOnce(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'md5', timestampUnit = 'ms', extras = 'full', gateway = GATEWAY, transport = 'body' } = {}) {
   const c = creds || getCredentials();
   const all = {
     app_key: c.appKey,
