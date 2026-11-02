@@ -70,6 +70,12 @@ export async function PATCH(req: NextRequest) {
   // On ne retouche pas un produit déjà en cours de traitement ou en ligne.
   const { error } = await sb.from('trend_candidates').update(patch).in('id', ids).in('status', ['candidate', 'validated', 'error']);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Annulation d'un produit « prêt » avant sa mise en ligne automatique : NON ou attente le repasse en candidat.
+  // Ses fiches restent en brouillon ; un nouveau OUI les réutilise.
+  if (decision !== 'yes') {
+    const { error: e2 } = await sb.from('trend_candidates').update({ ...patch, publish_at: null }).in('id', ids).eq('status', 'ready');
+    if (e2) return NextResponse.json({ error: e2.message }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }
 
