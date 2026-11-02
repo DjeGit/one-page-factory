@@ -1,20 +1,36 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Product, AnalyticsData } from '@/types';
+import { getCloudinaryUrl } from '@/lib/cloudinary';
+import { getProductGallery } from '@/lib/product-images';
+import { filterList, presenceOf, statusCounts, type StatusTab } from '@/lib/admin-products-view';
 
 interface ProductsTableProps {
   products: Product[];
   analyticsMap: Map<string, AnalyticsData>;
+  /** Marchés où existe chaque produit (clé = produit racine) : pastilles FR / ES / UK. */
+  presence?: Record<string, { market: string; active: boolean }[]>;
 }
 
-export default function ProductsTable({ products, analyticsMap }: ProductsTableProps) {
+const TABS: { key: StatusTab; label: string }[] = [
+  { key: 'all', label: 'Tous' },
+  { key: 'live', label: 'En ligne' },
+  { key: 'draft', label: 'Brouillons' },
+];
+
+export default function ProductsTable({ products, analyticsMap, presence = {} }: ProductsTableProps) {
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [status, setStatus] = useState<StatusTab>('all');
+  const [query, setQuery] = useState('');
+
+  const counts = useMemo(() => statusCounts(products), [products]);
+  const shown = useMemo(() => filterList(products, status, query), [products, status, query]);
 
   const handleDelete = async (product: Product) => {
     if (!confirm(`Supprimer "${product.name}" ? Cette action est irréversible.`)) return;
@@ -66,6 +82,35 @@ export default function ProductsTable({ products, analyticsMap }: ProductsTableP
           <button type="button" onClick={() => setNotice(null)} className="text-amber-700 font-semibold shrink-0">Fermer</button>
         </div>
       )}
+
+      {/* Onglets de statut + recherche */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-gray-100">
+        <div className="flex gap-1.5" role="tablist" aria-label="Statut">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={status === t.key}
+              onClick={() => setStatus(t.key)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                status === t.key ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {t.label} <span className={status === t.key ? 'text-primary-100' : 'text-gray-400'}>{counts[t.key]}</span>
+            </button>
+          ))}
+        </div>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Rechercher un produit…"
+          aria-label="Rechercher un produit"
+          className="w-full sm:w-64 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-300"
+        />
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -80,33 +125,71 @@ export default function ProductsTable({ products, analyticsMap }: ProductsTableP
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {products.map((product) => {
+            {shown.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-6 py-12 text-center text-gray-400">
+                  Aucun produit ne correspond{query ? ` à « ${query} »` : ''}.
+                </td>
+              </tr>
+            )}
+            {shown.map((product) => {
               const analytics = analyticsMap.get(product.id);
               const ctr = analytics ? analytics.ctr : 0;
+              const cover = getProductGallery(product)[0];
+              const markets = presenceOf(product, presence);
+              const currency = product.price_currency === 'GBP' ? '£' : '€';
 
               return (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                  {/* Product name & slug */}
-                  <td className="px-6 py-4">
-                    <div className="font-semibold text-gray-900">{product.name}</div>
-                    <div className="text-sm text-gray-400 flex items-center gap-1">
-                      <span>/{product.slug}</span>
-                      <a
-                        href={`/${product.slug}`}
-                        target="_blank"
-                        className="text-primary-500 hover:text-primary-700 transition-colors"
-                      >
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
+                  {/* Vignette, nom, adresse et marchés */}
+                  <td className="px-6 py-3">
+                    <div className="flex items-center gap-3">
+                      {cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={getCloudinaryUrl(cover, { width: 96, height: 96, crop: 'fill', format: 'auto', quality: 'auto' })}
+                          alt=""
+                          loading="lazy"
+                          className="h-12 w-12 shrink-0 rounded-lg bg-gray-100 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-xl" aria-hidden>📦</div>
+                      )}
+                      <div className="min-w-0">
+                        <Link href={`/admin/products/${product.id}`} className="font-semibold text-gray-900 hover:text-primary-700 line-clamp-2">
+                          {product.name}
+                        </Link>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <span className="truncate max-w-[16rem]">/{product.slug}</span>
+                            <a href={`/${product.slug}`} target="_blank" rel="noreferrer" className="text-primary-500 hover:text-primary-700 transition-colors" aria-label="Voir la page">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </a>
+                          </span>
+                          {markets.length > 0 && (
+                            <span className="flex gap-1">
+                              {markets.map((m) => (
+                                <span
+                                  key={m.market}
+                                  title={`${m.market.toUpperCase()} : ${m.active ? 'en ligne' : 'brouillon'}`}
+                                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${m.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}
+                                >
+                                  {m.market.toUpperCase()}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </td>
 
                   {/* Price */}
                   <td className="px-4 py-4 hidden lg:table-cell">
                     {product.price ? (
-                      <span className="font-medium text-gray-900">{product.price.toFixed(2)}€</span>
+                      <span className="font-medium text-gray-900">{product.price.toFixed(2)}{currency}</span>
                     ) : (
                       <span className="text-gray-400">—</span>
                     )}
@@ -138,14 +221,13 @@ export default function ProductsTable({ products, analyticsMap }: ProductsTableP
                     <button
                       onClick={() => handleToggleActive(product)}
                       disabled={togglingId === product.id}
+                      aria-label={product.active ? 'Désactiver' : 'Activer'}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
                         product.active ? 'bg-green-500' : 'bg-gray-300'
                       } disabled:opacity-60`}
                     >
                       <span
-                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                          product.active ? 'translate-x-4.5' : 'translate-x-0.5'
-                        }`}
+                        className="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform duration-200"
                         style={{ transform: product.active ? 'translateX(18px)' : 'translateX(2px)' }}
                       />
                     </button>
