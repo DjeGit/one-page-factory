@@ -12,7 +12,8 @@
 import { fileURLToPath } from 'node:url';
 import { checkCandidate, computePublishAt, isPriceStale, needsManualReview, publishIssues } from './gates.mjs';
 import { collectOffers } from './offers.mjs';
-import { generateFicheText, LANGS } from './fiche-text.mjs';
+import { generateFicheText } from './fiche-text.mjs';
+import { formatSpecs } from './specs.mjs';
 import { buildProductRow, LANG_OF_MARKET, slugify, uniqueSlug } from './fiches.mjs';
 
 const MIN_PHOTOS = 3;
@@ -96,8 +97,14 @@ export async function prepareCandidate(c, d) {
     }
     const lang = LANG_OF_MARKET[o.market];
     let text;
+    let specs = '';
     try {
-      ({ text } = await generateFicheText({ lang, title: o.detail.title || c.name, categoryLabel: CATEGORY_LABELS[c.category_slug] || c.category_slug, productType: c.product_type, notes: c.note }, { llm: d.llm }));
+      specs = d.specs ? formatSpecs(await d.specs(o.itemId)) : '';
+    } catch (e) {
+      d.log(`  (caractéristiques illisibles : ${e.message})`);
+    }
+    try {
+      ({ text } = await generateFicheText({ lang, title: o.detail.title || c.name, categoryLabel: CATEGORY_LABELS[c.category_slug] || c.category_slug, productType: c.product_type, notes: c.note, specs }, { llm: d.llm }));
     } catch (e) {
       return fail(c, d, e.message, { product_ids: all.map((p) => p.id) });
     }
@@ -264,6 +271,7 @@ async function main() {
   const { getProductForMarket, verifyAffiliateLink } = await import('../aliexpress/api.mjs');
   const api = { getProduct: getProductForMarket, verify: verifyAffiliateLink };
   const { callGemini } = await import('./fiche-text.mjs');
+  const { fetchSpecs } = await import('./specs.mjs');
   const log = (m) => console.log(m);
 
   if (args.includes('--dry-run')) {
@@ -285,7 +293,15 @@ async function main() {
       const first = offers.find((o) => o.status === 'ok');
       if (!first) return console.log('Pas de marché disponible : pas de texte.');
       const lang = LANG_OF_MARKET[first.market];
-      const { text } = await generateFicheText({ lang, title: first.detail.title || c.name, categoryLabel: CATEGORY_LABELS[c.category_slug] || c.category_slug, productType: c.product_type, notes: c.note }, { llm: (p) => callGemini(p) });
+      let specs = '';
+      try {
+        const list = await fetchSpecs(first.itemId);
+        specs = formatSpecs(list);
+        console.log(`\nCaractéristiques lues sur la page : ${list.length}`);
+      } catch (e) {
+        console.log(`\nCaractéristiques illisibles : ${e.message}`);
+      }
+      const { text } = await generateFicheText({ lang, title: first.detail.title || c.name, categoryLabel: CATEGORY_LABELS[c.category_slug] || c.category_slug, productType: c.product_type, notes: c.note, specs }, { llm: (p) => callGemini(p) });
       console.log(`\nAperçu du texte (${lang}) :\n${JSON.stringify(text, null, 2)}`);
     }
     return;
@@ -297,6 +313,7 @@ async function main() {
     sb, api, log,
     now: () => new Date(),
     llm: (p) => callGemini(p),
+    specs: (id) => fetchSpecs(id),
     photos: (row) => processProduct(row, { dryRun: false }),
     mail: (payload) => sendMail(renderEmail(payload)),
   };

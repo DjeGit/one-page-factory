@@ -90,6 +90,14 @@ export function validateFicheText(raw, lang) {
   const everything = [name, hero, sub, ...paragraphs, ...benefits.flatMap((b) => [b.title, b.description]), ...faq.flatMap((f) => [f.question, f.answer]), raw.meta_title, raw.meta_description].join(' \n ');
   for (const [re, why] of BANNED) if (re.test(everything)) errors.push(`texte interdit : ${why}`);
 
+  // Méta : le titre est toujours « <nom> | Tendpick » ; la description est coupée en fin de phrase, jamais en plein milieu.
+  let metaDescription = trim(raw.meta_description || sub);
+  if (metaDescription.length > 155) {
+    const cut = metaDescription.slice(0, 155);
+    const k = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '), /[.!?]$/.test(cut) ? cut.length - 1 : -1);
+    if (k >= 70) metaDescription = cut.slice(0, k + 1);
+    else errors.push('meta_description trop longue (155 caractères maximum, phrase complète)');
+  }
   if (errors.length) return { ok: false, errors };
   const noDot = (x) => trim(x).replace(/[.\s]+$/, '');
   return {
@@ -102,23 +110,23 @@ export function validateFicheText(raw, lang) {
       description: paragraphs.join('\n\n'),
       benefits: benefits.slice(0, 7).map((b) => ({ ...b, title: fit(noDot(b.title), 70) })),
       faq,
-      meta_title: fit(noDot(raw.meta_title || `${name} | Tendpick`), 60),
-      meta_description: fit(raw.meta_description || sub, 155),
+      meta_title: `${fit(noDot(name), 48)} | Tendpick`,
+      meta_description: metaDescription,
     },
   };
 }
 
-export function buildPrompt({ lang, title, categoryLabel, productType, notes }, feedback) {
+export function buildPrompt({ lang, title, categoryLabel, productType, notes, specs }, feedback) {
   const L = LANGS[lang];
   return `Tu rédiges la fiche produit d'un site d'affiliation (Tendpick) en ${L.label}, avec ${L.tu}.
 
 FAITS CONNUS — les seuls que tu peux utiliser :
 - Titre de l'annonce : « ${title} »
 - Catégorie du site : ${categoryLabel}
-${productType ? `- Type de produit : ${productType}\n` : ''}${notes ? `- Notes de recherche : ${notes}\n` : ''}
+${productType ? `- Type de produit : ${productType}\n` : ''}${notes ? `- Notes de recherche : ${notes}\n` : ''}${specs ? `\nCARACTÉRISTIQUES DE L'ANNONCE (peuvent contenir des erreurs : n'utilise que celles cohérentes avec le titre et entre elles ; ignore toute caractéristique douteuse ou contradictoire) :\n${specs}\n` : ''}
 RÈGLES ABSOLUES
 1. Donne l'information de l'annonce comme un fait, sans commentaire. Jamais « d'après les acheteurs », « selon les avis », « les clients signalent ».
-2. N'invente AUCUNE caractéristique : pas de chiffre (autonomie, dimensions, puissance, version, résolution…) qui ne soit pas dans le titre ci-dessus. Si une information manque, reste général (« conçu pour… », « pratique pour… »). Mieux vaut un texte plus court qu'une caractéristique fausse. Si tu connais ce modèle précis avec certitude, tu peux ajouter ses caractéristiques officielles, jamais d'approximation.
+2. N'invente AUCUNE caractéristique : pas de chiffre (autonomie, dimensions, puissance, version, résolution…) qui ne soit pas dans le titre ou les caractéristiques ci-dessus. Si une information manque, reste général (« conçu pour… », « pratique pour… »). Mieux vaut un texte plus court qu'une caractéristique fausse. Si tu connais ce modèle précis avec certitude, tu peux ajouter ses caractéristiques officielles, jamais d'approximation.
 3. Aucun jugement sur l'authenticité ou l'origine du produit (ni « boîte d'origine », ni « version chinoise », ni doute sur la garantie).
 4. Ne mentionne jamais AliExpress. Ne cite aucun prix, aucune remise, aucune livraison détaillée.
 5. Pas d'urgence ni de stock fictif, pas de faux témoignage, pas de « dernières pièces ».
@@ -126,7 +134,7 @@ RÈGLES ABSOLUES
 7. Garantie : la description se termine par une phrase de garantie : « ${L.warranty} »${lang === 'en' ? ' (rien d’autre : les règles britanniques diffèrent)' : ''}.
 8. Produit pour enfant ou bébé : ne dis jamais qu'il est conforme ou certifié.
 9. Aucune promesse de santé ou de performance (« soulage », « guérit », « améliore tes performances », « efficace contre »…) : décris la fonction du produit, jamais un effet sur le corps. Si le produit touche au bien-être ou à la santé (massage, mesure, soin), ajoute juste avant la phrase de garantie : « ${L.medical} »
-10. Casse de phrase : majuscule seulement en début de phrase et sur les noms propres (« Pistolet de massage électrique », pas « Pistolet De Massage Électrique »). Pas de point final dans le nom, l'accroche, les titres de bénéfices ni le meta_title.
+10. Casse de phrase : majuscule seulement en début de phrase et sur les noms propres (« Pistolet de massage électrique », pas « Pistolet De Massage Électrique »). Pas de point final dans le nom, l'accroche ni les titres de bénéfices.
 11. La FAQ ne contient que des questions auxquelles les faits ci-dessus permettent de répondre avec certitude. Pour un détail absent (autonomie, dimensions, contenu de la boîte, compatibilité), ne l'invente pas : pose une autre question, ou réponds que le détail figure sur la page de l'offre.
 
 FORMAT — réponds uniquement par un objet JSON, sans texte autour :
@@ -137,8 +145,7 @@ FORMAT — réponds uniquement par un objet JSON, sans texte autour :
  "description": "2 à 3 paragraphes séparés par une ligne vide : présentation et caractéristiques sûres ; usage ; garantie",
  "benefits": [ {"icon": "un emoji", "title": "titre court et concret (≤ 40 caractères)", "description": "une phrase"} ],
  "faq": [ {"question": "…", "answer": "…"} ],
- "meta_title": "≤ 60 caractères, se termine par | Tendpick",
- "meta_description": "≤ 155 caractères"
+ "meta_description": "une ou deux phrases COMPLÈTES, 155 caractères maximum"
 }
 Donne 6 bénéfices (les 5 premiers s'affichent sous le titre) et 3 à 4 questions de FAQ factuelles (pour qui, usage, fonctionnement…) — sans question sur le prix ni la livraison, ajoutées automatiquement.${feedback ? `\n\nTA RÉPONSE PRÉCÉDENTE A ÉTÉ REFUSÉE POUR CES RAISONS, corrige-les : ${feedback}` : ''}`;
 }

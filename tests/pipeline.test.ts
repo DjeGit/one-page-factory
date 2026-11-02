@@ -6,6 +6,8 @@ import { collectOffers, itemIdFor } from '../scripts/pipeline/offers.mjs';
 // @ts-ignore
 import { validateFicheText, generateFicheText, buildPrompt, fit, fixedFaq, longDate } from '../scripts/pipeline/fiche-text.mjs';
 // @ts-ignore
+import { extractSpecs, formatSpecs } from '../scripts/pipeline/specs.mjs';
+// @ts-ignore
 import { slugify, uniqueSlug, buildProductRow } from '../scripts/pipeline/fiches.mjs';
 // @ts-ignore
 import { renderEmail, sendMail } from '../scripts/pipeline/notify.mjs';
@@ -154,6 +156,7 @@ describe('fiche-text', () => {
     const v = validateFicheText(goodRaw('fr', { meta_title: 'x '.repeat(50) }), 'fr');
     expect(v.ok).toBe(true);
     expect(v.text.meta_title.length).toBeLessThanOrEqual(60);
+    expect(v.text.meta_title.endsWith(' | Tendpick')).toBe(true);
     expect(v.text.benefits).toHaveLength(6);
   });
   it('refuse : AliExpress, avis des acheteurs, authenticité, urgence, prix, garantie absente, trop peu de bénéfices', () => {
@@ -174,11 +177,27 @@ describe('fiche-text', () => {
     const v = validateFicheText(goodRaw('fr', { name: 'Pistolet de massage.', hero_title: 'Accroche.', meta_title: 'Titre. | Tendpick.' }), 'fr');
     expect(v.text.name).toBe('Pistolet de massage');
     expect(v.text.hero_title).toBe('Accroche');
-    expect(v.text.meta_title).toBe('Titre. | Tendpick');
+    expect(v.text.meta_title).toBe('Pistolet de massage | Tendpick');
     expect(v.text.benefits.every((b: any) => !b.title.endsWith('.'))).toBe(true);
     const prompt = buildPrompt({ lang: 'es', title: 'T', categoryLabel: 'Sport' });
     expect(prompt).toContain('No sustituye a un dispositivo médico.');
     expect(prompt).toContain('Casse de phrase');
+  });
+  it('meta_description : coupée en fin de phrase, sinon refusée', () => {
+    const long = 'Première phrase complète et assez longue pour dépasser largement la moitié de la limite autorisée. Deuxième phrase qui dépasse la limite des cent cinquante-cinq caractères et ne doit pas apparaître.';
+    expect(validateFicheText(goodRaw('fr', { meta_description: long }), 'fr').text.meta_description).toBe('Première phrase complète et assez longue pour dépasser largement la moitié de la limite autorisée.');
+    const noStop = 'mot '.repeat(60);
+    expect(validateFicheText(goodRaw('fr', { meta_description: noStop }), 'fr').errors.join()).toContain('meta_description trop longue');
+  });
+  it('specs : extraction, doublons, valeurs vides, prompt', () => {
+    const html = '..."attrName":"Brand Name","attrValue":"Other"..."attrName":"Battery","attrValue":"2000 mAh"..."attrName":"Battery","attrValue":"x"..."attrName":"Mode d\\u0027emploi","attrValue":"Auto"';
+    const s = extractSpecs(html);
+    expect(s.map((x: any) => x.name)).toEqual(['Battery', "Mode d'emploi"]);
+    expect(s[0].value).toBe('2000 mAh');
+    expect(formatSpecs(s)).toBe("- Battery : 2000 mAh\n- Mode d'emploi : Auto");
+    expect(extractSpecs('"name":"Voltage","value":"5V"')).toEqual([{ name: 'Voltage', value: '5V' }]);
+    expect(buildPrompt({ lang: 'fr', title: 'T', categoryLabel: 'C', specs: formatSpecs(s) })).toContain('- Battery : 2000 mAh');
+    expect(buildPrompt({ lang: 'fr', title: 'T', categoryLabel: 'C' })).not.toContain('CARACTÉRISTIQUES DE L');
   });
   it('generateFicheText : une 2e tentative avec les raisons, puis abandon', async () => {
     const prompts: string[] = [];
