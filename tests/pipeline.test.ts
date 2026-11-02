@@ -4,7 +4,7 @@ import { checkCandidate, computePublishAt, isPriceStale, parseFreeShipping, publ
 // @ts-ignore
 import { collectOffers, itemIdFor } from '../scripts/pipeline/offers.mjs';
 // @ts-ignore
-import { validateFicheText, generateFicheText, fit, fixedFaq, longDate } from '../scripts/pipeline/fiche-text.mjs';
+import { validateFicheText, generateFicheText, buildPrompt, fit, fixedFaq, longDate } from '../scripts/pipeline/fiche-text.mjs';
 // @ts-ignore
 import { slugify, uniqueSlug, buildProductRow } from '../scripts/pipeline/fiches.mjs';
 // @ts-ignore
@@ -163,11 +163,22 @@ describe('fiche-text', () => {
     expect(bad({ hero_subtitle: 'Livré dans sa boîte d’origine' })).toContain('authenticité');
     expect(bad({ hero_subtitle: 'Dernières pièces en stock' })).toContain('urgence');
     expect(bad({ hero_subtitle: 'Seulement 99 € aujourd’hui' })).toContain('prix');
+    expect(bad({ hero_subtitle: 'Soulage tes muscles en profondeur' })).toContain('promesse de santé');
     expect(bad({ description: 'Un paragraphe.\n\nUn autre sans la mention.' })).toContain('garantie');
     expect(bad({ benefits: goodRaw('fr').benefits.slice(0, 3) })).toContain('5 bénéfices');
     expect(validateFicheText(goodRaw('en'), 'en').ok).toBe(true);
     expect(validateFicheText(goodRaw('es'), 'es').ok).toBe(true);
     expect(validateFicheText(goodRaw('fr'), 'es').errors.join()).toContain('Producto garantizado');
+  });
+  it('normalise : pas de point final dans les titres ; le prompt impose casse de phrase et mention médicale', () => {
+    const v = validateFicheText(goodRaw('fr', { name: 'Pistolet de massage.', hero_title: 'Accroche.', meta_title: 'Titre. | Tendpick.' }), 'fr');
+    expect(v.text.name).toBe('Pistolet de massage');
+    expect(v.text.hero_title).toBe('Accroche');
+    expect(v.text.meta_title).toBe('Titre. | Tendpick');
+    expect(v.text.benefits.every((b: any) => !b.title.endsWith('.'))).toBe(true);
+    const prompt = buildPrompt({ lang: 'es', title: 'T', categoryLabel: 'Sport' });
+    expect(prompt).toContain('No sustituye a un dispositivo médico.');
+    expect(prompt).toContain('Casse de phrase');
   });
   it('generateFicheText : une 2e tentative avec les raisons, puis abandon', async () => {
     const prompts: string[] = [];

@@ -2,9 +2,9 @@
 // Le modèle n'a pour faits que ceux de l'annonce : il n'invente aucune caractéristique chiffrée.
 
 export const LANGS = {
-  fr: { market: 'fr', label: 'français', tu: 'tutoiement (« tu »)', warranty: 'Produit garanti', warrantyRe: /garanti/i },
-  es: { market: 'es', label: "espagnol d'Espagne", tu: 'tutoiement (« tú »)', warranty: 'Producto garantizado', warrantyRe: /garantizad/i },
-  en: { market: 'uk', label: 'anglais britannique', tu: 'ton direct (« you »)', warranty: 'Warranty as stated in the offer', warrantyRe: /warranty/i },
+  fr: { market: 'fr', label: 'français', tu: 'tutoiement (« tu »)', warranty: 'Produit garanti', warrantyRe: /garanti/i, medical: 'Ne remplace pas un appareil médical.' },
+  es: { market: 'es', label: "espagnol d'Espagne", tu: 'tutoiement (« tú »)', warranty: 'Producto garantizado', warrantyRe: /garantizad/i, medical: 'No sustituye a un dispositivo médico.' },
+  en: { market: 'uk', label: 'anglais britannique', tu: 'ton direct (« you »)', warranty: 'Warranty as stated in the offer', warrantyRe: /warranty/i, medical: 'Not a substitute for a medical device.' },
 };
 
 const MONTHS = {
@@ -51,6 +51,7 @@ const BANNED = [
   [/bo[iî]te d['’]origine|autocollants?|version chinoise|non test[ée]|pas test[ée]|contrefa|counterfeit|original box|chinese version|falsific|caja original|versi[oó]n china/i, 'jugement sur l’authenticité'],
   [/stock limit|derni[eè]res? (pi[eè]ces|unit[eé]s)|d[eé]p[eê]che|offre limit|plus que \d+|only \d+ left|last chance|[uú]ltimas unidades|oferta limitada|date limite/i, 'urgence ou stock fictif'],
   [/\d+[.,]?\d*\s?(€|eur\b|euros?|£|gbp|pounds?)/i, 'prix dans le texte (il est affiché par le site)'],
+  [/\bsoulag\w*|\bgu[eé]ri\w*|\balivia\w*|\bcura\b|\bsana\b|\brelieves?\b|\bheals?\b|\bcures?\b/i, 'promesse de santé (décris la fonction, pas un effet)'],
 ];
 
 const trim = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -90,17 +91,18 @@ export function validateFicheText(raw, lang) {
   for (const [re, why] of BANNED) if (re.test(everything)) errors.push(`texte interdit : ${why}`);
 
   if (errors.length) return { ok: false, errors };
+  const noDot = (x) => trim(x).replace(/[.\s]+$/, '');
   return {
     ok: true,
     errors: [],
     text: {
-      name,
-      hero_title: fit(hero, 100),
+      name: noDot(name),
+      hero_title: fit(noDot(hero), 100),
       hero_subtitle: fit(sub, 200),
       description: paragraphs.join('\n\n'),
-      benefits: benefits.slice(0, 7).map((b) => ({ ...b, title: fit(b.title, 70) })),
+      benefits: benefits.slice(0, 7).map((b) => ({ ...b, title: fit(noDot(b.title), 70) })),
       faq,
-      meta_title: fit(raw.meta_title || `${name} | Tendpick`, 60),
+      meta_title: fit(noDot(raw.meta_title || `${name} | Tendpick`), 60),
       meta_description: fit(raw.meta_description || sub, 155),
     },
   };
@@ -123,6 +125,9 @@ RÈGLES ABSOLUES
 6. Pas de conseils d'achat ni de renvoi vers un autre produit ou revendeur dans la description (ils vont dans la FAQ, sans comparer).
 7. Garantie : la description se termine par une phrase de garantie : « ${L.warranty} »${lang === 'en' ? ' (rien d’autre : les règles britanniques diffèrent)' : ''}.
 8. Produit pour enfant ou bébé : ne dis jamais qu'il est conforme ou certifié.
+9. Aucune promesse de santé ou de performance (« soulage », « guérit », « améliore tes performances », « efficace contre »…) : décris la fonction du produit, jamais un effet sur le corps. Si le produit touche au bien-être ou à la santé (massage, mesure, soin), ajoute juste avant la phrase de garantie : « ${L.medical} »
+10. Casse de phrase : majuscule seulement en début de phrase et sur les noms propres (« Pistolet de massage électrique », pas « Pistolet De Massage Électrique »). Pas de point final dans le nom, l'accroche, les titres de bénéfices ni le meta_title.
+11. La FAQ ne contient que des questions auxquelles les faits ci-dessus permettent de répondre avec certitude. Pour un détail absent (autonomie, dimensions, contenu de la boîte, compatibilité), ne l'invente pas : pose une autre question, ou réponds que le détail figure sur la page de l'offre.
 
 FORMAT — réponds uniquement par un objet JSON, sans texte autour :
 {
@@ -135,7 +140,7 @@ FORMAT — réponds uniquement par un objet JSON, sans texte autour :
  "meta_title": "≤ 60 caractères, se termine par | Tendpick",
  "meta_description": "≤ 155 caractères"
 }
-Donne 6 bénéfices (les 5 premiers s'affichent sous le titre) et 4 questions de FAQ factuelles (pour qui, usage, compatibilité, entretien…) — sans question sur le prix ni la livraison, ajoutées automatiquement.${feedback ? `\n\nTA RÉPONSE PRÉCÉDENTE A ÉTÉ REFUSÉE POUR CES RAISONS, corrige-les : ${feedback}` : ''}`;
+Donne 6 bénéfices (les 5 premiers s'affichent sous le titre) et 3 à 4 questions de FAQ factuelles (pour qui, usage, fonctionnement…) — sans question sur le prix ni la livraison, ajoutées automatiquement.${feedback ? `\n\nTA RÉPONSE PRÉCÉDENTE A ÉTÉ REFUSÉE POUR CES RAISONS, corrige-les : ${feedback}` : ''}`;
 }
 
 export function parseJsonLoose(text) {
