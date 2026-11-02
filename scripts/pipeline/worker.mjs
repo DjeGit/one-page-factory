@@ -294,7 +294,7 @@ async function main() {
       if (!first) return console.log('Pas de marché disponible : pas de texte.');
       const lang = LANG_OF_MARKET[first.market];
       let specs = '';
-      try {
+      if (process.env.PIPELINE_SPECS) try {
         const list = await fetchSpecs(first.itemId);
         specs = formatSpecs(list);
         console.log(`\nCaractéristiques lues sur la page : ${list.length}`);
@@ -313,7 +313,8 @@ async function main() {
     sb, api, log,
     now: () => new Date(),
     llm: (p) => callGemini(p),
-    specs: (id) => fetchSpecs(id),
+    // Les pages AliExpress sont rendues côté navigateur : aucune caractéristique lisible sans navigateur (PIPELINE_SPECS=1 pour réessayer).
+    specs: process.env.PIPELINE_SPECS ? (id) => fetchSpecs(id) : undefined,
     photos: (row) => processProduct(row, { dryRun: false }),
     mail: (payload) => sendMail(renderEmail(payload)),
   };
