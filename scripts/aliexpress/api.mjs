@@ -6,7 +6,7 @@ import { createHash, createHmac } from 'node:crypto';
 
 const GATEWAY = 'https://api-sg.aliexpress.com/sync';
 /** Ancienne passerelle « TOP » (applications à clé de 6 chiffres) : MD5, date de Shanghai, v=2.0, format=json. */
-export const TOP_GATEWAY = 'https://gw.api.taobao.com/router/rest';
+export const TOP_GATEWAY = 'http://gw.api.taobao.com/router/rest';
 
 /** Paramètres de l'API par marché : pays de livraison, devise et langue des textes. */
 export const MARKET_PARAMS = {
@@ -50,13 +50,13 @@ export function getCredentials(env = process.env) {
  * (kit « python-aliexpress-api ») : MD5, horodatage en ms, avec v=2.0, format=json et partner_id=top-apitools.
  */
 export const SIGN_VARIANTS = [
-  { name: 'sync · md5 + ms + v/format/partner_id (kit officiel)', gateway: GATEWAY, signMethod: 'md5', timestampUnit: 'ms', extras: 'full' },
-  { name: 'sync · sha256 + ms (IOP)', gateway: GATEWAY, signMethod: 'sha256', timestampUnit: 'ms', extras: false },
-  { name: 'sync · sha256 + ms + v=2.0', gateway: GATEWAY, signMethod: 'sha256', timestampUnit: 'ms', extras: 'v' },
-  { name: 'TOP · md5 + date Shanghai + v/format', gateway: TOP_GATEWAY, signMethod: 'md5', timestampUnit: 'datetime', extras: 'top' },
-  { name: 'TOP · md5 + date Shanghai + v/format/partner_id', gateway: TOP_GATEWAY, signMethod: 'md5', timestampUnit: 'datetime', extras: 'full' },
-  { name: 'TOP · md5 + ms + v/format', gateway: TOP_GATEWAY, signMethod: 'md5', timestampUnit: 'ms', extras: 'top' },
-  { name: 'TOP · sha256 + date Shanghai + v/format', gateway: TOP_GATEWAY, signMethod: 'sha256', timestampUnit: 'datetime', extras: 'top' },
+  { name: 'sync · sha256 · tout dans l\'adresse (GET)', gateway: GATEWAY, signMethod: 'sha256', timestampUnit: 'ms', extras: false, transport: 'query' },
+  { name: 'sync · sha256 · système dans l\'adresse, le reste dans le corps', gateway: GATEWAY, signMethod: 'sha256', timestampUnit: 'ms', extras: false, transport: 'split' },
+  { name: 'sync · md5 · v/format/partner_id · GET', gateway: GATEWAY, signMethod: 'md5', timestampUnit: 'ms', extras: 'full', transport: 'query' },
+  { name: 'sync · md5 · v/format/partner_id · système dans l\'adresse', gateway: GATEWAY, signMethod: 'md5', timestampUnit: 'ms', extras: 'full', transport: 'split' },
+  { name: 'TOP (http) · md5 + date Shanghai · POST', gateway: TOP_GATEWAY, signMethod: 'md5', timestampUnit: 'datetime', extras: 'top', transport: 'body' },
+  { name: 'TOP (http) · md5 + date Shanghai · GET', gateway: TOP_GATEWAY, signMethod: 'md5', timestampUnit: 'datetime', extras: 'top', transport: 'query' },
+  { name: 'sync · sha256 · POST dans le corps (essai initial)', gateway: GATEWAY, signMethod: 'sha256', timestampUnit: 'ms', extras: false, transport: 'body' },
 ];
 
 const EXTRAS = {
@@ -71,7 +71,7 @@ function formatTimestamp(unit, ms) {
   return String(ms);
 }
 
-export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'md5', timestampUnit = 'ms', extras = 'full', gateway = GATEWAY } = {}) {
+export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'md5', timestampUnit = 'ms', extras = 'full', gateway = GATEWAY, transport = 'body' } = {}) {
   const c = creds || getCredentials();
   const all = {
     app_key: c.appKey,
@@ -82,12 +82,24 @@ export async function callApi(method, params, { creds, fetchImpl = fetch, now = 
     ...params,
   };
   all.sign = signParams(all, c.appSecret, signMethod);
-  const res = await fetchImpl(gateway, {
+  const SYSTEM = new Set(['app_key', 'timestamp', 'sign_method', 'sign', 'method', 'v', 'format', 'partner_id']);
+  let url = gateway;
+  let init = {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded;charset=utf-8' },
     body: new URLSearchParams(all).toString(),
     signal: AbortSignal.timeout(30000),
-  });
+  };
+  if (transport === 'query') {
+    url = `${gateway}?${new URLSearchParams(all).toString()}`;
+    init = { method: 'GET', signal: AbortSignal.timeout(30000) };
+  } else if (transport === 'split') {
+    const sys = Object.fromEntries(Object.entries(all).filter(([k]) => SYSTEM.has(k)));
+    const biz = Object.fromEntries(Object.entries(all).filter(([k]) => !SYSTEM.has(k)));
+    url = `${gateway}?${new URLSearchParams(sys).toString()}`;
+    init = { ...init, body: new URLSearchParams(biz).toString() };
+  }
+  const res = await fetchImpl(url, init);
   const text = await res.text();
   let json;
   try {

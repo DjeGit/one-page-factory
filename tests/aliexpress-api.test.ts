@@ -44,6 +44,23 @@ describe('aliexpress api', () => {
     expect(sent!.get('timestamp')).toBe('2026-11-02 08:00:00'); // heure de Shanghai
   });
 
+  it('callApi : modes GET et système dans l\'adresse', async () => {
+    const calls: { url: string; init: any }[] = [];
+    const fetchImpl = async (u: string, init: any) => { calls.push({ url: u, init }); return new Response('{}', { status: 200 }); };
+    const creds = { appKey: 'k', appSecret: 's', trackingId: 't' };
+    await callApi('m', { product_ids: '1' }, { creds, fetchImpl: fetchImpl as any, signMethod: 'sha256', extras: false, transport: 'query' });
+    await callApi('m', { product_ids: '1' }, { creds, fetchImpl: fetchImpl as any, signMethod: 'sha256', extras: false, transport: 'split' });
+    const q = new URL(calls[0].url).searchParams;
+    expect(calls[0].init.method).toBe('GET');
+    expect([q.get('product_ids'), q.get('method'), !!q.get('sign')]).toEqual(['1', 'm', true]);
+    const s = new URL(calls[1].url).searchParams;
+    expect(calls[1].init.method).toBe('POST');
+    expect([s.get('method'), !!s.get('sign'), s.get('product_ids')]).toEqual(['m', true, null]);
+    expect(new URLSearchParams(calls[1].init.body).get('product_ids')).toBe('1');
+    // même signature quel que soit le mode d'envoi
+    expect(q.get('sign')).toBe(s.get('sign').length === 64 ? q.get('sign') : null);
+  });
+
   it('parseRate', () => {
     expect(parseRate('7.0%')).toBe(0.07);
     expect(parseRate('8')).toBe(0.08);
