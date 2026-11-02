@@ -43,13 +43,17 @@ export function getCredentials(env = process.env) {
   return { appKey, appSecret, trackingId };
 }
 
-/** Variantes de signature essayées par `probe.mjs --variants` pour trouver celle que la plateforme accepte. */
+/**
+ * Variantes de signature essayées par `probe.mjs --variants`. Le format de référence est celui du kit officiel
+ * (kit « python-aliexpress-api ») : MD5, horodatage en ms, avec v=2.0, format=json et partner_id=top-apitools.
+ */
 export const SIGN_VARIANTS = [
-  { name: 'sha256 + horodatage en ms', signMethod: 'sha256', timestampUnit: 'ms' },
-  { name: 'sha256 + horodatage en secondes', signMethod: 'sha256', timestampUnit: 's' },
-  { name: 'sha256 + date AAAA-MM-JJ hh:mm:ss', signMethod: 'sha256', timestampUnit: 'datetime' },
-  { name: 'md5 + horodatage en ms', signMethod: 'md5', timestampUnit: 'ms' },
-  { name: 'md5 + date AAAA-MM-JJ hh:mm:ss', signMethod: 'md5', timestampUnit: 'datetime' },
+  { name: 'md5 + ms + v/format/partner_id (kit officiel)', signMethod: 'md5', timestampUnit: 'ms', extras: true },
+  { name: 'sha256 + ms + v/format/partner_id', signMethod: 'sha256', timestampUnit: 'ms', extras: true },
+  { name: 'md5 + date AAAA-MM-JJ hh:mm:ss + v/format/partner_id', signMethod: 'md5', timestampUnit: 'datetime', extras: true },
+  { name: 'sha256 + date + v/format/partner_id', signMethod: 'sha256', timestampUnit: 'datetime', extras: true },
+  { name: 'md5 + secondes + v/format/partner_id', signMethod: 'md5', timestampUnit: 's', extras: true },
+  { name: 'md5 + ms sans extras', signMethod: 'md5', timestampUnit: 'ms', extras: false },
 ];
 
 function formatTimestamp(unit, ms) {
@@ -58,13 +62,14 @@ function formatTimestamp(unit, ms) {
   return String(ms);
 }
 
-export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'sha256', timestampUnit = 'ms' } = {}) {
+export async function callApi(method, params, { creds, fetchImpl = fetch, now = Date.now, signMethod = 'md5', timestampUnit = 'ms', extras = true } = {}) {
   const c = creds || getCredentials();
   const all = {
     app_key: c.appKey,
     timestamp: formatTimestamp(timestampUnit, now()),
     sign_method: signMethod,
     method,
+    ...(extras ? { v: '2.0', format: 'json', partner_id: 'top-apitools' } : {}),
     ...params,
   };
   all.sign = signParams(all, c.appSecret, signMethod);

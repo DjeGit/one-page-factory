@@ -89,9 +89,10 @@ describe('aliexpress api', () => {
     await callApi('m.test', { x: '1' }, { creds, fetchImpl: fetchImpl as any, now: () => 1700000000000 });
     expect(sent!.get('app_key')).toBe('k');
     expect(sent!.get('method')).toBe('m.test');
+    expect([sent!.get('v'), sent!.get('format'), sent!.get('partner_id'), sent!.get('sign_method')]).toEqual(['2.0', 'json', 'top-apitools', 'md5']);
     expect(sent!.get('timestamp')).toBe('1700000000000');
     const p = Object.fromEntries(sent!.entries());
-    expect(p.sign).toBe(signParams(p, 's'));
+    expect(p.sign).toBe(signParams(p, 's', 'md5'));
     const err = async () => new Response(JSON.stringify({ error_response: { code: 'IncompleteSignature', msg: 'bad sign' } }), { status: 200 });
     await expect(callApi('m', {}, { creds, fetchImpl: err as any })).rejects.toThrow(/IncompleteSignature/);
     expect(() => getCredentials({})).toThrow(/ALIEXPRESS_APP_KEY/);
