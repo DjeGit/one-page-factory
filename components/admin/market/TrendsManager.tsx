@@ -25,6 +25,16 @@ const money = (n: number | null, cur: string) => (n == null ? '—' : `${n.toFix
 const pct = (n: number | null) => (n == null ? '—' : `${Math.round(n * 1000) / 10} %`);
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('fr-FR');
 
+type Ship = 'fr' | 'es' | 'uk';
+const SHIP_MARKETS: Ship[] = ['fr', 'es', 'uk'];
+/** Livraison gratuite relevée : 'Oui' | 'Non' | null (pas encore relevée). Un clic passe à la valeur suivante. */
+const shipValue = (c: TrendCandidate, m: Ship): 'Oui' | 'Non' | null => {
+  const v = (c[`free_shipping_${m}` as const] ?? '').trim().toLowerCase();
+  if (!v) return null;
+  return /^(oui|yes|s[ií]|true|1|gratuit|free|gratis)/.test(v) ? 'Oui' : 'Non';
+};
+const nextShip = (v: 'Oui' | 'Non' | null): 'Oui' | 'Non' | null => (v === null ? 'Oui' : v === 'Oui' ? 'Non' : null);
+
 export default function TrendsManager() {
   const [data, setData] = useState<ApiData | null>(null);
   const [filter, setFilter] = useState<Filter>('active');
@@ -62,6 +72,25 @@ export default function TrendsManager() {
       return;
     }
     await load();
+  };
+
+  const setShipping = async (c: TrendCandidate, m: Ship) => {
+    const value = nextShip(shipValue(c, m));
+    // Affichage immédiat, puis enregistrement.
+    setData((d) => d && {
+      ...d,
+      candidates: d.candidates.map((x) => (x.id === c.id ? { ...x, [`free_shipping_${m}`]: value } : x)),
+      archive: d.archive.map((x) => (x.id === c.id ? { ...x, [`free_shipping_${m}`]: value } : x)),
+    });
+    const res = await fetch('/api/admin/trends', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: c.id, shipping: { [m]: value } }),
+    });
+    if (!res.ok) {
+      setMessage((await res.json().catch(() => ({}))).error || 'Enregistrement impossible');
+      await load();
+    }
   };
 
   const onImport = async (file: File) => {
@@ -229,6 +258,31 @@ export default function TrendsManager() {
                       <div>Commission {pct(c.commission_fr)}{c.commission_uk != null && c.commission_uk !== c.commission_fr ? ` / UK ${pct(c.commission_uk)}` : ''}</div>
                       <div>Note {c.rating ?? '—'} · {c.sales != null ? `${c.sales.toLocaleString('fr-FR')}+ ventes` : '—'}</div>
                       {c.reviews != null && <div>{c.reviews.toLocaleString('fr-FR')} avis</div>}
+                    </div>
+                    <div className="w-36 shrink-0" title="Livraison gratuite dans chaque pays (relevée sur la page AliExpress). Clic : pas relevé → Oui → Non.">
+                      <div className="text-[11px] text-gray-500 mb-1">Livraison gratuite</div>
+                      <div className="flex gap-1">
+                        {SHIP_MARKETS.filter((m) => !(m === 'uk' && !c.url_uk && c.price_uk == null)).map((m) => {
+                          const v = shipValue(c, m);
+                          return (
+                            <button
+                              key={m}
+                              type="button"
+                              disabled={archived}
+                              onClick={() => setShipping(c, m)}
+                              className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${
+                                v === 'Oui'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                  : v === 'Non'
+                                    ? 'bg-gray-100 text-gray-600 border-gray-300'
+                                    : 'bg-white text-amber-700 border-amber-300 border-dashed'
+                              }`}
+                            >
+                              {m.toUpperCase()} {v === 'Oui' ? '✓' : v === 'Non' ? '✗' : '?'}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div className="flex gap-1.5 shrink-0">
                       {archived ? (

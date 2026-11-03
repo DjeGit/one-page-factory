@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
-import { mondayOf, parseTrendCsv } from '@/lib/trends';
+import { extractAliexpressId, mondayOf, parseTrendCsv } from '@/lib/trends';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,10 +29,34 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ week, candidates: rows ?? [], archive: archive ?? [], refusedBefore });
 }
 
-/** PATCH : { ids: string[], decision: 'pending' | 'yes' | 'no' } — décision en lot. */
+/** PATCH : { ids: string[], decision: 'pending' | 'yes' | 'no' } — décision en lot ; ou { id, shipping } — livraison gratuite relevée. */
 export async function PATCH(req: NextRequest) {
   if (!isAuthorizedRequest(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => null);
+
+  // Livraison gratuite relevée à la main : { id, shipping: { fr?: 'Oui'|'Non'|null, es?, uk? } }
+  if (body?.shipping && typeof body.id === 'string') {
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const wanted: Record<string, boolean> = {};
+    for (const m of ['fr', 'es', 'uk'] as const) {
+      if (!(m in body.shipping)) continue;
+      const v = body.shipping[m];
+      if (v !== null && v !== 'Oui' && v !== 'Non') return NextResponse.json({ error: 'Valeur de livraison invalide' }, { status: 400 });
+      patch[`free_shipping_${m}`] = v;
+      if (v !== null) wanted[m] = v === 'Oui';
+    }
+    const sb = getSupabaseAdmin();
+    const { data: cand, error } = await sb.from('trend_candidates').update(patch).eq('id', body.id).select('*').maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!cand) return NextResponse.json({ error: 'Produit introuvable' }, { status: 404 });
+    // Les fiches déjà créées pour ce produit suivent aussitôt (même annonce, même pays).
+    for (const [m, free] of Object.entries(wanted)) {
+      const itemId = extractAliexpressId(m === 'uk' ? cand.url_uk : cand.url_fr) ?? cand.aliexpress_id;
+      await sb.from('products').update({ free_shipping: free }).eq('aliexpress_id', itemId).eq('market', m);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const ids: string[] = Array.isArray(body?.ids) ? body.ids : [];
   const decision = body?.decision;
   if (!ids.length || !['pending', 'yes', 'no'].includes(decision)) {
