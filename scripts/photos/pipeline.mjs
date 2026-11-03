@@ -12,6 +12,8 @@ export const SIZE = 1000;
 export const MAX_PHOTOS = 5;
 export const MIN_PHOTOS = 3;
 const MIN_SIDE = 400;
+const DUP_DISTANCE = 5; // distance de Hamming (sur 64 bits) : deux photos plus proches sont jugées identiques
+const DUP_DISTANCE_CROPPED = 10; // plus tolérant quand l'une des deux est une zone recadrée (cadrage légèrement différent)
 const MAX_BYTES = 15 * 1024 * 1024;
 const REJECT_KINDS = new Set(['promo', 'size_chart', 'packaging', 'other']);
 const UA =
@@ -465,6 +467,29 @@ export async function processProduct(row, opts = {}) {
       if (v.kind === 'infographic') v.kind = 'detail';
     }
     report.cropped = verdicts.filter((v) => v.cropped).length;
+  }
+  // Doublons visibles APRÈS recadrage : une zone « sans texte » découpée dans une image à gros texte peut reproduire une autre
+  // photo de la galerie. On compare donc les images telles qu'elles seront publiées (carrées) et on garde la meilleure :
+  // d'abord les photos non recadrées et sans texte, puis la meilleure note.
+  if (report.classified) {
+    const rank = (v) => [v.cropped ? 1 : 0, v.text === 'light' ? 1 : 0, -v.score, v.index];
+    const order = verdicts.filter((v) => v.usable).sort((a, b) => {
+      const ra = rank(a);
+      const rb = rank(b);
+      for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return ra[i] - rb[i];
+      return 0;
+    });
+    const kept = [];
+    for (const v of order) {
+      const h = await dHash((await toSquareJpeg(unique[v.index].buf, 256)).buffer);
+      if (kept.some((o) => hamming(o.h, h) <= (o.cropped || v.cropped ? DUP_DISTANCE_CROPPED : DUP_DISTANCE))) {
+        v.usable = false;
+        v.note = 'doublon visuel';
+        report.duplicates++;
+        continue;
+      }
+      kept.push({ h, cropped: !!v.cropped });
+    }
   }
   for (const v of verdicts) {
     if (!v.usable) report.rejected.push({ url: unique[v.index].url, kind: v.kind, text: v.text, note: v.note });

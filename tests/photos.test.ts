@@ -120,6 +120,29 @@ describe('photos pipeline', () => {
     }
   });
 
+  it('processProduct : une zone recadrée qui reproduit une autre photo est écartée (pas deux photos identiques)', async () => {
+    const origFetch = globalThis.fetch;
+    const imgs: Record<string, Buffer> = {};
+    const base = await scene(1000, 1000, 1);
+    for (let i = 0; i < 4; i++) imgs[`https://ae01.alicdn.com/kf/D${i}.jpg`] = i === 0 ? base : await scene(1000 + i * 10, 900 + i * 15, i + 5);
+    // image à gros texte : la même photo + un bandeau de texte en dessous ; sa zone propre = la photo n° 0
+    imgs['https://ae01.alicdn.com/kf/D4.jpg'] = await sharp(base).extend({ bottom: 400, background: '#ffffff' }).jpeg().toBuffer();
+    globalThis.fetch = (async (u: any) => (imgs[String(u)] ? new Response(imgs[String(u)], { status: 200 }) : new Response('no', { status: 404 }))) as any;
+    try {
+      const classify = async (bufs: Buffer[]) => bufs.map((_, index) => {
+        const heavy = index === bufs.length - 1;
+        return { index, usable: true, kind: heavy ? 'infographic' : 'product_white', shot: heavy ? 'front view' : `view ${index}`, text: heavy ? 'heavy' : 'none', watermark: false, score: heavy ? 5 : 4, note: '', cleanBox: heavy ? [0, 0, 714, 1000] : null };
+      });
+      const out = await processProduct({ aliexpress_id: '3', image_urls: Object.keys(imgs) }, { dryRun: true, classify });
+      expect(out.report.cropped).toBe(1);
+      expect(out.photos.length).toBe(4); // 5 images, 1 doublon écarté
+      expect(out.photos.some((p: any) => p.flags.includes('recadree_sans_texte'))).toBe(false); // on garde l'original non recadré
+      expect(out.report.rejected.some((r: any) => r.note === 'doublon visuel')).toBe(true);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
   it('visionProvider : Claude si clé Anthropic non vide, sinon Gemini', () => {
     expect(visionProvider({ ANTHROPIC_API_KEY: '', GEMINI_API_KEY: 'g' })).toBe('gemini');
     expect(visionProvider({ ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g' })).toBe('claude');
