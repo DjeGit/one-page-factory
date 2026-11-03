@@ -253,7 +253,7 @@ async function classifyWithClaude(buffers, { apiKey, model } = {}) {
   return parseClassification(data.content?.map((c) => c.text || '').join('') || '', buffers.length);
 }
 
-async function classifyWithGemini(buffers, { apiKey, model } = {}) {
+async function classifyWithGemini(buffers, { apiKey, model, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   const key = apiKey || process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY absente');
   const mdl = model || process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash';
@@ -264,16 +264,26 @@ async function classifyWithGemini(buffers, { apiKey, model } = {}) {
     parts.push({ inline_data: { mime_type: 'image/jpeg', data: small.toString('base64') } });
   }
   parts.push({ text: CLASSIFY_PROMPT });
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent`, {
-    method: 'POST',
-    headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts }],
-      generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
-    }),
-    signal: AbortSignal.timeout(120000),
+  const body = JSON.stringify({
+    contents: [{ role: 'user', parts }],
+    generationConfig: { temperature: 0, maxOutputTokens: 8000, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
   });
-  const data = await res.json();
+  // Gemini est parfois surchargé (503) ou limité (429) : on réessaie quelques fois avant d'abandonner.
+  const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
+  const DELAYS = [4000, 10000, 20000];
+  let res;
+  let data;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent`, {
+      method: 'POST',
+      headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
+      body,
+      signal: AbortSignal.timeout(120000),
+    });
+    data = await res.json().catch(() => ({}));
+    if (res.ok || !RETRY_STATUS.has(res.status) || attempt >= DELAYS.length) break;
+    await sleep(DELAYS[attempt]);
+  }
   if (!res.ok) throw new Error(`Gemini ${res.status} : ${data?.error?.message || 'erreur'}`);
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
   if (!text) throw new Error(`Gemini : réponse vide (${data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'inconnue'})`);

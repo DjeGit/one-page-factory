@@ -147,6 +147,35 @@ describe('photos pipeline', () => {
     }
   });
 
+  it('classifyImages (Gemini) : réessaie après une surcharge 503, puis abandonne après 3 essais', async () => {
+    const origFetch = globalThis.fetch;
+    let calls = 0;
+    const ok = '[{"index":0,"usable":true,"kind":"product_white","text":"none","watermark":false,"score":5,"note":"ok"}]';
+    globalThis.fetch = (async () => {
+      calls++;
+      return calls < 3
+        ? new Response(JSON.stringify({ error: { message: 'high demand' } }), { status: 503 })
+        : new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: ok }] } }] }), { status: 200 });
+    }) as any;
+    const waits: number[] = [];
+    try {
+      const out = await classifyImages([await scene(700, 700, 1)], { provider: 'gemini', apiKey: 'test', sleep: async (ms: number) => { waits.push(ms); } });
+      expect(calls).toBe(3);
+      expect(waits).toEqual([4000, 10000]);
+      expect(out[0].kind).toBe('product_white');
+      calls = -100; // toujours 503
+      await expect(classifyImages([await scene(700, 700, 1)], { provider: 'gemini', apiKey: 'test', sleep: async () => {} })).rejects.toThrow('Gemini 503');
+      expect(calls).toBe(-96); // 1 essai + 3 reprises
+      // une erreur définitive (400) n'est pas rejouée
+      calls = 0;
+      globalThis.fetch = (async () => { calls++; return new Response(JSON.stringify({ error: { message: 'bad' } }), { status: 400 }); }) as any;
+      await expect(classifyImages([await scene(700, 700, 1)], { provider: 'gemini', apiKey: 'test', sleep: async () => {} })).rejects.toThrow('Gemini 400');
+      expect(calls).toBe(1);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
   it('parseBox / cropToCleanBox : découpe la zone sans texte, refuse les zones trop petites', async () => {
     expect(parseBox([0, 0, 500, 500])).toEqual([0, 0, 500, 500]);
     expect(parseBox([500, 0, 100, 500])).toBeNull();

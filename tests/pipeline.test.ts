@@ -430,4 +430,24 @@ describe('worker : vidéo, livraison et photos refaites', () => {
     expect(t.trend_candidates[0].status).toBe('ready');
     expect(t.products.every((p) => p.images.length === 4 && p.image_url === 'products/new-7')).toBe(true);
   });
+
+  it('Gemini surchargé pendant le tri des photos : remise en file (pas d\'échec), puis les nouvelles photos remplacent les anciennes', async () => {
+    const t = tables();
+    const { d, mails, offers } = makeDeps(t);
+    offers.uk = null;
+    await runOnce(d, { publish: false });
+    expect(t.products.every((p) => p.image_url === 'products/ae-x-1')).toBe(true);
+
+    d.photos = async () => { throw new Error('Gemini 503 : This model is currently experiencing high demand.'); };
+    const r1 = await runOnce(d, { id: '1005010428515910', publish: false, redoPhotos: true });
+    expect(r1.prepared[0].outcome).toBe('retry');
+    expect(t.trend_candidates[0].status).toBe('validated');
+    expect(mails.some((m: any) => m.kind === 'problem')).toBe(false);
+
+    // la tâche suivante (sans option) retraite le produit et remplace les photos
+    d.photos = async () => ({ photos: [5, 6, 7].map((i) => ({ public_id: `products/new-${i}` })), report: { warnings: [] } });
+    const r2 = await runOnce(d, { publish: false });
+    expect(r2.prepared[0].outcome).toBe('ready');
+    expect(t.products.every((p) => p.image_url === 'products/new-5' && p.images.length === 3)).toBe(true);
+  });
 });

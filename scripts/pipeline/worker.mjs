@@ -40,6 +40,9 @@ async function safeMail(d, payload) {
 }
 
 /** Rend un produit à la file (erreur passagère) ou le met en erreur après plusieurs essais. */
+// Erreurs passagères d'un service externe (à réessayer plus tard).
+const TRANSIENT = /Gemini (429|500|502|503|504)|fetch failed|timeout|timed out|ECONN|ETIMEDOUT|UND_ERR|overloaded|high demand/i;
+
 async function retryOrFail(c, d, reason, extra = {}) {
   const attempts = (c.pipeline_log?.attempts || 0) + 1;
   const now = d.now().toISOString();
@@ -128,6 +131,7 @@ export async function prepareCandidate(c, d, opts = {}) {
   const summaryRows = () => all.map((p) => ({ market: p.market, name: p.name || p.slug, slug: p.slug, price: p.offer.detail.price, currency: p.offer.detail.currency, commission_rate: p.offer.detail.commissionRate }));
 
   // 5. Photos (partagées entre marchés) : réutilisées si déjà prêtes, sinon traitées
+  let photosFresh = false;
   let photos = !redoPhotos && Array.isArray(c.photos) && c.photos.length >= MIN_PHOTOS && ['review', 'approved', 'attached'].includes(c.photos_status) ? c.photos : null;
   const photoWarnings = [];
   if (!photos) {
@@ -136,16 +140,19 @@ export async function prepareCandidate(c, d, opts = {}) {
     try {
       const res = await d.photos({ ...c, image_urls: imageUrls });
       photos = res.photos;
+      photosFresh = true;
       photoWarnings.push(...(res.report?.warnings || []));
       must(await d.sb.from('trend_candidates').update({ photos, photos_status: 'approved', photos_report: res.report, image_urls: imageUrls }).eq('id', c.id), 'enregistrement des photos');
     } catch (e) {
       must(await d.sb.from('trend_candidates').update({ photos_status: 'error', photos_report: { error: e.message } }).eq('id', c.id), 'enregistrement du statut photos');
+      // Service momentanément indisponible (surcharge Gemini, réseau) : on remet en file au lieu d'échouer.
+      if (TRANSIENT.test(e.message)) return retryOrFail(c, d, `photos : ${e.message}`, { product_ids: productIds, products: summaryRows() });
       return fail(c, d, `photos : ${e.message}`, { product_ids: productIds, products: summaryRows(), warnings: ['Les fiches (liens, prix, textes) sont créées en brouillon : ajoute les photos dans l’admin, puis active le produit.'] });
     }
   }
   const publicIds = photos.map((p) => p.public_id);
   for (const p of all) {
-    if (!redoPhotos && (p.images?.length || p.image_url)) continue;
+    if (!photosFresh && (p.images?.length || p.image_url)) continue;
     must(await d.sb.from('products').update({ images: publicIds, image_url: publicIds[0] }).eq('id', p.id), `photos de ${p.slug}`);
     p.images = publicIds;
     p.image_url = publicIds[0];
