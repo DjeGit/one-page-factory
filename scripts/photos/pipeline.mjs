@@ -167,13 +167,14 @@ export async function toSquareJpeg(buf, size = SIZE) {
 
 const CLASSIFY_PROMPT = `Tu tries les photos d'une annonce AliExpress pour une fiche produit d'un site d'affiliation (Tendpick).
 Pour CHAQUE image numérotée, réponds par un objet JSON. Réponds uniquement par un tableau JSON, sans texte autour :
-[{"index":0,"usable":true,"kind":"product_white","text":"none","watermark":false,"score":4,"clean_box":null,"note":"…"}]
+[{"index":0,"usable":true,"kind":"product_white","text":"none","watermark":false,"score":4,"shot":"front view","clean_box":null,"note":"…"}]
 - kind : "product_white" (produit seul sur fond blanc/uni), "product_in_use" (produit porté/utilisé, mise en situation), "detail" (gros plan, composant, accessoire), "infographic" (schéma/caractéristiques avec beaucoup de texte), "promo" (affiche promotionnelle : SALE, 11.11, coupon, remise, prix, bandeau « 100% Original », « Fast Shipping »), "size_chart" (tableau de tailles), "packaging" (emballage, boîte, carton), "other".
 - text : texte incrusté dans l'image : "none" (aucun), "light" (un petit logo ou une courte légende discrète), "heavy" (paragraphes, listes, gros titres, bandeaux).
 - watermark : true si un filigrane ou logo de vendeur est visible.
 - score : 1 à 5 (netteté, éclairage, intérêt commercial, composition).
 - usable : false si promo, size_chart, packaging, other, image floue, ou collage de plusieurs vignettes. Une image avec beaucoup de texte reste usable si elle contient une vraie photo du produit : renseigne alors clean_box.
 - clean_box : [ymin, xmin, ymax, xmax] sur une échelle de 0 à 1000 = le plus GRAND rectangle de l'image qui montre le produit (ou la personne qui le porte) SANS AUCUN texte, titre, logo, badge ni bandeau à l'intérieur. Cherche-le activement pour toute image dont "text" vaut "heavy" : si le texte n'occupe qu'un bord (titre en haut, légende en bas, colonne à côté), la zone propre est le reste de l'image (ex. titre en haut → [250, 0, 1000, 1000]). Le rectangle doit couvrir au moins un quart de l'image. Renvoie null seulement si le texte recouvre le produit lui-même ou si l'image n'a pas de texte.
+- shot : la prise de vue, en 2 ou 3 mots anglais (ex. "front view", "side view", "back view", "top view", "worn on wrist", "held in hand", "close-up port"). Deux images qui montrent le même objet sous le même angle, même si la couleur, le fond ou la taille de l'objet change, doivent avoir EXACTEMENT la même valeur de shot.
 - note : 8 mots maximum.`;
 
 async function shrinkForVision(buf) {
@@ -221,6 +222,7 @@ export function parseClassification(text, count) {
       watermark: bool(o.watermark),
       score: Math.min(5, Math.max(1, Number(o.score) || 1)),
       cleanBox: parseBox(o.clean_box),
+      shot: typeof o.shot === 'string' ? o.shot.trim().toLowerCase().slice(0, 40) : '',
       note: typeof o.note === 'string' ? o.note.slice(0, 80) : '',
     };
   });
@@ -297,25 +299,45 @@ export async function classifyImages(buffers, opts = {}) {
 
 // ─── Choix des 5 photos ─────────────────────────────────────────────────────
 
-/** Ordre : couverture = meilleure photo sur fond blanc (sinon la meilleure mise en situation), puis variété (max 2 par type). */
-export function pickBest(items, n = MAX_PHOTOS) {
+/**
+ * Choix des photos (5 au plus, 3 au moins). La qualité passe avant le nombre :
+ *  - niveau 0 : photos propres (aucun texte, non recadrées) ;
+ *  - niveau 1 : photos avec un petit texte discret (souvent en anglais) ;
+ *  - niveau 2 : zones recadrées dans une image à gros texte (elles paraissent « coupées »).
+ * Les niveaux 1 et 2 ne servent qu'à atteindre le minimum.
+ * Ordre : couverture = meilleure photo sur fond blanc (sinon la meilleure mise en situation),
+ * puis variété : jamais deux fois la même prise de vue (« shot »), max 2 par type.
+ */
+export function pickBest(items, n = MAX_PHOTOS, min = MIN_PHOTOS) {
   const ok = items.filter((x) => x.usable && !REJECT_KINDS.has(x.kind) && x.text !== 'heavy' && x.kind !== 'infographic');
   const byScore = (a, b) => b.score - a.score || a.index - b.index;
+  const tier = (x) => (x.cropped ? 2 : x.text === 'light' ? 1 : 0);
+  const sameShot = (a, b) => !!a.shot && !!b.shot && a.kind === b.kind && a.shot === b.shot;
   const chosen = [];
-  const cover =
-    [...ok].filter((x) => x.kind === 'product_white').sort(byScore)[0] ||
-    [...ok].filter((x) => x.kind === 'product_in_use').sort(byScore)[0] ||
-    [...ok].sort(byScore)[0];
-  if (cover) chosen.push(cover);
   const count = (k) => chosen.filter((c) => c.kind === k).length;
-  for (const x of [...ok].sort(byScore)) {
-    if (chosen.length >= n) break;
-    if (chosen.includes(x) || count(x.kind) >= 2) continue;
-    chosen.push(x);
+  for (const t of [0, 1, 2]) {
+    const limit = t === 0 ? n : min;
+    if (chosen.length >= limit) continue;
+    const pool = ok.filter((x) => tier(x) === t).sort(byScore);
+    if (t === 0 && !chosen.length) {
+      const cover = pool.find((x) => x.kind === 'product_white') || pool.find((x) => x.kind === 'product_in_use') || pool[0];
+      if (cover) chosen.push(cover);
+    }
+    for (const strict of [true, false]) {
+      for (const x of pool) {
+        if (chosen.length >= limit) break;
+        if (chosen.includes(x) || chosen.some((c) => sameShot(c, x))) continue;
+        if (strict && count(x.kind) >= 2) continue;
+        chosen.push(x);
+      }
+    }
   }
-  for (const x of [...ok].sort(byScore)) {
-    if (chosen.length >= n) break;
-    if (!chosen.includes(x)) chosen.push(x);
+  // Dernier recours : pas assez de photos distinctes → on tolère une prise de vue répétée pour atteindre le minimum.
+  if (chosen.length < min) {
+    for (const x of [...ok].sort((a, b) => tier(a) - tier(b) || byScore(a, b))) {
+      if (chosen.length >= min) break;
+      if (!chosen.includes(x)) chosen.push(x);
+    }
   }
   return chosen;
 }
@@ -463,7 +485,7 @@ export async function processProduct(row, opts = {}) {
     previews.push({ name: `${String(i + 1).padStart(2, '0')}-${v.kind}.jpg`, buffer: sq.buffer });
     let up = { public_id: `products/${name}`, url: null };
     if (!opts.dryRun) up = await (opts.upload || uploadToCloudinary)(sq.buffer, name);
-    photos.push({ public_id: up.public_id, url: up.url, kind: v.kind, text: v.text, watermark: v.watermark, mode: sq.mode, score: v.score, source: src.url, flags });
+    photos.push({ public_id: up.public_id, url: up.url, kind: v.kind, text: v.text, watermark: v.watermark, mode: sq.mode, score: v.score, shot: v.shot || '', source: src.url, flags });
   }
   return { photos, report, previews };
 }

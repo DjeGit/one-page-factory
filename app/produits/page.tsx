@@ -14,7 +14,7 @@ import SiteFooter from '@/components/layout/SiteFooter';
 import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
 import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
-import { getDisplayPrice } from '@/lib/pricing';
+import { getCardPrice } from '@/lib/pricing';
 import FreeShippingBadge from '@/components/product/FreeShippingBadge';
 
 export const dynamic = 'force-dynamic';
@@ -161,9 +161,9 @@ export default async function ProduitsPage({ searchParams }: Props) {
                     {p.free_shipping && <FreeShippingBadge size="small" label={t.common.freeShipping} />}
                     <div className="flex items-center justify-between mt-1">
                       {(() => {
-                        const d = getDisplayPrice(p, t.product.locale, market);
-                        return d ? (
-                          <span className="text-site-cta font-bold text-sm">{d.label}</span>
+                        const price = getCardPrice(p, t.product.locale, market);
+                        return price ? (
+                          <span className="text-site-cta font-bold text-sm">{price}</span>
                         ) : (
                           <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
                         );

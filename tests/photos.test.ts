@@ -57,6 +57,34 @@ describe('photos pipeline', () => {
     expect(picked.filter((p: any) => p.kind === 'detail').length).toBeLessThanOrEqual(2);
   });
 
+  it('pickBest : jamais deux fois la même prise de vue, photos propres avant les photos à texte ou recadrées', () => {
+    const v = (index: number, kind: string, shot: string, score = 4, extra: any = {}) => ({ index, kind, shot, score, text: 'none', usable: true, watermark: false, ...extra });
+    const picked = pickBest([
+      v(0, 'product_white', 'front view', 5), v(1, 'product_white', 'front view', 5), v(2, 'product_white', 'front view', 4),
+      v(3, 'product_white', 'side view', 4), v(4, 'product_in_use', 'worn on wrist', 4), v(5, 'detail', 'close-up port', 3),
+      v(6, 'product_white', 'back view', 5, { text: 'light' }), v(7, 'detail', 'close-up screen', 5, { cropped: true }),
+    ]);
+    const shots = picked.map((p: any) => `${p.kind}|${p.shot}`);
+    expect(new Set(shots).size).toBe(shots.length);
+    expect(picked.length).toBe(4); // 4 photos propres et distinctes : on ne complète pas avec du texte ou du recadré
+    expect(picked.map((p: any) => p.index).sort()).toEqual([0, 3, 4, 5]);
+  });
+
+  it('pickBest : texte léger puis recadrées seulement pour atteindre 3 photos, et tolère une prise de vue répétée en dernier recours', () => {
+    const v = (index: number, shot: string, extra: any = {}) => ({ index, kind: 'product_white', shot, score: 4, text: 'none', usable: true, watermark: false, ...extra });
+    const a = pickBest([v(0, 'front'), v(1, 'back', { text: 'light' }), v(2, 'side', { cropped: true }), v(3, 'top', { cropped: true })]);
+    expect(a.map((p: any) => p.index)).toEqual([0, 1, 2]);
+    const b = pickBest([v(0, 'front'), v(1, 'front'), v(2, 'front')]);
+    expect(b.length).toBe(3);
+    // sans libellé de prise de vue (ancienne réponse) : comportement inchangé
+    expect(pickBest([v(0, ''), v(1, ''), v(2, '')]).length).toBe(3);
+  });
+
+  it('parseClassification lit la prise de vue (shot)', () => {
+    const r = parseClassification('[{"index":0,"usable":true,"kind":"detail","text":"none","score":3,"shot":" Front View "}]', 1);
+    expect(r[0].shot).toBe('front view');
+  });
+
   it('parseClassification tolère le texte autour et complète les index manquants', () => {
     const r = parseClassification('Voici :\n[{"index":0,"usable":true,"kind":"product_white","text":"none","score":9}]', 2);
     expect(r[0].score).toBe(5);
@@ -140,7 +168,8 @@ describe('photos pipeline', () => {
       const classify = async (bufs: Buffer[]) => bufs.map((_, index) => ({ index, usable: true, kind: 'infographic', text: 'heavy', watermark: false, score: 4, note: '', cleanBox: [0, 0, 1000, 600] }));
       const out = await processProduct({ aliexpress_id: '2', image_urls: Object.keys(imgs) }, { dryRun: true, classify });
       expect(out.report.cropped).toBe(4);
-      expect(out.photos.length).toBe(4);
+      // les zones recadrées (qui paraissent « coupées ») ne servent qu'à atteindre le minimum de 3 photos
+      expect(out.photos.length).toBe(3);
       expect(out.photos.every((p: any) => p.flags.includes('recadree_sans_texte') && p.kind === 'detail')).toBe(true);
     } finally {
       globalThis.fetch = origFetch;

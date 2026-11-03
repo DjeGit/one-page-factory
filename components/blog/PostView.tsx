@@ -17,7 +17,8 @@ import SiteFooter from '@/components/layout/SiteFooter';
 import BlogStructuredData from '@/components/landing/BlogStructuredData';
 import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import { SITE_COPY } from '@/lib/site-copy';
-import { SHOW_PRICES } from '@/lib/flags';
+import { getCardPrice } from '@/lib/pricing';
+import FreeShippingBadge from '@/components/product/FreeShippingBadge';
 import { GUIDE_BASE_PATH } from '@/lib/buying-guide';
 
 // Liens du corps d'article (Markdown) : les liens d'affiliation et les
@@ -239,12 +240,20 @@ export default async function PostView({ post, market, section, path, isGuideHub
                         <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug">{p.hero_title || p.name}</p>
                       </div>
                     </Link>
+                    {p.free_shipping && (
+                      <div className="px-3 pb-1">
+                        <FreeShippingBadge size="small" label={t.common.freeShipping} />
+                      </div>
+                    )}
                     <div className="px-3 pb-3 flex items-center justify-between gap-2">
-                      {SHOW_PRICES && p.price ? (
-                        <span className="text-site-cta font-bold text-sm">{p.price.toFixed(2)} €</span>
-                      ) : (
-                        <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
-                      )}
+                      {(() => {
+                        const price = getCardPrice(p, t.product.locale, market);
+                        return price ? (
+                          <span className="text-site-cta font-bold text-sm">{price}</span>
+                        ) : (
+                          <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
+                        );
+                      })()}
                       <a
                         href={`/api/go/${p.redirect_code}`}
                         rel="sponsored nofollow noopener"

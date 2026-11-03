@@ -4,6 +4,7 @@
 // Essais à la main :
 //   node --env-file=.env.local scripts/pipeline/worker.mjs --id <aliexpress_id> --dry-run [--text]   (aucune écriture : offres par marché, + aperçu du texte FR avec --text)
 //   node --env-file=.env.local scripts/pipeline/worker.mjs --id <aliexpress_id>                       (traite ce produit s'il est sur OUI)
+//   node --env-file=.env.local scripts/pipeline/worker.mjs --id <aliexpress_id> --redo-photos          (refait le tri des photos d'un produit déjà prêt)
 //   node --env-file=.env.local scripts/pipeline/worker.mjs --no-publish                                (prépare sans mettre en ligne)
 //
 // Pour chaque produit OUI (status 'validated') : liens affiliés vérifiés par marché → textes → fiches brouillon →
@@ -62,7 +63,8 @@ async function fail(c, d, reason, { products = [], warnings = [], product_ids } 
 const summarize = (p) => ({ market: p.market, name: p.name, slug: p.slug, price: p.price, currency: p.price_currency, commission_rate: p.commission_rate });
 
 /** Prépare un produit validé. @returns {{outcome:'ready'|'error'|'retry', reason?:string}} */
-export async function prepareCandidate(c, d) {
+export async function prepareCandidate(c, d, opts = {}) {
+  const redoPhotos = !!opts.redoPhotos;
   const today = ymd(d.now());
   d.log(`\n▶ ${c.aliexpress_id} — ${c.name}`);
 
@@ -79,7 +81,7 @@ export async function prepareCandidate(c, d) {
 
   // 2. Fiches déjà existantes (relance) et catégorie
   const ids = [...new Set(ok.map((o) => o.itemId))];
-  const existing = must(await d.sb.from('products').select('id, slug, name, market, aliexpress_id, active, images, image_url, source_product_ref').in('aliexpress_id', ids), 'lecture des fiches existantes') || [];
+  const existing = must(await d.sb.from('products').select('id, slug, name, market, aliexpress_id, active, images, image_url, video_url, free_shipping, source_product_ref').in('aliexpress_id', ids), 'lecture des fiches existantes') || [];
   const cat = must(await d.sb.from('categories').select('id').eq('slug', c.category_slug).maybeSingle(), 'lecture de la catégorie');
   if (!cat) return fail(c, d, `catégorie introuvable : ${c.category_slug}`);
 
@@ -111,7 +113,7 @@ export async function prepareCandidate(c, d) {
     const base = slugify(text.name);
     const taken = new Set((must(await d.sb.from('products').select('slug').like('slug', `${base}%`), 'lecture des slugs') || []).map((r) => r.slug));
     const row = buildProductRow({ candidate: c, offer: o, text, today, categoryId: cat.id, slug: uniqueSlug(base, taken) });
-    const inserted = must(await d.sb.from('products').insert(row).select('id, slug, name, market, aliexpress_id, active, images, image_url, source_product_ref').single(), `création ${row.slug}`);
+    const inserted = must(await d.sb.from('products').insert(row).select('id, slug, name, market, aliexpress_id, active, images, image_url, video_url, free_shipping, source_product_ref').single(), `création ${row.slug}`);
     created.push(inserted);
     all.push({ ...inserted, offer: o });
     d.log(`  ${o.market.toUpperCase()} : fiche créée ${inserted.slug} (brouillon)`);
@@ -126,7 +128,7 @@ export async function prepareCandidate(c, d) {
   const summaryRows = () => all.map((p) => ({ market: p.market, name: p.name || p.slug, slug: p.slug, price: p.offer.detail.price, currency: p.offer.detail.currency, commission_rate: p.offer.detail.commissionRate }));
 
   // 5. Photos (partagées entre marchés) : réutilisées si déjà prêtes, sinon traitées
-  let photos = Array.isArray(c.photos) && c.photos.length >= MIN_PHOTOS && ['review', 'approved', 'attached'].includes(c.photos_status) ? c.photos : null;
+  let photos = !redoPhotos && Array.isArray(c.photos) && c.photos.length >= MIN_PHOTOS && ['review', 'approved', 'attached'].includes(c.photos_status) ? c.photos : null;
   const photoWarnings = [];
   if (!photos) {
     const first = ok[0].detail;
@@ -143,12 +145,36 @@ export async function prepareCandidate(c, d) {
   }
   const publicIds = photos.map((p) => p.public_id);
   for (const p of all) {
-    if (p.images?.length || p.image_url) continue;
+    if (!redoPhotos && (p.images?.length || p.image_url)) continue;
     must(await d.sb.from('products').update({ images: publicIds, image_url: publicIds[0] }).eq('id', p.id), `photos de ${p.slug}`);
     p.images = publicIds;
     p.image_url = publicIds[0];
   }
   must(await d.sb.from('trend_candidates').update({ photos_status: 'attached' }).eq('id', c.id), 'statut photos');
+
+  // 5b. Vidéo YouTube (facultative, jamais bloquante) et rappel livraison gratuite
+  if (d.video) {
+    for (const p of all) {
+      if (p.video_url) continue;
+      try {
+        const v = await d.video({ name: p.name, market: p.market });
+        if (v) {
+          must(await d.sb.from('products').update({ video_url: v.url }).eq('id', p.id), `vidéo de ${p.slug}`);
+          p.video_url = v.url;
+          d.log(`  ${p.market.toUpperCase()} : vidéo trouvée — ${v.title} (${v.channel})`);
+        } else {
+          photoWarnings.push(`Vidéo ${p.market.toUpperCase()} : aucune vidéo fiable trouvée (produit sans repère précis ou aucun test correspondant). À ajouter dans la fiche si tu en as une.`);
+        }
+      } catch (e) {
+        d.log(`  (vidéo ${p.market.toUpperCase()} : ${e.message})`);
+        photoWarnings.push(`Vidéo ${p.market.toUpperCase()} : recherche impossible (${e.message}).`);
+      }
+    }
+  } else {
+    photoWarnings.push('Vidéo : recherche automatique inactive (YOUTUBE_API_KEY absente). Colle le lien YouTube dans la fiche si tu en veux une.');
+  }
+  const noShipping = all.filter((p) => p.free_shipping !== true).map((p) => p.market.toUpperCase());
+  if (noShipping.length) photoWarnings.push(`Livraison gratuite non détectée automatiquement (${noShipping.join(', ')}) : coche « Livraison gratuite » dans la fiche si elle est offerte.`);
 
   // 6. Contrôle final des fiches, puis « prêt »
   const fresh = must(await d.sb.from('products').select('id, slug, market, affiliate_url, image_url, images, price, price_checked_at').in('id', productIds), 'relecture des fiches');
@@ -231,21 +257,22 @@ export async function publishDue(d) {
 }
 
 /** Un passage complet : reprise des verrous oubliés, préparation des OUI, mise en ligne des produits prêts. */
-export async function runOnce(d, { id, publish = true, limit = 2 } = {}) {
+export async function runOnce(d, { id, publish = true, limit = 2, redoPhotos = false } = {}) {
   const nowIso = d.now().toISOString();
   const staleBefore = new Date(d.now().getTime() - STALE_LOCK_MIN * 60000).toISOString();
   const stale = must(await d.sb.from('trend_candidates').update({ status: 'validated', updated_at: nowIso }).eq('status', 'in_progress').lt('updated_at', staleBefore).select('id'), 'reprise des verrous') || [];
   if (stale.length) d.log(`${stale.length} produit(s) repris après une interruption.`);
 
   let q = d.sb.from('trend_candidates').select('*').eq('decision', 'yes');
-  q = id ? q.eq('aliexpress_id', id).in('status', ['validated', 'error']) : q.eq('status', 'validated');
+  const startable = redoPhotos ? ['validated', 'error', 'ready'] : ['validated', 'error'];
+  q = id ? q.eq('aliexpress_id', id).in('status', startable) : q.eq('status', 'validated');
   const todo = must(await q.order('decided_at').limit(limit), 'lecture des produits OUI') || [];
   const prepared = [];
   for (const c of todo) {
-    const locked = must(await d.sb.from('trend_candidates').update({ status: 'in_progress', updated_at: nowIso }).eq('id', c.id).in('status', ['validated', 'error']).select('id'), 'verrou') || [];
+    const locked = must(await d.sb.from('trend_candidates').update({ status: 'in_progress', updated_at: nowIso }).eq('id', c.id).in('status', startable).select('id'), 'verrou') || [];
     if (!locked.length) continue; // pris par un autre passage
     try {
-      prepared.push({ id: c.id, ...(await prepareCandidate(c, d)) });
+      prepared.push({ id: c.id, ...(await prepareCandidate(c, d, { redoPhotos })) });
     } catch (e) {
       prepared.push({ id: c.id, ...(await retryOrFail(c, d, `erreur inattendue : ${e.message}`)) });
     }
@@ -309,6 +336,7 @@ async function main() {
 
   const { processProduct } = await import('../photos/pipeline.mjs');
   const { renderEmail, sendMail } = await import('./notify.mjs');
+  const { findVideo } = await import('./video.mjs');
   const d = {
     sb, api, log,
     now: () => new Date(),
@@ -316,9 +344,12 @@ async function main() {
     // Les pages AliExpress sont rendues côté navigateur : aucune caractéristique lisible sans navigateur (PIPELINE_SPECS=1 pour réessayer).
     specs: process.env.PIPELINE_SPECS ? (id) => fetchSpecs(id) : undefined,
     photos: (row) => processProduct(row, { dryRun: false }),
+    // Vidéo YouTube : active seulement si YOUTUBE_API_KEY est renseignée.
+    video: process.env.YOUTUBE_API_KEY ? (q) => findVideo(q, { apiKey: process.env.YOUTUBE_API_KEY }) : undefined,
     mail: (payload) => sendMail(renderEmail(payload)),
   };
-  const res = await runOnce(d, { id: val('id'), publish: !args.includes('--no-publish') });
+  const res = await runOnce(d, { id: val('id'), publish: !args.includes('--no-publish'), redoPhotos: args.includes('--redo-photos') });
+
   log(`\nTerminé : ${res.prepared.length} préparé(s), ${res.published.length} mis en ligne.`);
 }
 

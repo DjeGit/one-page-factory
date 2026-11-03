@@ -378,3 +378,56 @@ describe('worker', () => {
     expect(mails.at(-1).kind).toBe('problem');
   });
 });
+
+describe('worker : vidéo, livraison et photos refaites', () => {
+  it('vidéo trouvée pour FR, absente pour ES : rappel dans l\'email ; livraison gratuite à cocher si non détectée', async () => {
+    const t = tables();
+    const { d, mails, offers } = makeDeps(t, {
+      video: async ({ market }: any) => (market === 'fr' ? { url: 'https://www.youtube.com/watch?v=abc', title: 'Test', channel: 'Chaîne' } : null),
+    });
+    offers.uk = null;
+    await runOnce(d, { publish: false });
+    const fr = t.products.find((p) => p.market === 'fr');
+    const es = t.products.find((p) => p.market === 'es');
+    expect(fr.video_url).toBe('https://www.youtube.com/watch?v=abc');
+    expect(es.video_url ?? null).toBeNull();
+    const w: string[] = mails[0].warnings;
+    expect(w.some((x) => x.startsWith('Vidéo ES'))).toBe(true);
+    expect(w.some((x) => x.startsWith('Vidéo FR'))).toBe(false);
+    expect(w.some((x) => x.includes('Livraison gratuite non détectée'))).toBe(false); // FR et ES : « Oui » dans la recherche
+  });
+
+  it('erreur YouTube : jamais bloquante ; sans clé : le dit dans l\'email', async () => {
+    const t = tables();
+    const { d, mails, offers } = makeDeps(t, { video: async () => { throw new Error('YouTube 403'); } });
+    offers.uk = null;
+    const r = await runOnce(d, { publish: false });
+    expect(r.prepared[0].outcome).toBe('ready');
+    expect(mails[0].warnings.some((x: string) => x.includes('YouTube 403'))).toBe(true);
+
+    const t2 = tables();
+    const m2 = makeDeps(t2);
+    m2.offers.uk = null;
+    await runOnce(m2.d, { publish: false });
+    expect(m2.mails[0].warnings.some((x: string) => x.includes('YOUTUBE_API_KEY'))).toBe(true);
+  });
+
+  it('--redo-photos : refait le tri d\'un produit déjà prêt et remplace les photos des fiches', async () => {
+    const t = tables();
+    const { d, offers } = makeDeps(t);
+    offers.uk = null;
+    await runOnce(d, { publish: false });
+    expect(t.trend_candidates[0].status).toBe('ready');
+    // sans l'option, un produit prêt n'est pas retraité
+    const idle = await runOnce(d, { id: '1005010428515910', publish: false });
+    expect(idle.prepared.length).toBe(0);
+
+    let calls = 0;
+    d.photos = async () => { calls++; return { photos: [7, 8, 9, 10].map((i) => ({ public_id: `products/new-${i}` })), report: { warnings: [] } }; };
+    const r = await runOnce(d, { id: '1005010428515910', publish: false, redoPhotos: true });
+    expect(calls).toBe(1);
+    expect(r.prepared[0].outcome).toBe('ready');
+    expect(t.trend_candidates[0].status).toBe('ready');
+    expect(t.products.every((p) => p.images.length === 4 && p.image_url === 'products/new-7')).toBe(true);
+  });
+});

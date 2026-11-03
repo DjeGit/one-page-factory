@@ -28,3 +28,17 @@ export function getDisplayPrice(
     : null;
   return { label: merchantPrice ? `${label}*` : label, checkedAt, merchantPrice };
 }
+
+/**
+ * Prix pour une vignette (accueil, catégories, listes) : mêmes règles que
+ * getDisplayPrice mais SANS astérisque — le client voit la date et la mention
+ * « prix à confirmer » en ouvrant la fiche produit (décision du 03/11/2026).
+ */
+export function getCardPrice(
+  product: Pick<Product, 'price' | 'price_currency' | 'price_checked_at' | 'affiliate_url'>,
+  locale: string,
+  market: Market,
+): string | null {
+  const d = getDisplayPrice(product, locale, market);
+  return d ? d.label.replace(/\*$/, '') : null;
+}
