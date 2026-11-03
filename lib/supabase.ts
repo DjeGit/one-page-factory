@@ -1,3 +1,4 @@
+import { countsByProduct } from '@/lib/analytics/counts';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { Category, Product, AnalyticsData, DashboardStats } from '@/types';
 import type { Market } from '@/lib/market';
@@ -428,18 +429,18 @@ export async function getAnalytics(market?: Market, productId?: string): Promise
 
   const results: AnalyticsData[] = [];
 
-  for (const product of products) {
-    // Get click count
-    const { count: clickCount } = await supabaseAdmin
-      .from('clicks')
-      .select('*', { count: 'exact', head: true })
-      .eq('product_id', product.id);
+  // Comptages en parallèle (avant : 2 requêtes par produit, l'une après l'autre → 4-5 s pour la liste des produits).
+  const countOne = (table: 'clicks' | 'page_views', id: string) =>
+    supabaseAdmin.from(table).select('*', { count: 'exact', head: true }).eq('product_id', id);
+  const ids = products.map((p) => p.id as string);
+  const [clickCounts, viewCounts] = await Promise.all([
+    countsByProduct(countOne, 'clicks', ids),
+    countsByProduct(countOne, 'page_views', ids),
+  ]);
 
-    // Get view count
-    const { count: viewCount } = await supabaseAdmin
-      .from('page_views')
-      .select('*', { count: 'exact', head: true })
-      .eq('product_id', product.id);
+  for (const product of products) {
+    const clickCount = clickCounts.get(product.id as string) ?? 0;
+    const viewCount = viewCounts.get(product.id as string) ?? 0;
 
     const clicks = clickCount || 0;
     const views = viewCount || 0;

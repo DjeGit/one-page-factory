@@ -11,6 +11,7 @@
  * `actualConversionRate` permet de brancher un taux réel plus tard sans
  * changer la signature de computeProductROI.
  */
+import { countsByProduct } from '@/lib/analytics/counts';
 import type { Market } from '@/lib/market';
 import { getCurrencyForMarket } from '@/lib/market';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -152,11 +153,15 @@ export async function computeMarketROI(market: Market): Promise<MarketROISummary
 
   const results: (ProductROIResult & { productId: string; productName: string })[] = [];
 
+  // Clics comptés en parallèle (avant : une requête par produit, en file indienne).
+  const clickCounts = await countsByProduct(
+    (table, id) => sb.from(table).select('*', { count: 'exact', head: true }).eq('product_id', id),
+    'clicks',
+    (products || []).map((p) => p.id as string),
+  );
+
   for (const p of products || []) {
-    const { count: clickCount } = await sb
-      .from('clicks')
-      .select('*', { count: 'exact', head: true })
-      .eq('product_id', p.id);
+    const clickCount = clickCounts.get(p.id as string) ?? 0;
 
     const roi = computeProductROI({
       price: p.price,
