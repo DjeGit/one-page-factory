@@ -1,10 +1,11 @@
 import Link from 'next/link';
 import { getBlogCategories } from '@/lib/blog';
 import BlogCategoriesManager from './BlogCategoriesManager';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function BlogCategoriesPage() {
+export default withAdminAuth(async function BlogCategoriesPage() {
   const categories = await getBlogCategories();
 
   return (
@@ -24,4 +25,4 @@ export default async function BlogCategoriesPage() {
       <BlogCategoriesManager initialCategories={categories} />
     </div>
   );
-}
+});

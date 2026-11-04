@@ -25,6 +25,8 @@ import { query, withTransaction } from '@/lib/db';
 import { getProductPricesBatched, type MarketId } from '@/lib/keepa';
 import { dispatchPriceAlert } from '@/lib/opf-notify';
 import { requireInternalAuth, logSyncStart, logSyncEnd } from '@/lib/api-auth';
+import { badRequest, serverError } from '../../_lib/http';
+import { parseLegacyMarkets, parseProductIds, readSyncBody, shortError } from '../../_lib/legacy-sync-input';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -91,8 +93,6 @@ const MARKET_CONFIG: Record<
   },
 };
 
-const ACTIVE_MARKETS: MarketId[] = ['fr', 'es', 'com'];
-
 // ─── Core sync function ──────────────────────────────────────────────────────
 
 async function syncMarketPrices(
@@ -109,7 +109,7 @@ async function syncMarketPrices(
   try {
     logId = await logSyncStart(marketId, 'prices');
   } catch (dbErr) {
-    const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+    const msg = shortError(dbErr);
     console.error('[Sync] DB unavailable:', msg);
     // Erreur DB au démarrage : SyncResult-shaped avec l'erreur dedans (et non
     // une NextResponse — cette fonction n'est pas un route handler, elle est
@@ -217,7 +217,7 @@ async function syncMarketPrices(
 
     await logSyncEnd(logId, 'success', pricesUpdated, errors.length);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = shortError(err);
     errors.push(msg);
     await logSyncEnd(logId, 'error', pricesUpdated, errors.length, msg);
     console.error(`[PriceSync] ${marketId.toUpperCase()} error:`, msg);
@@ -241,29 +241,30 @@ export async function POST(request: NextRequest) {
 
   const globalStart = Date.now();
 
-  let body: {
-    markets?: MarketId[];
-    product_ids?: string[];  // UUIDs
-    alert_threshold_pct?: number;
-  } = {};
+  const parsed = await readSyncBody(request);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
 
-  try {
-    body = await request.json();
-  } catch {
-    // Empty body is fine — use defaults
+  const m = parseLegacyMarkets(body.markets);
+  if ('response' in m) return m.response;
+  const markets: MarketId[] = m.markets;
+
+  const pid = parseProductIds(body.product_ids);
+  if ('response' in pid) return pid.response;
+  const productIds = pid.ids;
+
+  let alertThreshold = 5;
+  if (body.alert_threshold_pct !== undefined && body.alert_threshold_pct !== null) {
+    const t = body.alert_threshold_pct;
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0 || t > 100) return badRequest('alert_threshold_pct doit être un nombre entre 0 et 100');
+    alertThreshold = t;
   }
-
-  const markets = body.markets ?? ACTIVE_MARKETS;
-  const alertThreshold = body.alert_threshold_pct ?? 5;
 
   // Fetch products from DB
   let products: Product[];
   try {
-    const productFilter =
-      body.product_ids && body.product_ids.length > 0
-        ? `AND p.id = ANY($1::uuid[])`
-        : '';
-    const params = body.product_ids?.length ? [body.product_ids] : [];
+    const productFilter = productIds.length > 0 ? `AND p.id = ANY($1::uuid[])` : '';
+    const params = productIds.length > 0 ? [productIds] : [];
 
     products = await query<Product>(
       `SELECT p.id, p.name, p.image_url,
@@ -276,14 +277,13 @@ export async function POST(request: NextRequest) {
       params
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `DB error: ${msg}` }, { status: 500 });
+    console.error('[PriceSync] lecture des produits :', shortError(err));
+    return serverError('Erreur de base de données');
   }
 
   // Run syncs in sequence (to respect Keepa rate limits)
   const results: SyncResult[] = [];
   for (const marketId of markets) {
-    if (!ACTIVE_MARKETS.includes(marketId)) continue;
     const result = await syncMarketPrices(marketId, products, alertThreshold);
     results.push(result);
   }
@@ -292,6 +292,8 @@ export async function POST(request: NextRequest) {
   const totalAlerts = results.reduce((s, r) => s + r.priceDropAlerts, 0);
   const totalErrors = results.flatMap((r) => r.errors);
 
+  // Jamais 200 si tout a échoué : l'automate (n8n) doit voir l'échec.
+  const status = totalErrors.length === 0 ? 200 : totalUpdated > 0 ? 207 : 502;
   return NextResponse.json({
     success: totalErrors.length === 0,
     durationMs: Date.now() - globalStart,
@@ -302,7 +304,7 @@ export async function POST(request: NextRequest) {
       errors: totalErrors.length,
     },
     markets: results,
-  });
+  }, { status });
 }
 
 /** GET — quick status check */
@@ -310,20 +312,25 @@ export async function GET(request: NextRequest) {
   const authError = requireInternalAuth(request);
   if (authError) return authError;
 
-  const rows = await query<{
-    market_id: string;
-    sync_type: string;
-    status: string;
-    products_synced: number;
-    started_at: string;
-    finished_at: string;
-  }>(
-    `SELECT market_id, sync_type, status, products_synced, started_at, finished_at
-     FROM market_sync_log
-     WHERE sync_type = 'prices'
-     ORDER BY started_at DESC
-     LIMIT 9`
-  );
+  try {
+    const rows = await query<{
+      market_id: string;
+      sync_type: string;
+      status: string;
+      products_synced: number;
+      started_at: string;
+      finished_at: string;
+    }>(
+      `SELECT market_id, sync_type, status, products_synced, started_at, finished_at
+       FROM market_sync_log
+       WHERE sync_type = 'prices'
+       ORDER BY started_at DESC
+       LIMIT 9`
+    );
 
-  return NextResponse.json({ recentSyncs: rows });
+    return NextResponse.json({ recentSyncs: rows });
+  } catch (err) {
+    console.error('[PriceSync] statut :', shortError(err));
+    return serverError('Erreur de base de données');
+  }
 }

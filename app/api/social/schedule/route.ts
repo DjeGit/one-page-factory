@@ -16,44 +16,46 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { isValidMarket } from '@/lib/market';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { badRequest, dbErrorResponse, readJsonObject, unauthorized } from '../../_lib/http';
+import { parseSocialInput } from '../../_lib/social-input';
+
+const STATUSES = ['pending', 'processing', 'sent', 'failed', 'cancelled'];
+const LIST_LIMIT = 500;
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
   const sb = getSupabaseAdmin();
   const { searchParams } = req.nextUrl;
   const statusFilter = searchParams.get('status');
   const marketFilter = searchParams.get('market');
+  if (statusFilter && !STATUSES.includes(statusFilter)) return badRequest('Statut invalide');
 
-  let query = sb.from('scheduled_posts').select('*').order('scheduled_at', { ascending: true });
+  let query = sb.from('scheduled_posts').select('*').order('scheduled_at', { ascending: true }).limit(LIST_LIMIT);
   if (statusFilter) query = query.eq('status', statusFilter);
   if (marketFilter && isValidMarket(marketFilter)) query = query.eq('market', marketFilter);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return dbErrorResponse('GET /api/social/schedule', error);
   return NextResponse.json(data);
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const body = await req.json().catch(() => ({}));
-  const channelIds: string[] = Array.isArray(body.channelIds) ? body.channelIds : [];
-  const text: string = typeof body.text === 'string' ? body.text.trim() : '';
-  const market = isValidMarket(body.market) ? body.market : getActiveMarket();
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  const parsed = await readJsonObject(req);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
+
+  const input = parseSocialInput(body);
+  if ('error' in input) return badRequest(input.error);
+  const market = isValidMarket(body.market as string) ? (body.market as 'fr' | 'es' | 'uk') : getActiveMarket();
   const scheduledAt = typeof body.scheduledAt === 'string' ? new Date(body.scheduledAt) : null;
 
-  if (!text) return NextResponse.json({ error: 'Le contenu du post est requis.' }, { status: 400 });
-  if (channelIds.length === 0) return NextResponse.json({ error: 'Sélectionnez au moins un canal.' }, { status: 400 });
-  if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
-    return NextResponse.json({ error: 'Date de programmation invalide.' }, { status: 400 });
-  }
-  if (scheduledAt.getTime() <= Date.now()) {
-    return NextResponse.json({ error: 'La date de programmation doit être dans le futur.' }, { status: 400 });
-  }
+  if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) return badRequest('Date de programmation invalide.');
+  if (scheduledAt.getTime() <= Date.now()) return badRequest('La date de programmation doit être dans le futur.');
+  // Au-delà d'un an, c'est presque sûrement une faute de frappe (le post resterait « en attente » indéfiniment).
+  if (scheduledAt.getTime() > Date.now() + 366 * 24 * 3600 * 1000) return badRequest('La date de programmation ne peut pas dépasser un an.');
 
+  const { channelIds, text, imageUrls, videoUrl, link } = input.data;
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
     .from('scheduled_posts')
@@ -62,14 +64,14 @@ export async function POST(req: NextRequest) {
       text,
       market,
       scheduled_at: scheduledAt.toISOString(),
-      image_urls: Array.isArray(body.imageUrls) ? body.imageUrls : null,
-      video_url: typeof body.videoUrl === 'string' && body.videoUrl ? body.videoUrl : null,
-      link: typeof body.link === 'string' && body.link ? body.link : null,
+      image_urls: imageUrls ?? null,
+      video_url: videoUrl ?? null,
+      link: link ?? null,
       status: 'pending',
     })
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return dbErrorResponse('POST /api/social/schedule', error);
   return NextResponse.json(data, { status: 201 });
 }

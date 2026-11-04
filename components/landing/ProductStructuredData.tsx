@@ -1,13 +1,13 @@
 import type { Product } from '@/types';
 import { categoryPath } from '@/lib/category-slugs';
-import { getCurrencyForMarket } from '@/lib/market';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getProductGallery } from '@/lib/product-images';
 import { serializeJsonLd } from '@/lib/json-ld';
-import { marketUrl } from '@/lib/site-url';
+import { MARKET_HREFLANG, marketUrl } from '@/lib/site-url';
 import { DEFAULT_MARKET, isValidMarket } from '@/lib/market';
 import type { Market } from '@/lib/market';
-import { SHOW_PRICES } from '@/lib/flags';
+import { getStructuredOffer } from '@/lib/pricing';
+import { SITE_COPY } from '@/lib/site-copy';
 
 interface ProductStructuredDataProps {
   product: Product;
@@ -30,8 +30,15 @@ interface ProductStructuredDataProps {
  * (import Trustpilot, collecte post-achat...), jamais avant.
  *
  * Corrections de l'audit SEO du 07/10 (E5, E5b) :
- *  - `offers` n'est émis que si un prix existe (une Offer sans prix est
- *    invalide pour Google) ;
+ *  - `offers` n'est émis que si la fiche AFFICHE un prix (même règle que
+ *    l'affichage : lib/pricing.ts getStructuredOffer — prix daté, jamais
+ *    Amazon tant que SHOW_PRICES est coupé). Même montant, même devise que
+ *    la page : on ne déclare jamais à Google un prix que le visiteur ne voit
+ *    pas (11/2026 : l'ancien test SHOW_PRICES seul masquait à tort les prix
+ *    marchands affichés avec astérisque, et forçait l'euro pour une fiche en
+ *    livres) ;
+ *  - FAQPage ajouté quand la fiche affiche une FAQ (mêmes questions/réponses
+ *    que celles visibles) ;
  *  - plus de `availability: InStock` codé en dur : le stock des produits
  *    affiliés est inconnu, on ne déclare donc rien plutôt qu'un faux ;
  *  - plus de `brand: Tendpick` : Tendpick n'est pas la marque du produit
@@ -56,7 +63,8 @@ export default function ProductStructuredData({
     getCloudinaryUrl(img, { width: 1200, height: 1200, crop: 'fill', format: 'auto', quality: 'auto' })
   );
 
-  const hasPrice = SHOW_PRICES && typeof product.price === 'number' && product.price > 0;
+  const offer = getStructuredOffer(product, SITE_COPY[m].product.locale, m);
+  const faq = (product.faq ?? []).filter((f) => f && f.question?.trim() && f.answer?.trim());
 
   const productNode = {
     '@type': 'Product',
@@ -65,11 +73,11 @@ export default function ProductStructuredData({
     description: product.description ?? undefined,
     image: images.length > 0 ? images : undefined,
     url: productUrl,
-    offers: hasPrice
+    offers: offer
       ? {
           '@type': 'Offer',
-          price: product.price,
-          priceCurrency: getCurrencyForMarket(m),
+          price: offer.price,
+          priceCurrency: offer.priceCurrency,
           url: productUrl,
         }
       : undefined,
@@ -92,6 +100,20 @@ export default function ProductStructuredData({
           item: c.url,
         })),
       },
+      ...(faq.length > 0
+        ? [
+            {
+              '@type': 'FAQPage',
+              '@id': `${productUrl}#faq`,
+              inLanguage: MARKET_HREFLANG[m],
+              mainEntity: faq.map((f) => ({
+                '@type': 'Question',
+                name: f.question,
+                acceptedAnswer: { '@type': 'Answer', text: f.answer },
+              })),
+            },
+          ]
+        : []),
     ],
   };
 

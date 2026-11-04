@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { listIntegrationsWithStatus } from '@/lib/integrations/registry';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
  * Page honnête sur l'état actuel plutôt qu'un écran de campagnes qui ne
  * ferait rien.
  */
-export default async function MarketingPage() {
+export default withAdminAuth(async function MarketingPage() {
   const { socialChannels } = await listIntegrationsWithStatus();
   const meta = socialChannels.find((i) => i.id === 'meta-ads');
   const tiktok = socialChannels.find((i) => i.id === 'tiktok');
@@ -65,4 +66,4 @@ export default async function MarketingPage() {
       </div>
     </div>
   );
-}
+});

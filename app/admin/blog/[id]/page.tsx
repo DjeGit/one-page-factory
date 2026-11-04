@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getBlogPostByIdAdmin, getBlogCategories } from '@/lib/blog';
-import { getAllProducts } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
+import { MARKET_ORIGIN } from '@/lib/site-url';
 import BlogPostForm from '@/components/admin/BlogPostForm';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 interface Props {
   params: { id: string };
@@ -10,11 +12,18 @@ interface Props {
 
 export const dynamic = 'force-dynamic';
 
-export default async function EditBlogPostPage({ params }: Props) {
-  const post = await getBlogPostByIdAdmin(params.id);
-  if (!post) notFound();
+async function getBlogProductChoices() {
+  const { data } = await getSupabaseAdmin().from('products').select('id, name, slug, market').order('name');
+  return (data ?? []) as { id: string; name: string; slug: string; market: string }[];
+}
 
-  const [products, categories] = await Promise.all([getAllProducts(), getBlogCategories()]);
+export default withAdminAuth(async function EditBlogPostPage({ params }: Props) {
+  const [post, products, categories] = await Promise.all([
+    getBlogPostByIdAdmin(params.id),
+    getBlogProductChoices(),
+    getBlogCategories(),
+  ]);
+  if (!post) notFound();
 
   return (
     <div className="p-8">
@@ -34,8 +43,9 @@ export default async function EditBlogPostPage({ params }: Props) {
 
           {post.status === 'published' && (
             <a
-              href={`/blog/${post.slug}`}
+              href={`${MARKET_ORIGIN[post.market]}/blog/${post.slug}`}
               target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 font-medium text-sm rounded-xl hover:bg-gray-50 transition-colors"
             >
               Voir l&apos;article en ligne
@@ -49,4 +59,4 @@ export default async function EditBlogPostPage({ params }: Props) {
       </div>
     </div>
   );
-}
+});

@@ -115,7 +115,8 @@ async function main() {
     return runOne(supabase, row, { dryRun });
   }
   if (flag('all')) {
-    const { data, error } = await supabase.from('trend_candidates').select('*').eq('decision', 'yes').in('photos_status', ['none', 'error']);
+    // Pas les produits « en cours » ou déjà prêts / en ligne : le worker automatique (pipeline/worker.mjs) s'en occupe.
+    const { data, error } = await supabase.from('trend_candidates').select('*').eq('decision', 'yes').in('status', ['validated', 'error']).in('photos_status', ['none', 'error']);
     if (error) throw error;
     console.log(`${data.length} produit(s) retenu(s) sans photos.`);
     for (const row of data) await runOne(supabase, row, { dryRun });

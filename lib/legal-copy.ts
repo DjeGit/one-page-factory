@@ -8,7 +8,7 @@
  * textes légaux dans sa langue.
  *
  * Règles de rédaction :
- *   - aucune promesse sur des prix affichés (le site n'en affiche plus) ;
+ *   - aucune promesse sur des prix affichés (prix marchands datés avec astérisque seulement, jamais Amazon) ;
  *   - on ne nomme que les programmes d'affiliation dont l'adhésion est
  *     établie (Amazon) ; les autres sont désignés au pluriel, « au fur et à
  *     mesure de leur validation » ;
@@ -43,7 +43,7 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: "Affiliation",
           paragraphs: [
             "Tendpick vit de l'affiliation. Certains liens vers des marchands sont des liens affiliés : si vous achetez après avoir cliqué, nous pouvons percevoir une commission, sans supplément de prix pour vous. Nous participons au Programme Partenaires d'Amazon EU et, au fur et à mesure de leur validation, à d'autres programmes et réseaux d'affiliation.",
-            "Tendpick n'affiche pas de prix sur ses pages. Le prix et la disponibilité qui comptent sont ceux de la page du marchand au moment de l'achat.",
+            "Tendpick n'affiche pas de prix pour les produits Amazon. Pour les autres marchands, un prix peut apparaître, suivi d'un astérisque et de sa date : c'est le prix relevé chez le marchand ce jour-là, à titre indicatif. Le prix et la disponibilité qui comptent sont ceux de la page du marchand au moment de l'achat.",
           ],
         },
         {
@@ -174,7 +174,7 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: 'Afiliación',
           paragraphs: [
             'Tendpick vive de la afiliación. Algunos enlaces a tiendas son enlaces de afiliado: si compras después de hacer clic, podemos recibir una comisión, sin coste adicional para ti. Participamos en el Programa de Afiliados de Amazon EU y, a medida que se validen, en otros programas y redes de afiliación.',
-            'Tendpick no muestra precios en sus páginas. El precio y la disponibilidad que cuentan son los de la página de la tienda en el momento de la compra.',
+            'Tendpick no muestra precios de los productos de Amazon. En el resto de tiendas puede aparecer un precio, con un asterisco y su fecha: es el precio que mostraba la tienda ese día, a título orientativo. El precio y la disponibilidad que cuentan son los de la página de la tienda en el momento de la compra.',
           ],
         },
         {
@@ -305,7 +305,7 @@ export const LEGAL_COPY: Record<Market, Record<LegalPageKey, StaticPageCopy>> = 
           heading: 'Affiliation',
           paragraphs: [
             'Tendpick earns from affiliate commissions. Some links to retailers are affiliate links: if you buy after clicking, we may receive a commission, at no extra cost to you. We take part in the Amazon EU Associates Programme and, as they are approved, in other affiliate programmes and networks.',
-            'Tendpick does not show prices on its pages. The price and availability that count are those on the retailer’s page at the time of purchase.',
+            'Tendpick does not show prices for Amazon products. For other retailers a price may appear, with an asterisk and its date: it is the price the retailer showed on that day, for guidance only. The price and availability that count are those on the retailer’s page at the time of purchase.',
           ],
         },
         {

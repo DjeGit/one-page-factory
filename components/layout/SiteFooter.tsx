@@ -102,12 +102,16 @@ export default function SiteFooter({ categories, market }: Props) {
                 id="footer-newsletter-email"
                 type="email"
                 placeholder={t.emailPlaceholder}
-                className="flex-1 min-w-0 rounded-md border-none px-2.5 py-2 text-xs text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary"
+                // Inscription pas encore branchée (voir commentaire plus haut) : champ
+                // désactivé plutôt qu'un formulaire qui avale l'adresse sans rien enregistrer.
+                disabled
+                className="flex-1 min-w-0 rounded-md border-none px-2.5 py-2 text-xs text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary disabled:opacity-60 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
+                disabled
                 title={t.newsletterButtonTitle}
-                className="bg-site-cta hover:bg-site-cta-hover transition-colors rounded-md px-3 py-2 text-xs font-semibold text-white shrink-0"
+                className="bg-site-cta transition-colors rounded-md px-3 py-2 text-xs font-semibold text-white shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {t.ok}
               </button>

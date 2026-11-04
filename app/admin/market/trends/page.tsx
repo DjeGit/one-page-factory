@@ -1,8 +1,9 @@
 import TrendsManager from '@/components/admin/market/TrendsManager';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
-export default function TrendsPage() {
+export default withAdminAuth(function TrendsPage() {
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -15,4 +16,4 @@ export default function TrendsPage() {
       <TrendsManager />
     </div>
   );
-}
+});

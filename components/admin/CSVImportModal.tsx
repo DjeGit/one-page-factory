@@ -2,6 +2,8 @@
 
 import { useState, useRef } from 'react';
 import type { ImportRow } from '@/types';
+import { parseCsv } from '@/lib/trends';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 interface CSVImportModalProps {
   onClose: () => void;
@@ -19,27 +21,29 @@ export default function CSVImportModal({ onClose, onImported }: CSVImportModalPr
   const [importing, setImporting] = useState(false);
   const [results, setResults] = useState<{ created: number; skipped: number } | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const REQUIRED_HEADERS = ['name', 'affiliate_url'];
   const OPTIONAL_HEADERS = ['price', 'original_price', 'image_url', 'description'];
 
   const parseCSV = (text: string): ParsedRow[] => {
-    const lines = text.trim().split('\n').filter(Boolean);
-    if (lines.length < 2) throw new Error('Le CSV doit contenir au moins une ligne d\'en-têtes et une ligne de données');
+    // Analyse tolérante : séparateur , ; ou tabulation (Excel français), guillemets, retours à la ligne Windows, BOM.
+    const table = parseCsv(text);
+    if (table.length < 2) throw new Error('Le CSV doit contenir au moins une ligne d\'en-têtes et une ligne de données');
 
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
+    const headers = table[0].map(h => h.trim().toLowerCase().replace(/['"]/g, ''));
     const missingRequired = REQUIRED_HEADERS.filter(r => !headers.includes(r));
     if (missingRequired.length > 0) {
       throw new Error(`Colonnes requises manquantes : ${missingRequired.join(', ')}`);
     }
 
-    return lines.slice(1).map((line, idx) => {
-      const values = line.split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
+    return table.slice(1).map((values, idx) => {
       const row: Record<string, string> = {};
-      headers.forEach((h, i) => { row[h] = values[i] || ''; });
+      headers.forEach((h, i) => { row[h] = (values[i] ?? '').trim(); });
 
-      const valid = Boolean(row.name && row.affiliate_url);
+      const validUrl = /^https?:\/\//i.test(row.affiliate_url || '');
+      const valid = Boolean(row.name && validUrl);
       return {
         name: row.name || '',
         affiliate_url: row.affiliate_url || '',
@@ -48,13 +52,14 @@ export default function CSVImportModal({ onClose, onImported }: CSVImportModalPr
         image_url: row.image_url || undefined,
         description: row.description || undefined,
         _valid: valid,
-        _error: !valid ? `Ligne ${idx + 2}: name et affiliate_url requis` : undefined,
+        _error: !valid ? `Ligne ${idx + 2} : le nom et une adresse affiliée commençant par http(s):// sont requis` : undefined,
       };
     });
   };
 
   const handleParse = () => {
     setParseError(null);
+    setImportError(null);
     setParsed(null);
     try {
       const rows = parseCSV(csvText);
@@ -81,20 +86,23 @@ export default function CSVImportModal({ onClose, onImported }: CSVImportModalPr
     if (validRows.length === 0) return;
 
     setImporting(true);
+    setImportError(null);
     try {
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: validRows }),
+        body: JSON.stringify({ rows: validRows.map(({ _valid, _error, ...row }) => row) }),
       });
-      const data = await res.json();
+      // Avant : une erreur serveur affichait quand même « N produits créés ».
+      if (!res.ok) throw new Error(await readApiError(res, 'Import refusé'));
+      const data = await res.json().catch(() => ({}));
       setResults({
         created: data.created ?? validRows.length,
         skipped: data.skipped ?? (parsed.length - validRows.length),
       });
       onImported();
-    } catch {
-      setResults({ created: 0, skipped: parsed.length });
+    } catch (err) {
+      setImportError(`Import impossible : ${networkErrorMessage(err)}`);
     } finally {
       setImporting(false);
     }
@@ -104,13 +112,14 @@ export default function CSVImportModal({ onClose, onImported }: CSVImportModalPr
   const invalidCount = parsed?.filter(r => !r._valid).length ?? 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-label="Importer un fichier CSV">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
           <h2 className="text-xl font-black text-gray-900">Importer CSV</h2>
           <button
             onClick={onClose}
+            aria-label="Fermer"
             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,9 +236,17 @@ export default function CSVImportModal({ onClose, onImported }: CSVImportModalPr
                 )}
               </div>
 
+              {validCount > 100 && (
+                <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
+                  Maximum 100 produits par import : découpez le fichier en plusieurs parties.
+                </div>
+              )}
+              {importError && (
+                <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">{importError}</div>
+              )}
               <button
                 onClick={handleImport}
-                disabled={importing || validCount === 0}
+                disabled={importing || validCount === 0 || validCount > 100}
                 className="w-full py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
               >
                 {importing ? (

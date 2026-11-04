@@ -54,7 +54,7 @@ export default function HeroCarousel({ market }: Props) {
       setActive((i) => (i + 1) % SLIDES.length);
     }, ROTATE_MS);
     return () => clearInterval(id);
-  }, [paused]);
+  }, [paused, SLIDES.length]);
 
   return (
     <section
@@ -119,7 +119,8 @@ export default function HeroCarousel({ market }: Props) {
             onClick={() => setActive(i)}
             aria-label={slideAria(i + 1)}
             aria-current={i === active}
-            className={`h-2 rounded-full transition-all ${
+            // before: zone de toucher agrandie (la pastille fait 8 px, trop petite au doigt)
+            className={`relative before:absolute before:-inset-3 before:content-[''] h-2 rounded-full transition-all ${
               i === active ? 'w-6 bg-site-cta' : 'w-2 bg-white/30 hover:bg-white/50'
             }`}
           />

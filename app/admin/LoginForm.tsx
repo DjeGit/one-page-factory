@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { readApiError } from '@/components/admin/http';
 
 export default function LoginForm() {
   const [password, setPassword] = useState('');
@@ -24,7 +25,8 @@ export default function LoginForm() {
       if (res.ok) {
         router.refresh();
       } else {
-        setError('Mot de passe incorrect.');
+        // Le serveur précise la cause : mot de passe faux, trop de tentatives (15 min), configuration manquante…
+        setError(res.status === 401 ? 'Mot de passe incorrect.' : await readApiError(res, 'Connexion impossible'));
       }
     } catch {
       setError('Erreur de connexion.');
@@ -49,10 +51,11 @@ export default function LoginForm() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+            <label htmlFor="admin-password" className="block text-sm font-semibold text-gray-700 mb-1.5">
               Mot de passe admin
             </label>
             <input
+              id="admin-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -60,11 +63,12 @@ export default function LoginForm() {
               placeholder="Entrez votre mot de passe"
               required
               autoFocus
+              autoComplete="current-password"
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
+            <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
               <svg className="w-4 h-4 text-red-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>

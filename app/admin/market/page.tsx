@@ -1,4 +1,5 @@
 import MarketPageTabs from '@/components/admin/market/MarketPageTabs';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 // Sprint 4 : la page ne pré-charge plus market_products côté serveur pour
 // des catégories GPT fixes (5 catégories inventées) — chaque onglet
@@ -6,7 +7,7 @@ import MarketPageTabs from '@/components/admin/market/MarketPageTabs';
 // (cf. MesRecherches.tsx / AmazonBestSellers.tsx).
 export const dynamic = 'force-dynamic';
 
-export default function MarketPage() {
+export default withAdminAuth(function MarketPage() {
   return (
     <div className="p-8">
       <div className="mb-6">
@@ -19,4 +20,4 @@ export default function MarketPage() {
       <MarketPageTabs />
     </div>
   );
-}
+});

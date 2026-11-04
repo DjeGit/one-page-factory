@@ -1,21 +1,14 @@
 import Link from 'next/link';
-import Image from 'next/image';
-import { getSupabaseAdmin, getActiveCategories } from '@/lib/supabase';
-import type { Product } from '@/types';
-import { getCloudinaryUrl } from '@/lib/cloudinary';
+import { getMarketCatalog, getNavCategories, searchProducts } from '@/lib/site-products';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
-import { getMarketFromHost } from '@/lib/market-from-host';
-import type { Market } from '@/lib/market';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
 import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import SiteFooter from '@/components/layout/SiteFooter';
-import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
-import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
-import { getCardPrice } from '@/lib/pricing';
-import FreeShippingBadge from '@/components/product/FreeShippingBadge';
+import { buildAlternates, getRequestMarket, hasIndexBlockingParams } from '@/lib/site-url';
+import ProductCard from '@/components/site/ProductCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +23,7 @@ interface Props {
 // recherche (?q=) ne sont pas indexés.
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const h = headers();
-  const market = getMarketFromHost(h.get('host'));
+  const market = getRequestMarket(h);
   return {
     title: SITE_COPY[market].products.metaTitle,
     description: SITE_COPY[market].products.metaDescription,
@@ -39,46 +32,15 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   };
 }
 
-// Audit M10 : la saisie est insérée dans un filtre PostgREST (.or(...)) où
-// la virgule, les parenthèses et les jokers ont un sens. On les retire pour
-// qu'un visiteur ne puisse pas injecter ses propres opérateurs de filtre.
-function sanitizeSearchTerm(raw: string): string {
-  return raw.replace(/[,()*%\\"`]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
-}
-
-function categoryName(c: { name_fr: string; name_es: string; name_uk: string }, market: Market): string {
-  if (market === 'es') return c.name_es;
-  if (market === 'uk') return c.name_uk;
-  return c.name_fr;
-}
-
-async function getAllActive(market: Market, query?: string): Promise<Product[]> {
-  try {
-    const sb = getSupabaseAdmin();
-    let q = sb
-      .from('products')
-      .select('*')
-      .eq('active', true)
-      .eq('market', market);
-    // Recherche (icône loupe du header, 30/09) : simple ILIKE sur le nom
-    // et le titre affiché, pas de moteur de recherche dédié pour l'instant.
-    const term = query ? sanitizeSearchTerm(query) : '';
-    if (term) {
-      q = q.or(`name.ilike.%${term}%,hero_title.ilike.%${term}%`);
-    }
-    const { data } = await q.order('updated_at', { ascending: false });
-    return (data as Product[]) || [];
-  } catch {
-    return [];
-  }
-}
-
 export default async function ProduitsPage({ searchParams }: Props) {
   // Marché déduit du domaine (pas de produit unique sur cette page),
   // même logique que app/layout.tsx (lib/market-from-host.ts).
-  const market = getMarketFromHost(headers().get('host'));
-  const query = searchParams.q?.trim() || undefined;
-  const [products, categories] = await Promise.all([getAllActive(market, query), getActiveCategories(market)]);
+  const market = getRequestMarket(headers());
+  // Recherche (icône loupe du header) : faite en mémoire sur le catalogue en
+  // cache, sans accents ni casse ; la saisie n'atteint jamais la base (audit M10).
+  const query = (typeof searchParams.q === 'string' ? searchParams.q.trim().slice(0, 80) : '') || undefined;
+  const [catalog, categories] = await Promise.all([getMarketCatalog(market), getNavCategories(market)]);
+  const products = query ? searchProducts(catalog, query) : catalog;
   const t = SITE_COPY[market];
 
   return (
@@ -123,59 +85,9 @@ export default async function ProduitsPage({ searchParams }: Props) {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {products.map((p) => {
-              const img = p.image_url
-                ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
-                : null;
-              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === getProductSource(p.affiliate_url));
-              return (
-                <Link
-                  key={p.id}
-                  href={`/${p.slug}`}
-                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
-                >
-                  <div className="aspect-square relative bg-site-bg flex-shrink-0">
-                    {img ? (
-                      <Image
-                        src={img}
-                        alt={p.name}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        unoptimized={img.includes('/fetch/')}
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
-                    )}
-                    {sourceMeta && (
-                      <span className="absolute top-2 left-2 bg-white/95 border border-site-border rounded-full px-2 py-0.5 text-xs font-medium text-site-text-secondary flex items-center gap-1">
-                        <span>{sourceMeta.icon}</span>
-                        {sourceMeta.label}
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-3 flex flex-col gap-1 flex-1">
-                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
-                      {p.hero_title || p.name}
-                    </p>
-                    {p.free_shipping && <FreeShippingBadge size="small" label={t.common.freeShipping} />}
-                    <div className="flex items-center justify-between mt-1">
-                      {(() => {
-                        const price = getCardPrice(p, t.product.locale, market);
-                        return price ? (
-                          <span className="text-site-cta font-bold text-sm">{price}</span>
-                        ) : (
-                          <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
-                        );
-                      })()}
-                      <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
-                        {t.common.seeArrow}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
+            {products.map((p) => (
+              <ProductCard key={p.id} product={p} market={market} />
+            ))}
           </div>
         )}
       </main>

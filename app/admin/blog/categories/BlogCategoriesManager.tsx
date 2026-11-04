@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 import type { BlogCategory } from '@/types';
 
 interface Props {
@@ -76,10 +77,7 @@ export default function BlogCategoriesManager({ initialCategories }: Props) {
           sort_order: parseInt(editDraft.sort_order, 10) || 0,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la sauvegarde');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la sauvegarde'));
       const updated = await res.json();
       setCategories((prev) =>
         prev
@@ -89,7 +87,7 @@ export default function BlogCategoriesManager({ initialCategories }: Props) {
       setEditingId(null);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -103,14 +101,11 @@ export default function BlogCategoriesManager({ initialCategories }: Props) {
     setError(null);
     try {
       const res = await fetch(`/api/blog-categories/${cat.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la suppression');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la suppression'));
       setCategories((prev) => prev.filter((c) => c.id !== cat.id));
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -133,17 +128,14 @@ export default function BlogCategoriesManager({ initialCategories }: Props) {
           sort_order: parseInt(newDraft.sort_order, 10) || 0,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la création');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la création'));
       const created = await res.json();
       setCategories((prev) => [...prev, created].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
       setCreating(false);
       setNewDraft(emptyDraft);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setSaving(false);
     }

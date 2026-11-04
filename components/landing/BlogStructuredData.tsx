@@ -61,7 +61,10 @@ export default function BlogStructuredData({
         mainEntityOfPage: postUrl,
         // Categorie (05/10) : articleSection standard de schema.org pour le
         // rayon editorial d'un article, rempli uniquement si l'article en a une.
-        articleSection: post.category?.name_fr ?? undefined,
+        articleSection:
+          (market === 'es' ? post.category?.name_es : market === 'uk' ? post.category?.name_uk : post.category?.name_fr) ||
+          post.category?.name_fr ||
+          undefined,
       },
       {
         '@type': 'BreadcrumbList',

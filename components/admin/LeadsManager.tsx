@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { Product } from '@/types';
 import type { Contact } from '@/types';
 import { MARKETS } from '@/lib/market';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 import ContactFormModal from './leads/ContactFormModal';
 import ContactDetailPanel from './leads/ContactDetailPanel';
 
@@ -16,7 +17,7 @@ interface LeadsStats {
 }
 
 interface LeadsManagerProps {
-  products: Product[];
+  products: Pick<Product, 'id' | 'name'>[];
 }
 
 const PAGE_SIZE = 50;
@@ -59,21 +60,27 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fetchId = useRef(0);
 
   const [showForm, setShowForm] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
 
   const fetchContacts = useCallback(async () => {
+    const id = ++fetchId.current;
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (filterProductId) params.set('product_id', filterProductId);
       if (filterMarket) params.set('market', filterMarket);
       if (filterType) params.set('contact_type', filterType);
       const res = await fetch(`/api/leads?${params}`);
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(await readApiError(res, 'Chargement des contacts impossible'));
       const data = await res.json();
+      // Réponse d'un filtre précédent arrivée en retard : ignorée.
+      if (id !== fetchId.current) return;
       const all: Contact[] = Array.isArray(data) ? data : (data.leads || []);
       setContacts(all);
 
@@ -92,10 +99,10 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
 
       setStats({ total: all.length, this_week: weekCount, today: todayCount, top_product: topProduct });
       setPage(0);
-    } catch {
-      // silently fail
+    } catch (err) {
+      if (id === fetchId.current) setError(networkErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (id === fetchId.current) setLoading(false);
     }
   }, [filterProductId, filterMarket, filterType, products]);
 
@@ -114,14 +121,14 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Supprimer ce contact ? Cette action est irréversible.')) return;
+    setError(null);
     try {
       const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setContacts((prev) => prev.filter((c) => c.id !== id));
-        setSelectedContact(null);
-      }
-    } catch {
-      // silently fail
+      if (!res.ok) throw new Error(await readApiError(res, 'Suppression impossible'));
+      setContacts((prev) => prev.filter((c) => c.id !== id));
+      setSelectedContact(null);
+    } catch (err) {
+      setError(`Suppression impossible : ${networkErrorMessage(err)}`);
     }
   };
 
@@ -131,7 +138,7 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
       const params = new URLSearchParams();
       if (filterProductId) params.set('product_id', filterProductId);
       const res = await fetch(`/api/leads/export?${params}`);
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(await readApiError(res, 'Export impossible'));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -139,8 +146,8 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
       a.download = `leads-${Date.now()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      // silently fail
+    } catch (err) {
+      setError(`Export impossible : ${networkErrorMessage(err)}`);
     } finally {
       setExporting(false);
     }
@@ -185,10 +192,17 @@ export default function LeadsManager({ products }: LeadsManagerProps) {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            {exporting ? 'Export...' : 'Exporter CSV'}
+            {exporting ? 'Export...' : 'Exporter les leads (CSV)'}
           </button>
         </div>
       </div>
+
+      {error && (
+        <div role="alert" className="mb-6 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-800 flex items-center justify-between gap-3">
+          <span>{error}</span>
+          <button type="button" onClick={fetchContacts} className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700">Réessayer</button>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="grid sm:grid-cols-4 gap-4 mb-8">

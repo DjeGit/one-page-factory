@@ -2,13 +2,18 @@ import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { isValidMarket, type Market } from '@/lib/market';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { badRequest, dbErrorResponse, invalidId, isUuid, notFound, readJsonObject, unauthorized } from '../../_lib/http';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
   const sb = getSupabaseAdmin();
-  await sb.from('email_leads').delete().eq('id', params.id);
+  // Avant : l'erreur était ignorée et la réponse était toujours « success ».
+  const { data, error } = await sb.from('email_leads').delete().eq('id', params.id).select('id');
+  if (error) return dbErrorResponse('DELETE /api/leads/[id]', error);
+  if (!data || data.length === 0) return notFound('Contact introuvable');
   return NextResponse.json({ success: true });
 }
 
@@ -17,28 +22,23 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 // Les leads capturés automatiquement (contact_type='lead') ne passent pas
 // par cette route (pas d'UI d'édition prévue pour eux).
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
   const sb = getSupabaseAdmin();
-  const body = await req.json();
+  const parsed = await readJsonObject(req);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
 
   const email = typeof body.email === 'string' && body.email.trim() ? body.email.trim() : null;
   const phone = typeof body.phone === 'string' && body.phone.trim() ? body.phone.trim() : null;
-  if (!email && !phone) {
-    return NextResponse.json({ error: 'Renseignez au moins un email ou un téléphone' }, { status: 400 });
-  }
-  if (email && !email.includes('@')) {
-    return NextResponse.json({ error: 'Email invalide' }, { status: 400 });
-  }
+  if (!email && !phone) return badRequest('Renseignez au moins un email ou un téléphone');
+  if (email && !EMAIL_RE.test(email)) return badRequest('Email invalide');
 
   const markets: Market[] = Array.isArray(body.markets) ? body.markets.filter(isValidMarket) : [];
-  if (markets.length === 0) {
-    return NextResponse.json({ error: 'Sélectionnez au moins un marché' }, { status: 400 });
-  }
+  if (markets.length === 0) return badRequest('Sélectionnez au moins un marché');
 
   if (body.contact_type !== 'client' && body.contact_type !== 'fournisseur' && body.contact_type !== 'partenaire') {
-    return NextResponse.json({ error: 'Type de contact invalide (client, fournisseur ou partenaire)' }, { status: 400 });
+    return badRequest('Type de contact invalide (client, fournisseur ou partenaire)');
   }
 
   const { data, error } = await sb
@@ -57,8 +57,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     })
     .eq('id', params.id)
     .select()
-    .single();
+    .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return dbErrorResponse('PUT /api/leads/[id]', error);
+  if (!data) return notFound('Contact introuvable');
   return NextResponse.json({ success: true, data });
 }

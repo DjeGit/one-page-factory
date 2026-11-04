@@ -1,33 +1,35 @@
-import { getAllProducts } from '@/lib/supabase';
-import Image from 'next/image';
 import { headers } from 'next/headers';
-import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
+import { getMarketCatalog } from '@/lib/site-products';
 import { SITE_COPY } from '@/lib/site-copy';
-import { SHOW_PRICES } from '@/lib/flags';
+import { getRequestMarket } from '@/lib/site-url';
+import { getCardPrice } from '@/lib/pricing';
+import { productCoverUrl, resolveImage } from '@/lib/site-image';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-  title: 'Nos produits',
-  description: 'Découvrez tous nos produits sélectionnés.',
-  robots: { index: false },
-};
+// Page « lien en bio » (Instagram, TikTok) : jamais indexée. Titre dans la
+// langue du domaine (avant : toujours en français).
+export async function generateMetadata(): Promise<Metadata> {
+  const t = SITE_COPY[getRequestMarket(headers())].bio;
+  return { title: t.title, robots: { index: false, follow: false } };
+}
+
+// Survol géré en CSS : cette page est un composant serveur, elle ne peut pas
+// recevoir de gestionnaires onMouseEnter/onMouseLeave (ils faisaient planter la
+// page dès qu'un produit était en ligne).
+const BIO_CSS = `
+.bio-link{display:flex;align-items:center;gap:16px;background:rgba(255,255,255,0.08);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.12);border-radius:16px;padding:14px 18px;text-decoration:none;color:#fff;transition:all .18s ease}
+.bio-link:hover,.bio-link:focus-visible{background:rgba(124,58,237,0.25);border-color:rgba(124,58,237,0.5);transform:translateY(-2px);box-shadow:0 8px 32px rgba(124,58,237,0.2)}
+`;
 
 export default async function BioPage() {
-  // Audit 21/09 (bug HIGH corrigé) : dérivait le marché du cookie visiteur
-  // opf_market, illisible dans la même requête qui vient de le poser (page
-  // souvent la toute première ouverte via un lien bio Instagram/TikTok) —
-  // retombait donc systématiquement sur 'fr' pour un premier visiteur. Le
-  // host est disponible dès cette première requête, comme dans
-  // middleware.ts — même détection canonique partagée.
-  const host = headers().get('host') ?? '';
-  const market = getMarketFromHost(host);
-  const t = SITE_COPY[market].bio;
-  const allProducts = await getAllProducts(market);
-  const active = allProducts.filter((p) => p.active);
-
-  const siteUrl = host ? 'https://' + host : (process.env.NEXT_PUBLIC_SITE_URL || 'https://tendpick.fr').replace(/\/$/, '');
+  // Marché lu sur le domaine (x-forwarded-host d'abord) : disponible dès la
+  // toute première requête, contrairement à un cookie (audit 21/09).
+  const market = getRequestMarket(headers());
+  const t = SITE_COPY[market];
+  const copy = t.bio;
+  const active = await getMarketCatalog(market);
 
   return (
     <main
@@ -41,6 +43,7 @@ export default async function BioPage() {
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       }}
     >
+      <style>{BIO_CSS}</style>
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: 36 }}>
         <div
@@ -68,7 +71,7 @@ export default async function BioPage() {
             letterSpacing: '-0.02em',
           }}
         >
-          {t.title}
+          {copy.title}
         </h1>
         <p
           style={{
@@ -77,7 +80,7 @@ export default async function BioPage() {
             margin: 0,
           }}
         >
-          {t.productCount(active.length)}
+          {copy.productCount(active.length)}
         </p>
       </div>
 
@@ -103,38 +106,14 @@ export default async function BioPage() {
               fontSize: 14,
             }}
           >
-            {t.noProduct}
+            {copy.noProduct}
           </div>
         ) : (
           active.map((product) => (
             <a
               key={product.id}
-              href={`${siteUrl}/${product.slug}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 16,
-                background: 'rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 16,
-                padding: '14px 18px',
-                textDecoration: 'none',
-                color: '#ffffff',
-                transition: 'all 0.18s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(124,58,237,0.25)';
-                e.currentTarget.style.borderColor = 'rgba(124,58,237,0.5)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 8px 32px rgba(124,58,237,0.2)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              href={`/${product.slug}`}
+              className="bio-link"
             >
               {/* Image or placeholder */}
               <div
@@ -151,12 +130,14 @@ export default async function BioPage() {
                   fontSize: 22,
                 }}
               >
-                {product.image_url ? (
-                  <Image
-                    src={product.image_url}
+                {resolveImage(productCoverUrl(product, 96)) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={productCoverUrl(product, 96) as string}
                     alt={product.name}
                     width={48}
                     height={48}
+                    loading="lazy"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
@@ -178,30 +159,16 @@ export default async function BioPage() {
                 >
                   {product.name}
                 </div>
-                {SHOW_PRICES && product.price && (
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: 'rgba(255,255,255,0.55)',
-                      marginTop: 2,
-                    }}
-                  >
-                    {product.original_price && product.original_price > product.price && (
-                      <span
-                        style={{
-                          textDecoration: 'line-through',
-                          marginRight: 6,
-                          color: 'rgba(255,255,255,0.3)',
-                        }}
-                      >
-                        {product.original_price.toFixed(2)}€
-                      </span>
-                    )}
-                    <span style={{ color: '#F59E0B', fontWeight: 700 }}>
-                      {product.price.toFixed(2)}€
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const price = getCardPrice(product, t.product.locale, market);
+                  return price || product.free_shipping ? (
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>
+                      {price && <span style={{ color: '#F59E0B', fontWeight: 700 }}>{price}</span>}
+                      {price && product.free_shipping ? ' · ' : ''}
+                      {product.free_shipping ? t.common.freeShipping : ''}
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               {/* Arrow */}
@@ -227,7 +194,7 @@ export default async function BioPage() {
           textAlign: 'center',
         }}
       >
-        {t.affiliateFooter} © {new Date().getFullYear()}
+        {copy.affiliateFooter} © {new Date().getFullYear()}
       </p>
     </main>
   );

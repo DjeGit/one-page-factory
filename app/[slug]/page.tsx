@@ -1,11 +1,15 @@
 import { Metadata } from 'next';
 import { categoryPath } from '@/lib/category-slugs';
 import Link from 'next/link';
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { headers, cookies } from 'next/headers';
 import { Check, Lock, Truck } from 'lucide-react';
-import { getProduct, getSupabaseAdmin, getActiveCategories } from '@/lib/supabase';
+import { getProduct, getSupabaseAdmin } from '@/lib/supabase';
+import { getMarketCatalog, getNavCategories, isPlausibleSlug } from '@/lib/site-products';
+import { requestCache } from '@/lib/site-request-cache';
+import { ttlCache } from '@/lib/ttl-cache';
+import { toMetaDescription } from '@/lib/seo-text';
+import ProductCard from '@/components/site/ProductCard';
 import PixelInjector from '@/components/landing/PixelInjector';
 import ExitIntentPopup from '@/components/landing/ExitIntentPopup';
 import EmailCapturePopup from '@/components/landing/EmailCapturePopup';
@@ -22,10 +26,10 @@ import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getProductGallery } from '@/lib/product-images';
 import { TOP_VENTES_SOURCES, getProductSource } from '@/lib/top-ventes';
 import { isBotUserAgent } from '@/lib/bot-detection';
-import { marketUrl } from '@/lib/site-url';
+import { getRequestMarket, marketUrl } from '@/lib/site-url';
 import { redirectToMarketDomain } from '@/lib/market-redirect';
 import { SITE_COPY } from '@/lib/site-copy';
-import { isValidMarket, DEFAULT_MARKET, getMarketLabel, getCurrencyForMarket } from '@/lib/market';
+import { isValidMarket, DEFAULT_MARKET, getMarketLabel } from '@/lib/market';
 import type { Market } from '@/lib/market';
 import type { ABTest, Category, Product } from '@/types';
 import { getDisplayPrice } from '@/lib/pricing';
@@ -35,9 +39,25 @@ interface Props {
   params: { slug: string };
 }
 
+// generateMetadata et la page lisaient chacune le produit (2 requêtes par
+// visite) : mémoïsé le temps d'une requête.
+const loadProduct = requestCache((slug: string) => (isPlausibleSlug(slug) ? getProduct(slug) : Promise.resolve(null)));
+
+const OG_LOCALE: Record<Market, string> = { fr: 'fr_FR', es: 'es_ES', uk: 'en_GB' };
+const NOT_FOUND_TITLE: Record<Market, string> = { fr: 'Produit introuvable', es: 'Producto no encontrado', uk: 'Product not found' };
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const product = await getProduct(params.slug);
-  if (!product) return { title: 'Produit introuvable' };
+  const product = await loadProduct(params.slug);
+  if (!product) {
+    // Titre dans la langue du domaine visité (avant : toujours en français).
+    let market: Market = DEFAULT_MARKET;
+    try {
+      market = getRequestMarket(headers());
+    } catch {
+      // hors requête (aperçu, test) : français par défaut
+    }
+    return { title: NOT_FOUND_TITLE[market], robots: { index: false, follow: false } };
+  }
 
   // Audit C1 : l'URL de référence est le domaine du MARCHÉ du produit, pas
   // une variable d'environnement unique (qui faisait pointer le canonical de
@@ -51,23 +71,32 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ogImage = cover
     ? getCloudinaryUrl(cover, { width: 1200, height: 630, crop: 'fill', format: 'auto', quality: 'auto' })
     : null;
+  const title = product.meta_title || product.name;
+  // Description de repli coupée à ~160 caractères (le texte complet du produit
+  // fait plusieurs paragraphes). Sans photo, on laisse l'image de partage par
+  // défaut du site (app/opengraph-image.tsx) au lieu d'un tableau vide qui la masquait.
+  const description = toMetaDescription(product.meta_description || product.description);
 
   return {
-    title: product.meta_title || product.name,
-    description: product.meta_description || product.description || undefined,
+    title,
+    description,
     openGraph: {
       type: 'website',
       siteName: 'Tendpick',
-      title: product.meta_title || product.name,
-      description: product.meta_description || product.description || undefined,
-      images: ogImage ? [ogImage] : [],
+      locale: OG_LOCALE[productMarket],
+      title,
+      description,
+      // La clé `images` est OMISE (et non mise à undefined/[]) quand il n'y a pas
+      // de photo : Next n'applique l'image de partage par défaut du site
+      // (app/opengraph-image.tsx) que si la clé est absente.
+      ...(ogImage ? { images: [ogImage] } : {}),
       url: pageUrl,
     },
     twitter: {
       card: 'summary_large_image',
-      title: product.meta_title || product.name,
-      description: product.meta_description || product.description || undefined,
-      images: ogImage ? [ogImage] : [],
+      title,
+      description,
+      ...(ogImage ? { images: [ogImage] } : {}),
     },
     alternates: {
       canonical: pageUrl,
@@ -98,8 +127,14 @@ async function trackServerPageView(productId: string) {
   }
 }
 
-// Fetch active A/B test for a product (server-side)
+// Test A/B actif d'un produit (serveur). Mis en cache 60 s : la grande majorité
+// des fiches n'ont aucun test, ce n'est pas la peine de questionner la base à
+// chaque visite pour le savoir.
 async function getActiveABTest(productId: string): Promise<ABTest | null> {
+  return ttlCache(`abtest:${productId}`, 60_000, () => fetchActiveABTest(productId), () => false);
+}
+
+async function fetchActiveABTest(productId: string): Promise<ABTest | null> {
   try {
     const sb = getSupabaseAdmin();
     const { data, error } = await sb
@@ -108,7 +143,8 @@ async function getActiveABTest(productId: string): Promise<ABTest | null> {
       .eq('product_id', productId)
       .eq('active', true)
       .is('winner', null)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (error || !data) return null;
     return data as ABTest;
@@ -118,42 +154,13 @@ async function getActiveABTest(productId: string): Promise<ABTest | null> {
 }
 
 // "Vous aimerez aussi" : d'abord la même catégorie, complété par les plus
-// récents du même marché si la catégorie n'en a pas assez (4 cartes).
+// récents du même marché (4 cartes). Calculé à partir du catalogue en cache
+// (lib/site-products.ts) : aucune requête supplémentaire.
 async function getRelatedProducts(product: Product, market: Market): Promise<Product[]> {
-  try {
-    const sb = getSupabaseAdmin();
-    const picked: Product[] = [];
-
-    if (product.category_id) {
-      const { data } = await sb
-        .from('products')
-        .select('*')
-        .eq('active', true)
-        .eq('market', market)
-        .eq('category_id', product.category_id)
-        .neq('id', product.id)
-        .order('updated_at', { ascending: false })
-        .limit(4);
-      picked.push(...((data as Product[]) || []));
-    }
-
-    if (picked.length < 4) {
-      const exclude = [product.id, ...picked.map((p) => p.id)];
-      const { data } = await sb
-        .from('products')
-        .select('*')
-        .eq('active', true)
-        .eq('market', market)
-        .not('id', 'in', `(${exclude.join(',')})`)
-        .order('updated_at', { ascending: false })
-        .limit(4 - picked.length);
-      picked.push(...((data as Product[]) || []));
-    }
-
-    return picked;
-  } catch {
-    return [];
-  }
+  const others = (await getMarketCatalog(market)).filter((p) => p.id !== product.id);
+  const sameCategory = product.category_id ? others.filter((p) => p.category_id === product.category_id) : [];
+  const rest = others.filter((p) => !sameCategory.includes(p));
+  return [...sameCategory, ...rest].slice(0, 4);
 }
 
 function categoryName(c: Category, market: Market): string {
@@ -163,7 +170,7 @@ function categoryName(c: Category, market: Market): string {
 }
 
 export default async function ProductPage({ params }: Props) {
-  const product = await getProduct(params.slug);
+  const product = await loadProduct(params.slug);
 
   if (!product) {
     notFound();
@@ -182,7 +189,7 @@ export default async function ProductPage({ params }: Props) {
   trackServerPageView(product.id);
 
   const [categories, related, abTest] = await Promise.all([
-    getActiveCategories(market),
+    getNavCategories(market),
     getRelatedProducts(product, market),
     getActiveABTest(product.id),
   ]);
@@ -217,23 +224,13 @@ export default async function ProductPage({ params }: Props) {
   const display = getDisplayPrice(product, p.locale, market);
   const priceLabel = display?.label ?? null;
   const priceNote = display?.merchantPrice && display.checkedAt ? p.priceNote(display.checkedAt) : null;
-  const withOriginal = !!(display && product.original_price && product.price && product.original_price > product.price);
-  const fmt = new Intl.NumberFormat(p.locale, {
-    style: 'currency',
-    currency: product.price_currency || getCurrencyForMarket(market),
-  });
-  const originalLabel = withOriginal && product.original_price ? fmt.format(product.original_price) : null;
-  const discount =
-    withOriginal && product.original_price && product.price
-      ? Math.round(((product.original_price - product.price) / product.original_price) * 100)
-      : null;
-
   const title = heroTitle || product.hero_title || product.name;
   const subtitle = heroSubtitle || product.hero_subtitle;
   const ctaLabel = heroCta || p.seeOffer(sourceLabel);
 
-  const benefits = product.benefits || [];
-  const faq = product.faq || [];
+  const benefits = (product.benefits || []).filter((b) => b && b.title?.trim());
+  // Même filtre que le JSON-LD FAQPage : ce que Google lit = ce que le visiteur voit.
+  const faq = (product.faq || []).filter((f) => f && f.question?.trim() && f.answer?.trim());
   const paragraphs = (product.description || '')
     .split(/\n{2,}/)
     .map((s) => s.trim())
@@ -304,14 +301,6 @@ export default async function ProductPage({ params }: Props) {
               {priceLabel && (
                 <div className="flex flex-wrap items-baseline gap-x-3.5 gap-y-1.5">
                   <span className="text-4xl font-extrabold text-site-cta">{priceLabel}</span>
-                  {originalLabel && (
-                    <span className="text-lg text-site-text-secondary line-through">{originalLabel}</span>
-                  )}
-                  {discount !== null && discount > 0 && (
-                    <span className="bg-[#FFF1EA] text-[#C2410C] text-[13px] font-bold px-2.5 py-1 rounded-full">
-                      -{discount} %
-                    </span>
-                  )}
                 </div>
               )}
 
@@ -473,48 +462,9 @@ export default async function ProductPage({ params }: Props) {
             <section className="pt-12">
               <h2 className="text-2xl font-extrabold text-site-primary mb-5">{p.relatedTitle}</h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                {related.map((r) => {
-                  const cover = getProductGallery(r)[0];
-                  const img = cover
-                    ? getCloudinaryUrl(cover, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
-                    : null;
-                  const rSource = TOP_VENTES_SOURCES.find((s) => s.key === getProductSource(r.affiliate_url));
-                  return (
-                    <Link
-                      key={r.id}
-                      href={`/${r.slug}`}
-                      className="bg-white border border-site-border rounded-xl p-4 flex flex-col gap-2 hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group"
-                    >
-                      <div className="h-40 relative bg-site-bg rounded-lg overflow-hidden flex-shrink-0">
-                        {img ? (
-                          <Image
-                            src={img}
-                            alt={r.name}
-                            fill
-                            className="object-cover group-hover:scale-105 transition-transform duration-300"
-                            unoptimized={img.includes('/fetch/')}
-                            sizes="(max-width: 640px) 50vw, 25vw"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
-                        )}
-                      </div>
-                      {rSource && <span className="text-xs text-site-text-secondary">{rSource.label}</span>}
-                      <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
-                        {r.hero_title || r.name}
-                      </p>
-                      {(() => {
-                        const rd = getDisplayPrice(r, p.locale, market);
-                        return rd ? (
-                          <span className="text-site-cta font-bold text-base">{rd.label}</span>
-                        ) : (
-                          <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
-                        );
-                      })()}
-                      {r.free_shipping && <FreeShippingBadge size="small" label={t.common.freeShipping} />}
-                    </Link>
-                  );
-                })}
+                {related.map((r) => (
+                  <ProductCard key={r.id} product={r} market={market} variant="boxed" />
+                ))}
               </div>
             </section>
           )}
@@ -534,7 +484,7 @@ export default async function ProductPage({ params }: Props) {
 
       {/* Exit intent popup */}
       {product.exit_intent_enabled !== false && (
-        <ExitIntentPopup productName={product.name} redirectCode={product.redirect_code} />
+        <ExitIntentPopup productName={product.name} redirectCode={product.redirect_code} market={market} />
       )}
 
       {/* Email capture popup */}
@@ -544,6 +494,7 @@ export default async function ProductPage({ params }: Props) {
           productName={product.name}
           slug={product.slug}
           discount={product.email_capture_discount || 10}
+          market={market}
         />
       )}
 

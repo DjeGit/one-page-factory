@@ -58,7 +58,9 @@ describe('generateMetadata (app/[slug]/page.tsx)', () => {
 
     const metadata = await generateMetadata({ params: { slug: 'produit-incomplet' } });
     expect(metadata.title).toBe('Produit Incomplet');
-    expect(metadata.openGraph?.images).toEqual([]);
+    // Sans photo : la clé `images` doit être ABSENTE pour que Next applique l'image
+    // de partage par défaut du site (une liste vide la masquait).
+    expect(metadata.openGraph).not.toHaveProperty('images');
   });
 
   it('le canonical suit le marché du produit, pas une variable d\'environnement (audit C1)', async () => {

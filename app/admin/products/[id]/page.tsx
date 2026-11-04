@@ -2,19 +2,23 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getProductById, getCategories } from '@/lib/supabase';
 import ProductForm from '@/components/admin/ProductForm';
+import { publicUrl } from '@/lib/admin-products-view';
+import { getMarketLabel } from '@/lib/market';
+import { withAdminAuth } from '@/app/admin/admin-guard';
+
+export const dynamic = 'force-dynamic';
 
 interface Props {
   params: { id: string };
 }
 
-export default async function EditProductPage({ params }: Props) {
-  const product = await getProductById(params.id);
+export default withAdminAuth(async function EditProductPage({ params }: Props) {
+  // En parallèle (avant : le produit, puis les catégories l'un après l'autre).
+  const [product, categories] = await Promise.all([getProductById(params.id), getCategories()]);
 
   if (!product) {
     notFound();
   }
-
-  const categories = await getCategories();
 
   return (
     <div className="p-8">
@@ -39,8 +43,9 @@ export default async function EditProductPage({ params }: Props) {
           {/* View live link */}
           {product.active && (
             <a
-              href={`/${product.slug}`}
+              href={publicUrl(product.market, `/${product.slug}`)}
               target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 font-medium text-sm rounded-xl hover:bg-gray-50 transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,6 +68,9 @@ export default async function EditProductPage({ params }: Props) {
             <span className={`w-1.5 h-1.5 rounded-full ${product.active ? 'bg-green-500' : 'bg-gray-400'}`} />
             {product.active ? 'Publié' : 'Non publié'}
           </span>
+          <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
+            Marché : {getMarketLabel(product.market)}
+          </span>
           <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-mono bg-gray-100 text-gray-600">
             /{product.slug}
           </span>
@@ -77,4 +85,4 @@ export default async function EditProductPage({ params }: Props) {
       </div>
     </div>
   );
-}
+});

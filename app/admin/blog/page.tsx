@@ -3,10 +3,11 @@ import { getAllBlogPostsAdmin } from '@/lib/blog';
 import BlogPostsTable from './BlogPostsTable';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { getMarketLabel } from '@/lib/market';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function BlogAdminPage() {
+export default withAdminAuth(async function BlogAdminPage() {
   const market = getActiveMarket();
   const { posts, error } = await getAllBlogPostsAdmin(market);
 
@@ -64,4 +65,4 @@ export default async function BlogAdminPage() {
       )}
     </div>
   );
-}
+});

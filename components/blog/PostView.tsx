@@ -4,14 +4,16 @@
  * blog (/blog/[slug]) et le guide d'achat (/guide-achat, /guide-achat/[slug]).
  */
 import Link from 'next/link';
-import Image from 'next/image';
 import type { ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { BlogPost } from '@/types';
 import type { Market } from '@/lib/market';
-import { getActiveCategories, getProductsByIds } from '@/lib/supabase';
+import { getProductsByIds } from '@/lib/supabase';
+import { getNavCategories } from '@/lib/site-products';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
+import { productCoverUrl } from '@/lib/site-image';
+import SiteImage from '@/components/site/SiteImage';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import BlogStructuredData from '@/components/landing/BlogStructuredData';
@@ -102,10 +104,13 @@ interface PostViewProps {
 export default async function PostView({ post, market, section, path, isGuideHub, after }: PostViewProps) {
   const t = SITE_COPY[market];
 
-  const [categories, linkedProducts] = await Promise.all([
-    getActiveCategories(market),
-    getProductsByIds(post.linked_product_ids),
+  const [categories, linkedAll] = await Promise.all([
+    getNavCategories(market),
+    getProductsByIds(post.linked_product_ids ?? []),
   ]);
+  // Seuls les produits du marché de la page : un produit d'un autre marché
+  // mènerait à une fiche d'un autre domaine (redirection) et à une autre langue.
+  const linkedProducts = linkedAll.filter((p) => p.market === market);
 
   // Signal de fraîcheur attendu par Google et par les lecteurs : la date de
   // dernière mise à jour quand elle est postérieure à la publication.
@@ -116,7 +121,7 @@ export default async function PostView({ post, market, section, path, isGuideHub
       ? fmt(post.updated_at)
       : null;
   const publishedDate = post.published_at ? fmt(post.published_at) : null;
-  const tagsShown = post.tags.slice(0, MAX_TAGS_SHOWN);
+  const tagsShown = (post.tags ?? []).slice(0, MAX_TAGS_SHOWN);
 
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
@@ -172,10 +177,10 @@ export default async function PostView({ post, market, section, path, isGuideHub
 
         {post.cover_image_url && (
           <div className="relative w-full h-64 sm:h-96 rounded-xl overflow-hidden mb-8 bg-site-bg">
-            <Image
+            <SiteImage
               src={getCloudinaryUrl(post.cover_image_url, { width: 1000, crop: 'fill', format: 'auto', quality: 'auto' })}
               alt={post.title}
-              fill
+              sizes="(max-width: 768px) 100vw, 768px"
               className="object-cover"
               priority
             />
@@ -207,9 +212,7 @@ export default async function PostView({ post, market, section, path, isGuideHub
             <h2 className="text-lg font-bold text-site-primary mb-4">{t.home.ourAdvice}</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               {linkedProducts.map((p) => {
-                const img = p.image_url
-                  ? getCloudinaryUrl(p.image_url, { width: 300, height: 300, crop: 'fill', format: 'auto', quality: 'auto' })
-                  : null;
+                const img = productCoverUrl(p, 300);
                 return (
                   // Carte : le titre et l'image mènent à la FICHE produit
                   // (lien interne, audit E10 : un article doit renforcer les
@@ -223,18 +226,12 @@ export default async function PostView({ post, market, section, path, isGuideHub
                   >
                     <Link href={`/${p.slug}`} className="flex flex-col flex-1">
                       <div className="aspect-square relative bg-site-bg flex-shrink-0">
-                        {img ? (
-                          <Image
-                            src={img}
-                            alt={p.name}
-                            fill
-                            className="object-cover group-hover:scale-105 transition-transform duration-300"
-                            unoptimized={img.includes('/fetch/')}
-                            sizes="(max-width: 640px) 50vw, 33vw"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-3xl text-site-border">📦</div>
-                        )}
+                        <SiteImage
+                          src={img}
+                          alt={p.name}
+                          sizes="(max-width: 640px) 50vw, 33vw"
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
                       </div>
                       <div className="p-3 pb-1">
                         <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug">{p.hero_title || p.name}</p>

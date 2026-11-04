@@ -8,30 +8,19 @@
  * marchés futurs hors zone euro.
  *
  * Auth : session admin (cookie) OU secret serveur-à-serveur (Bearer),
- * même pattern que /api/market/refresh.
+ * via lib/admin-auth.ts (isAuthorizedRequest) comme les autres crons.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { hashAdminToken } from '@/lib/admin-auth';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { unauthorized } from '../../_lib/http';
 
 const TARGET_CURRENCIES = ['GBP'] as const;
 
-function isAuthorized(req: NextRequest): boolean {
-  const authCookie = cookies().get('admin_auth');
-  const adminSecret = process.env.ADMIN_SECRET || 'changeme';
-  if (authCookie?.value === hashAdminToken(adminSecret)) return true;
-
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '');
-  const cronSecret = process.env.INTERNAL_CRON_SECRET || process.env.PIPELINE_SECRET || process.env.ADMIN_SECRET || '';
-  return Boolean(token) && Boolean(cronSecret) && token === cronSecret;
-}
-
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // Avant : copie locale de la vérification qui comparait les secrets avec `===` (faille de timing)
+  // et retombait sur le mot de passe par défaut « changeme » si ADMIN_SECRET était absent.
+  if (!isAuthorizedRequest(req)) return unauthorized();
 
   const sb = getSupabaseAdmin();
   const results: { currency: string; rate?: number; error?: string }[] = [];
@@ -44,7 +33,9 @@ export async function POST(req: NextRequest) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const rate = json?.rates?.[target];
-      if (typeof rate !== 'number') throw new Error('Réponse frankfurter.app sans taux exploitable');
+      if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
+        throw new Error('Réponse frankfurter.app sans taux exploitable');
+      }
 
       const { error } = await sb.from('exchange_rates').insert({
         base_currency: 'EUR',
@@ -56,6 +47,7 @@ export async function POST(req: NextRequest) {
 
       results.push({ currency: target, rate });
     } catch (err) {
+      console.error(`[api] cron/exchange-rates (${target}) :`, err);
       results.push({ currency: target, error: (err as Error).message });
     }
   }
@@ -65,7 +57,8 @@ export async function POST(req: NextRequest) {
 }
 
 // GET = dernier taux connu par devise, sans en récupérer un nouveau (lecture rapide pour l'UI).
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) return unauthorized();
   const sb = getSupabaseAdmin();
   const rows: { currency: string; rate: number | null; fetched_at: string | null }[] = [];
 

@@ -1,16 +1,15 @@
 import Link from 'next/link';
 import { permanentRedirect } from 'next/navigation';
-import Image from 'next/image';
+import SiteImage from '@/components/site/SiteImage';
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
-import { getMarketFromHost } from '@/lib/market-from-host';
-import { getPublishedBlogPosts, getBlogCategoriesCached } from '@/lib/blog';
-import { getActiveCategories } from '@/lib/supabase';
+import { getPublishedBlogPosts, getLatestPublishedBlogPosts, getBlogCategoriesCached } from '@/lib/blog';
+import { getNavCategories } from '@/lib/site-products';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { SITE_COPY } from '@/lib/site-copy';
-import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
+import { buildAlternates, getRequestMarket, hasIndexBlockingParams } from '@/lib/site-url';
 import { GUIDE_BASE_PATH, GUIDE_CATEGORY_SLUG } from '@/lib/buying-guide';
 
 export const dynamic = 'force-dynamic';
@@ -23,10 +22,11 @@ interface Props {
 // ?category= ne sont pas indexés (pages minces, doublons de la liste).
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const h = headers();
-  const market = getMarketFromHost(h.get('host'));
+  const market = getRequestMarket(h);
   const t = SITE_COPY[market];
   // Blog vide = page mince : non indexée tant qu'aucun article n'est publié.
-  const hasPosts = (await getPublishedBlogPosts(market)).length > 0;
+  // (lecture d'un seul article, en cache 60 s : pas besoin de charger toute la liste ici)
+  const hasPosts = (await getLatestPublishedBlogPosts(market, 1).catch(() => [])).length > 0;
   const blocked = !hasPosts || hasIndexBlockingParams(searchParams, ['tag', 'category']);
   const alternates = buildAlternates(h, '/blog');
   return {
@@ -45,7 +45,7 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
 }
 
 export default async function BlogIndexPage({ searchParams }: Props) {
-  const market = getMarketFromHost(headers().get('host'));
+  const market = getRequestMarket(headers());
   const t = SITE_COPY[market];
   const tag = searchParams.tag?.trim() || undefined;
   const categorySlug = searchParams.category?.trim() || undefined;
@@ -56,7 +56,7 @@ export default async function BlogIndexPage({ searchParams }: Props) {
 
   const [posts, categories, blogCategories] = await Promise.all([
     getPublishedBlogPosts(market, { tag, categorySlug }),
-    getActiveCategories(market),
+    getNavCategories(market),
     getBlogCategoriesCached(),
   ]);
 
@@ -131,18 +131,13 @@ export default async function BlogIndexPage({ searchParams }: Props) {
                   className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
                 >
                   <div className="h-40 relative bg-site-bg flex-shrink-0">
-                    {img ? (
-                      <Image
-                        src={img}
-                        alt={t.home.blogImageAlt}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        unoptimized={img.includes('/fetch/')}
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📝</div>
-                    )}
+                    <SiteImage
+                      src={img}
+                      alt={post.title}
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      fallback={<div className="w-full h-full flex items-center justify-center text-4xl text-site-border" aria-hidden="true">📝</div>}
+                    />
                   </div>
                   <div className="p-4 flex flex-col gap-1.5 flex-1">
                     {post.category && (

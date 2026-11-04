@@ -3,6 +3,9 @@
  * Les compteurs et les listes portent sur le marché affiché dans l'admin (sélecteur de marché).
  */
 
+import { MARKET_ORIGIN } from '@/lib/site-url';
+import { isValidMarket } from '@/lib/market';
+
 export type CatParam = { kind: 'home' } | { kind: 'all' } | { kind: 'none' } | { kind: 'slug'; slug: string };
 export type StatusTab = 'all' | 'live' | 'draft';
 
@@ -116,3 +119,72 @@ export function buildPresence(rows: PresenceRow[]): Record<string, { market: str
 
 export const presenceOf = (p: Pick<ViewProduct, 'id' | 'source_product_ref'>, map: Record<string, { market: string; active: boolean }[]>) =>
   map[p.source_product_ref || p.id] || [];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Adresses publiques, résumé de synchronisation et allègement des lignes
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Adresse PUBLIQUE d'une page d'un marché (tendpick.fr / .es / .com).
+ * Dans l'admin, un lien relatif « /mon-produit » ne marche pas : le back-office vit sur son propre
+ * domaine, qui renvoie tout ce qui n'est pas /admin vers le tableau de bord.
+ */
+export function publicUrl(market: string | null | undefined, path: string): string {
+  const origin = MARKET_ORIGIN[isValidMarket(market) ? market : 'fr'];
+  const p = !path || path === '/' ? '' : path.startsWith('/') ? path : `/${path}`;
+  return `${origin}${p}`;
+}
+
+export interface SyncReport {
+  activated?: { market: string }[];
+  deactivated?: { market: string }[];
+  skipped?: { market: string; reasons: string[] }[];
+}
+
+/**
+ * Résumé lisible du résultat de /api/products/[id] après un changement d'état en ligne / brouillon :
+ * les autres marchés du même produit suivent, sauf ceux qui ne sont pas prêts (lien neutre, pas de photo).
+ * `blocked` = au moins un marché n'a pas pu suivre : à signaler en avertissement.
+ */
+export function summarizeSync(sync: SyncReport | null | undefined, nowActive: boolean): { text: string; blocked: boolean } {
+  if (!sync) return { text: '', blocked: false };
+  const parts: string[] = [];
+  const moved = [...(sync.activated ?? []), ...(sync.deactivated ?? [])].map((x) => x.market.toUpperCase());
+  if (moved.length) parts.push(`${nowActive ? 'Activé' : 'Désactivé'} aussi sur : ${moved.join(', ')}.`);
+  for (const s of sync.skipped ?? []) parts.push(`${s.market.toUpperCase()} resté en brouillon (${s.reasons.join(', ')}).`);
+  return { text: parts.join(' '), blocked: (sync.skipped?.length ?? 0) > 0 };
+}
+
+/** Champs réellement utilisés par la liste des produits : évite d'envoyer au navigateur les textes IA, FAQ, scripts… */
+export interface TableProduct {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  market: string;
+  category_id: string | null;
+  source_product_ref: string | null;
+  price: number | null;
+  price_currency: string | null;
+  image_url: string | null;
+  images: string[];
+}
+
+export function toTableProduct(p: {
+  id: string; name: string; slug: string; active: boolean; market?: string | null; category_id?: string | null;
+  source_product_ref?: string | null; price?: number | null; price_currency?: string | null; image_url?: string | null; images?: string[] | null;
+}): TableProduct {
+  return {
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    active: !!p.active,
+    market: p.market ?? 'fr',
+    category_id: p.category_id ?? null,
+    source_product_ref: p.source_product_ref ?? null,
+    price: p.price ?? null,
+    price_currency: p.price_currency ?? null,
+    image_url: p.image_url ?? null,
+    images: Array.isArray(p.images) ? p.images.filter((v) => typeof v === 'string' && v.trim() !== '').slice(0, 1) : [],
+  };
+}

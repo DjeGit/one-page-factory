@@ -26,6 +26,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 import { getProductPricesBatched, type MarketId } from '@/lib/keepa';
 import { requireInternalAuth, logSyncStart, logSyncEnd } from '@/lib/api-auth';
+import { badRequest, serverError } from '../../_lib/http';
+import { parseLegacyMarkets, parseProductIds, readSyncBody, shortError } from '../../_lib/legacy-sync-input';
 
 interface ProductWithAsins {
   id: string;  // UUID (Supabase)
@@ -247,25 +249,26 @@ export async function POST(request: NextRequest) {
 
   const globalStart = Date.now();
 
-  let body: {
-    markets?: MarketId[];
-    product_ids?: string[];  // UUIDs
-    cross_market_discovery?: boolean;
-  } = {};
+  const parsed = await readSyncBody(request);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
 
-  try {
-    body = await request.json();
-  } catch {
-    // Use defaults
+  const m = parseLegacyMarkets(body.markets);
+  if ('response' in m) return m.response;
+  const markets: MarketId[] = m.markets;
+
+  const pid = parseProductIds(body.product_ids);
+  if ('response' in pid) return pid.response;
+  const productIds = pid.ids;
+
+  if (body.cross_market_discovery !== undefined && typeof body.cross_market_discovery !== 'boolean') {
+    return badRequest('cross_market_discovery doit être un booléen');
   }
-
-  const markets: MarketId[] = body.markets ?? ['fr', 'es', 'com'];
   const enableDiscovery = body.cross_market_discovery ?? true;
 
   // Fetch products
-  const productFilter =
-    body.product_ids?.length ? `AND id = ANY($1::uuid[])` : '';
-  const params = body.product_ids?.length ? [body.product_ids] : [];
+  const productFilter = productIds.length ? `AND id = ANY($1::uuid[])` : '';
+  const params = productIds.length ? [productIds] : [];
 
   let products: ProductWithAsins[];
   try {
@@ -279,8 +282,8 @@ export async function POST(request: NextRequest) {
       params
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `DB error: ${msg}` }, { status: 500 });
+    console.error('[AvailCheck] lecture des produits :', shortError(err));
+    return serverError('Erreur de base de données');
   }
 
   // Run availability checks per market
@@ -317,21 +320,26 @@ export async function GET(request: NextRequest) {
   const authError = requireInternalAuth(request);
   if (authError) return authError;
 
-  const stats = await query<{
-    market_id: string;
-    total: number;
-    available: number;
-  }>(
-    `SELECT
-       'fr' AS market_id,
-       COUNT(*) AS total,
-       COUNT(*) FILTER (WHERE available_fr = true) AS available
-     FROM products
-     UNION ALL
-     SELECT 'es', COUNT(*), COUNT(*) FILTER (WHERE available_es = true) FROM products
-     UNION ALL
-     SELECT 'com', COUNT(*), COUNT(*) FILTER (WHERE available_com = true) FROM products`
-  );
+  try {
+    const stats = await query<{
+      market_id: string;
+      total: number;
+      available: number;
+    }>(
+      `SELECT
+         'fr' AS market_id,
+         COUNT(*) AS total,
+         COUNT(*) FILTER (WHERE available_fr = true) AS available
+       FROM products
+       UNION ALL
+       SELECT 'es', COUNT(*), COUNT(*) FILTER (WHERE available_es = true) FROM products
+       UNION ALL
+       SELECT 'com', COUNT(*), COUNT(*) FILTER (WHERE available_com = true) FROM products`
+    );
 
-  return NextResponse.json({ availability: stats });
+    return NextResponse.json({ availability: stats });
+  } catch (err) {
+    console.error('[AvailCheck] statut :', shortError(err));
+    return serverError('Erreur de base de données');
+  }
 }

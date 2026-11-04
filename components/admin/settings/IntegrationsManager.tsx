@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { clsx } from 'clsx';
 import { INTEGRATION_DESCRIPTIONS } from '@/lib/integrations/labels';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 interface Entry {
   id: string;
@@ -39,12 +40,13 @@ function IntegrationRow({ entry, onChanged }: { entry: Entry; onChanged: () => v
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !entry.enabled }),
       });
-      const data = await res.json();
       if (!res.ok) {
-        setTestResult({ ok: false, message: data.error || 'Erreur' });
+        setTestResult({ ok: false, message: await readApiError(res, 'Changement impossible') });
       } else {
         onChanged();
       }
+    } catch (err) {
+      setTestResult({ ok: false, message: networkErrorMessage(err) });
     } finally {
       setBusy(false);
     }
@@ -55,8 +57,14 @@ function IntegrationRow({ entry, onChanged }: { entry: Entry; onChanged: () => v
     setTestResult(null);
     try {
       const res = await fetch(`/api/integrations/${entry.id}/test`, { method: 'POST' });
-      const data = await res.json();
-      setTestResult(data);
+      if (!res.ok) {
+        setTestResult({ ok: false, message: await readApiError(res, 'Test impossible') });
+      } else {
+        const data = await res.json();
+        setTestResult({ ok: !!data.ok, message: String(data.message ?? '') });
+      }
+    } catch (err) {
+      setTestResult({ ok: false, message: networkErrorMessage(err) });
     } finally {
       setBusy(false);
     }
@@ -94,6 +102,9 @@ function IntegrationRow({ entry, onChanged }: { entry: Entry; onChanged: () => v
         <button
           type="button"
           onClick={toggle}
+          role="switch"
+          aria-checked={entry.enabled}
+          aria-label={`${entry.enabled ? 'Désactiver' : 'Activer'} ${entry.displayName}`}
           disabled={busy || !entry.configured}
           title={!entry.configured ? "Ajoute la clé API dans .env.local d'abord" : undefined}
           className={clsx(
@@ -125,11 +136,15 @@ export default function IntegrationsManager({
   const [socialChannels, setSocialChannels] = useState(initialSocialChannels);
 
   const refresh = useCallback(async () => {
-    const res = await fetch('/api/integrations');
-    if (!res.ok) return;
-    const data = await res.json();
-    setDataSources(data.dataSources);
-    setSocialChannels(data.socialChannels);
+    try {
+      const res = await fetch('/api/integrations');
+      if (!res.ok) return;
+      const data = await res.json();
+      setDataSources(data.dataSources);
+      setSocialChannels(data.socialChannels);
+    } catch {
+      // la liste affichée reste celle du serveur au chargement de la page
+    }
   }, []);
 
   return (

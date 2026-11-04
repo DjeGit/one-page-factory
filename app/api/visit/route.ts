@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { isBotUserAgent } from '@/lib/bot-detection';
+import { createRateLimiter, getClientIp } from '../_lib/http';
 import { getRequestHost, getRequestMarket, isBackofficeHost, isTendpickHost } from '@/lib/site-url';
 import {
   VISITOR_COOKIE,
@@ -37,6 +38,8 @@ export const dynamic = 'force-dynamic';
 // ou un abus, sans état partagé.
 const RATE_WINDOW_MS = 60_000;
 const RATE_MAX = 90;
+// 600/min par IP : large pour une box d'entreprise ou un réseau mobile partagé, bloque une boucle.
+const ipLimiter = createRateLimiter(600, RATE_WINDOW_MS);
 const rateCache = new Map<string, { count: number; resetAt: number }>();
 
 function rateLimited(key: string): boolean {
@@ -74,9 +77,15 @@ function ignored(req: NextRequest): boolean {
 export async function POST(req: NextRequest) {
   if (ignored(req)) return new NextResponse(null, { status: 204 });
 
+  // Plafond par IP : sans cookie, chaque requête reçoit un nouvel identifiant de visiteur et échappait à la limite ci-dessous.
+  const ip = getClientIp(req.headers);
+  if (ip && !ipLimiter.allow(ip)) return new NextResponse(null, { status: 429 });
+
   let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    const parsed: unknown = await req.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('corps non objet');
+    body = parsed as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: 'JSON invalide' }, { status: 400 });
   }
@@ -92,11 +101,12 @@ export async function POST(req: NextRequest) {
     if (!isUuid(body.visitId) || seconds === null || !isUuid(existingId)) {
       return NextResponse.json({ error: 'Paramètres invalides' }, { status: 400 });
     }
-    await sb
+    const { error: endError } = await sb
       .from('page_visits')
       .update({ duration_seconds: seconds })
       .eq('id', body.visitId)
       .eq('visitor_id', existingId);
+    if (endError) console.error('POST /api/visit (durée) :', endError.message);
     return new NextResponse(null, { status: 204 });
   }
 

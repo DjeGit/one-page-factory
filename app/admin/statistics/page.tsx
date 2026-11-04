@@ -2,6 +2,7 @@ import { getDashboardStats } from '@/lib/supabase';
 import { computeMarketROI } from '@/lib/analytics/roi';
 import { MARKETS } from '@/lib/market';
 import StatsCard from '@/components/admin/StatsCard';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,13 +11,13 @@ export const dynamic = 'force-dynamic';
  * place) des Analytics filtrées par marché actif. Toutes les devises sont
  * ramenées en EUR (lib/analytics/roi.ts) pour être additionnables.
  */
-export default async function StatisticsPage() {
+export default withAdminAuth(async function StatisticsPage() {
+  // Tout en parallèle (avant : pour chaque marché, les statistiques puis le ROI l'un après l'autre).
   const perMarket = await Promise.all(
-    MARKETS.map(async (m) => ({
-      market: m,
-      stats: await getDashboardStats(m.code),
-      roi: await computeMarketROI(m.code),
-    }))
+    MARKETS.map(async (m) => {
+      const [stats, roi] = await Promise.all([getDashboardStats(m.code), computeMarketROI(m.code)]);
+      return { market: m, stats, roi };
+    })
   );
 
   const totals = perMarket.reduce(
@@ -108,4 +109,4 @@ export default async function StatisticsPage() {
       </div>
     </div>
   );
-}
+});

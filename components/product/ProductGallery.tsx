@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
+import { resolveImage } from '@/lib/site-image';
 
 interface Props {
   images: string[];
@@ -25,7 +26,9 @@ interface Props {
 // glisser du doigt pour changer de photo sur mobile. Les images sont déjà
 // recadrées en carré à l'upload (app/api/upload) ; object-cover ici n'est
 // qu'un filet pour les images ajoutées par simple URL.
-export default function ProductGallery({ images, alt, labels }: Props) {
+export default function ProductGallery({ images: rawImages, alt, labels }: Props) {
+  // Une photo dont l'adresse est inutilisable ferait planter next/image : on l'écarte.
+  const images = rawImages.filter((img) => resolveImage(getCloudinaryUrl(img, { width: 160, height: 160 })) !== null);
   const [index, setIndex] = useState(0);
   const [zoom, setZoom] = useState<{ x: number; y: number } | null>(null);
   const touchStartX = useRef<number | null>(null);
@@ -105,7 +108,7 @@ export default function ProductGallery({ images, alt, labels }: Props) {
                     fill
                     sizes="76px"
                     className="object-cover"
-                    unoptimized={thumb.includes('/fetch/')}
+                    unoptimized={resolveImage(thumb)?.unoptimized ?? true}
                   />
                 </button>
               </li>
@@ -137,7 +140,7 @@ export default function ProductGallery({ images, alt, labels }: Props) {
                 ? { transform: 'scale(1.8)', transformOrigin: `${zoom.x}% ${zoom.y}%` }
                 : undefined
             }
-            unoptimized={mainSrc.includes('/fetch/')}
+            unoptimized={resolveImage(mainSrc)?.unoptimized ?? true}
           />
 
           {total > 1 && (

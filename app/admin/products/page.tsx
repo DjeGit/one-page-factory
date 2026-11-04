@@ -1,28 +1,47 @@
 import Link from 'next/link';
-import { getAllProducts, getAnalytics, getCategories, getSupabaseAdmin } from '@/lib/supabase';
-import ProductsTable from './ProductsTable';
+import { getAnalytics, getCategories, getSupabaseAdmin } from '@/lib/supabase';
+import ProductsTable, { type ProductStats } from './ProductsTable';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 import CSVImportButton from '@/components/admin/CSVImportButton';
 import CategoryCards from '@/components/admin/products/CategoryCards';
 import CategoryBar from '@/components/admin/products/CategoryBar';
 import { getActiveMarket } from '@/lib/get-active-market';
-import { buildPresence, categoryName, countByCategory, parseCat, productsFor, type PresenceRow } from '@/lib/admin-products-view';
+import { buildPresence, categoryName, countByCategory, parseCat, productsFor, toTableProduct, type PresenceRow } from '@/lib/admin-products-view';
 
 export const dynamic = 'force-dynamic';
 
 const MARKET_LABEL: Record<string, string> = { fr: '🇫🇷 France', es: '🇪🇸 España', uk: '🇬🇧 UK' };
 
-export default async function ProductsPage({ searchParams }: { searchParams?: { cat?: string | string[] } }) {
+// Colonnes réellement utiles à la liste (pas les textes IA, FAQ, scripts… : plusieurs Ko par produit
+// qui seraient sinon envoyés au navigateur pour rien).
+const LIST_COLUMNS = 'id, name, slug, active, market, category_id, source_product_ref, price, price_currency, image_url, images';
+
+export default withAdminAuth(async function ProductsPage({ searchParams }: { searchParams?: { cat?: string | string[] } }) {
   const market = getActiveMarket();
   const cat = parseCat(searchParams?.cat);
-  const [products, analytics, categories, presenceRes] = await Promise.all([
-    getAllProducts(market),
+  // Une seule requête produits pour les 3 marchés : sert à la liste du marché affiché ET aux pastilles FR / ES / UK.
+  const [allRowsRes, analytics, categories] = await Promise.all([
+    getSupabaseAdmin().from('products').select(LIST_COLUMNS).order('created_at', { ascending: false }),
     getAnalytics(market),
     getCategories(),
-    getSupabaseAdmin().from('products').select('id, market, active, source_product_ref'),
   ]);
 
-  const analyticsMap = new Map(analytics.map((a) => [a.product_id, a]));
-  const presence = buildPresence((presenceRes.data ?? []) as PresenceRow[]);
+  if (allRowsRes.error) {
+    return (
+      <div className="p-8">
+        <div role="alert" className="bg-red-50 border border-red-200 rounded-2xl p-6 text-red-800">
+          <p className="font-bold mb-1">Impossible de charger les produits.</p>
+          <p className="text-sm mb-4">Vos produits ne sont pas supprimés : la lecture a échoué ({allRowsRes.error.message}). Rechargez la page.</p>
+          <Link href="/admin/products" className="inline-block px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-xl hover:bg-red-700">Recharger</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const allRows = (allRowsRes.data ?? []) as unknown as (Parameters<typeof toTableProduct>[0] & { market: string })[];
+  const products = allRows.filter((r) => r.market === market).map(toTableProduct);
+  const analyticsMap: ProductStats = Object.fromEntries(analytics.map((a) => [a.product_id, { views: a.views, clicks: a.clicks, ctr: a.ctr }]));
+  const presence = buildPresence(allRows as unknown as PresenceRow[]);
   const counts = countByCategory(products, categories, market);
   const current = cat.kind === 'slug' ? categories.find((c) => c.slug === cat.slug) : undefined;
   const list = productsFor(products, cat, categories);
@@ -53,6 +72,9 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/admin/categories" className="text-sm font-semibold text-gray-600 hover:text-primary-700 underline-offset-2 hover:underline">
+            Gérer les catégories
+          </Link>
           <CSVImportButton />
           <Link
             href="/admin/products/new"
@@ -93,4 +115,4 @@ export default async function ProductsPage({ searchParams }: { searchParams?: { 
       )}
     </div>
   );
-}
+});

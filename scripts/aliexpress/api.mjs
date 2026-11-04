@@ -143,10 +143,12 @@ const num = (v) => {
   const n = Number(String(v ?? '').replace(',', '.').replace(/[^\d.\-]/g, ''));
   return Number.isFinite(n) && String(v ?? '') !== '' ? n : null;
 };
-/** « 7.0% » ou « 7 » → 0.07 */
+/** « 7.0% » ou « 7 » → 0.07 ; « 0.5% » → 0.005 ; « 1% » → 0.01 (un « % » veut toujours dire pourcentage). Un nombre sans « % » ≤ 1 est déjà une fraction. */
 export function parseRate(v) {
   const n = num(v);
-  return n === null ? null : n > 1 ? Math.round(n * 100) / 10000 : n;
+  if (n === null) return null;
+  if (typeof v === 'string' && v.includes('%')) return Math.round(n * 100) / 10000;
+  return n > 1 ? Math.round(n * 100) / 10000 : n;
 }
 
 /** Réponse de aliexpress.affiliate.productdetail.get → fiche normalisée (ou null si le produit est absent). */

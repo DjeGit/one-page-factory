@@ -1,8 +1,16 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { DEFAULT_MARKET, isValidMarket, type Market } from '@/lib/market';
-import { getMarketFromHost } from '@/lib/market-from-host';
+import { getRequestMarket } from '@/lib/site-url';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { badRequest, createRateLimiter, dbErrorResponse, getClientIp, isUuid, readJsonObject, unauthorized } from '../_lib/http';
+
+const CONTACT_TYPES = ['lead', 'client', 'fournisseur', 'partenaire'];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const PAGE = 1000;
+const MAX_ROWS = 20000;
+// Capture publique : 10 inscriptions par minute et par visiteur suffisent largement à un humain.
+const captureLimiter = createRateLimiter(10, 60_000);
 
 // --- Email de bienvenue transactionnel (Brevo) ---
 const WELCOME_CONTENT = {
@@ -67,27 +75,37 @@ async function syncToBrevo(email: string, market: string, productName?: string) 
 // optionnels utilisés par l'écran Admin > Contacts (Répertoire).
 // marketFilter matche soit market (marché "principal", leads auto-capturés)
 // soit markets[] (contact manuel rattaché à plusieurs marchés à la fois).
+// Les filtres sont appliqués par la base (avant : TOUTE la table était chargée puis filtrée en
+// mémoire, et Supabase tronque silencieusement à 1000 lignes — les contacts au-delà disparaissaient
+// de l'écran). La liste est lue par pages de 1000.
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
   const sb = getSupabaseAdmin();
   const url = new URL(req.url);
   const productFilter = url.searchParams.get('product_id');
   const marketFilter = url.searchParams.get('market');
   const typeFilter = url.searchParams.get('contact_type');
-  const { data } = await sb
-    .from('email_leads')
-    .select('*, products(name, slug)')
-    .order('created_at', { ascending: false });
-  let leads = data || [];
-  if (productFilter) leads = leads.filter((l: Record<string, unknown>) => l.product_id === productFilter);
-  if (marketFilter) {
-    leads = leads.filter((l: Record<string, unknown>) =>
-      l.market === marketFilter || (Array.isArray(l.markets) && (l.markets as string[]).includes(marketFilter))
-    );
+  if (productFilter && !isUuid(productFilter)) return badRequest('product_id invalide');
+  if (marketFilter && !isValidMarket(marketFilter)) return badRequest('Marché invalide');
+  if (typeFilter && !CONTACT_TYPES.includes(typeFilter)) return badRequest('Type de contact invalide');
+
+  const leads: Record<string, unknown>[] = [];
+  for (let from = 0; from < MAX_ROWS; from += PAGE) {
+    let query = sb
+      .from('email_leads')
+      .select('*, products(name, slug)')
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true }) // ordre stable entre deux pages
+      .range(from, from + PAGE - 1);
+    if (productFilter) query = query.eq('product_id', productFilter);
+    // marketFilter est validé (fr/es/uk) : sûr dans l'expression de filtre.
+    if (marketFilter) query = query.or(`market.eq.${marketFilter},markets.cs.{${marketFilter}}`);
+    if (typeFilter) query = query.eq('contact_type', typeFilter);
+    const { data, error } = await query;
+    if (error) return dbErrorResponse('GET /api/leads', error);
+    leads.push(...(data ?? []));
+    if (!data || data.length < PAGE) break;
   }
-  if (typeFilter) leads = leads.filter((l: Record<string, unknown>) => l.contact_type === typeFilter);
   return NextResponse.json(leads);
 }
 
@@ -108,7 +126,7 @@ async function createManualContact(sb: ReturnType<typeof getSupabaseAdmin>, body
   if (!email && !phone) {
     return NextResponse.json({ error: 'Renseignez au moins un email ou un téléphone' }, { status: 400 });
   }
-  if (email && !email.includes('@')) {
+  if (email && !EMAIL_RE.test(email)) {
     return NextResponse.json({ error: 'Email invalide' }, { status: 400 });
   }
 
@@ -136,28 +154,39 @@ async function createManualContact(sb: ReturnType<typeof getSupabaseAdmin>, body
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return dbErrorResponse('POST /api/leads (contact manuel)', error);
   return NextResponse.json({ success: true, data });
 }
 
 export async function POST(req: NextRequest) {
   const sb = getSupabaseAdmin();
-  const body = await req.json();
+  const parsed = await readJsonObject(req);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
 
   // Ajout manuel de contact (client/fournisseur, écran admin Répertoire) —
   // distinct de la capture publique ci-dessous, qui doit rester accessible
   // sans authentification (formulaires sur les pages produit publiques).
   if (body.manual === true) {
-    if (!isAuthorizedRequest(req)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    if (!isAuthorizedRequest(req)) return unauthorized();
     return createManualContact(sb, body);
   }
 
-  const { email, product_id, source_slug } = body;
-  if (!email || !email.includes('@')) {
-    return NextResponse.json({ error: 'Email invalide' }, { status: 400 });
+  const ip = getClientIp(req.headers);
+  if (ip && !captureLimiter.allow(ip)) {
+    return NextResponse.json({ error: 'Trop de requêtes, réessayez dans une minute.' }, { status: 429 });
   }
+
+  // Avant : `email.includes` plantait (500) si email n'était pas un texte ; product_id n'était pas
+  // vérifié ; la casse et les espaces créaient des doublons (Jean@x.fr / jean@x.fr).
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
+    return badRequest('Email invalide');
+  }
+  const product_id = typeof body.product_id === 'string' && body.product_id ? body.product_id : null;
+  if (product_id && !isUuid(product_id)) return badRequest('Produit invalide');
+  const source_slug = typeof body.source_slug === 'string' && body.source_slug ? body.source_slug.slice(0, 200) : null;
+  const productName = typeof body.productName === 'string' ? body.productName.slice(0, 200) : undefined;
 
   // Marché du lead : dérivé du PRODUIT concerné (source la plus fiable —
   // Sprint 1), jamais de la préférence admin (route publique, cf. doc de
@@ -170,36 +199,61 @@ export async function POST(req: NextRequest) {
   // première visite retombait toujours sur DEFAULT_MARKET ('fr'). Le host
   // est fiable dès la première requête.
   let market: string = DEFAULT_MARKET;
+  let marketFromProduct = false;
   if (product_id) {
-    const { data: product } = await sb.from('products').select('market').eq('id', product_id).single();
-    if (product?.market && isValidMarket(product.market)) market = product.market;
+    const { data: product } = await sb.from('products').select('market').eq('id', product_id).maybeSingle();
+    if (product?.market && isValidMarket(product.market)) {
+      market = product.market;
+      marketFromProduct = true;
+    }
   }
-  if (market === DEFAULT_MARKET) {
-    market = getMarketFromHost(req.headers.get('host'));
+  // Le host ne sert que si le produit n'a pas donné le marché (avant : un produit FR consulté
+  // depuis un autre domaine était rattaché au marché du domaine).
+  if (!marketFromProduct) {
+    market = getRequestMarket(req.headers);
+  }
+
+  // Un même email déjà inscrit (même produit, ou inscription générique sans produit) n'est PAS une
+  // erreur pour le visiteur : avant, le doublon renvoyait un 400 « JSON object requested… » et le
+  // formulaire affichait un échec. Sans produit, la contrainte d'unicité (email, product_id) ne joue
+  // pas (NULL ≠ NULL) : on vérifie nous-mêmes pour ne pas empiler les doublons.
+  if (!product_id) {
+    const { data: already, error: lookupError } = await sb
+      .from('email_leads')
+      .select('id')
+      .eq('email', email)
+      .is('product_id', null)
+      .limit(1);
+    if (lookupError) return dbErrorResponse('POST /api/leads (recherche doublon)', lookupError);
+    if (already && already.length > 0) {
+      syncToBrevo(email, market, productName).catch(() => {});
+      return NextResponse.json({ success: true, duplicate: true });
+    }
   }
 
   // Upsert avec market ; filet de sécurité si jamais la colonne n'existe pas
   // encore sur cet environnement (code Postgres 42703 = colonne manquante).
+  // ignoreDuplicates : pas de ligne renvoyée pour un doublon -> tableau, jamais .single().
   let upsertResult = await sb
     .from('email_leads')
     .upsert({ email, product_id, source_slug, market, markets: [market] }, { onConflict: 'email,product_id', ignoreDuplicates: true })
-    .select().single();
+    .select('id');
   if (upsertResult.error && (upsertResult.error as { code?: string }).code === '42703') {
     upsertResult = await sb
       .from('email_leads')
       .upsert({ email, product_id, source_slug }, { onConflict: 'email,product_id', ignoreDuplicates: true })
-      .select().single();
+      .select('id');
   }
   const { data, error } = upsertResult;
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return dbErrorResponse('POST /api/leads', error);
 
   // Sync CRM (non bloquant, échec silencieux). Note : sendWelcomeEmail()
   // existe mais n'est pas appelée ici. Vérifié le 07/10 dans Brevo : il n'y
   // a AUCUNE automatisation ni template, donc aucun e-mail de bienvenue
   // n'est envoyé aujourd'hui. L'expéditeur de la fonction est maintenant
   // contact@tendpick.com (vérifié) ; l'activer = décision de Jerome.
-  syncToBrevo(email, market, body.productName).catch(() => {});
+  syncToBrevo(email, market, productName).catch(() => {});
 
-  return NextResponse.json({ success: true, data });
+  return NextResponse.json({ success: true, duplicate: !data || data.length === 0 });
 }

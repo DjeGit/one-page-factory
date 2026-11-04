@@ -9,37 +9,29 @@
  *
  * POST body : { channelIds: string[], text: string, imageUrls?: string[],
  *               videoUrl?: string, link?: string, market?: Market }
+ *
+ * Statuts : 200 tous les canaux ont publié ; 207 résultat mixte ; 502 aucun canal n'a publié
+ * (la réponse porte toujours `results`, canal par canal).
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { isValidMarket } from '@/lib/market';
 import { findSocialChannel, isIntegrationEnabled, recordSyncResult } from '@/lib/integrations/registry';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { badRequest, readJsonObject, unauthorized } from '../../_lib/http';
+import { parseSocialInput } from '../../_lib/social-input';
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
 
-  const body = await req.json().catch(() => ({}));
-  const channelIds: string[] = Array.isArray(body.channelIds) ? body.channelIds : [];
-  const text: string = typeof body.text === 'string' ? body.text.trim() : '';
-  const market = isValidMarket(body.market) ? body.market : getActiveMarket();
+  const parsed = await readJsonObject(req);
+  if ('response' in parsed) return parsed.response;
+  const input = parseSocialInput(parsed.body);
+  if ('error' in input) return badRequest(input.error);
 
-  if (!text) {
-    return NextResponse.json({ error: 'Le contenu du post est requis.' }, { status: 400 });
-  }
-  if (channelIds.length === 0) {
-    return NextResponse.json({ error: 'Sélectionnez au moins un canal.' }, { status: 400 });
-  }
-
-  const content = {
-    market,
-    text,
-    imageUrls: Array.isArray(body.imageUrls) ? body.imageUrls : undefined,
-    videoUrl: typeof body.videoUrl === 'string' && body.videoUrl ? body.videoUrl : undefined,
-    link: typeof body.link === 'string' && body.link ? body.link : undefined,
-  };
+  const market = isValidMarket(parsed.body.market as string) ? (parsed.body.market as 'fr' | 'es' | 'uk') : getActiveMarket();
+  const { channelIds, text, imageUrls, videoUrl, link } = input.data;
+  const content = { market, text, imageUrls, videoUrl, link };
 
   const results: { channelId: string; ok: boolean; message: string; postId?: string }[] = [];
 
@@ -70,6 +62,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const allOk = results.every((r) => r.ok);
-  return NextResponse.json({ success: allOk, results }, { status: allOk ? 200 : 207 });
+  const okCount = results.filter((r) => r.ok).length;
+  const allOk = okCount === results.length;
+  return NextResponse.json({ success: allOk, results }, { status: allOk ? 200 : okCount > 0 ? 207 : 502 });
 }

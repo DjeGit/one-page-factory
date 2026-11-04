@@ -1,71 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBlogPostByIdAdmin, updateBlogPost, deleteBlogPost, publishBlogPost, unpublishBlogPost } from '@/lib/blog';
-import { slugifyBlogTitle } from '@/lib/slugify';
+import { clearTtlCache } from '@/lib/ttl-cache';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
-import { isValidMarket } from '@/lib/market';
-import type { BlogPostFormData } from '@/types';
+import { badRequest, dbErrorResponse, invalidId, isUuid, notFound, readJsonObject, unauthorized } from '../../_lib/http';
+import { parseBlogForm } from '../../_lib/blog-input';
 
 interface Params {
   params: { id: string };
 }
 
 export async function GET(req: NextRequest, { params }: Params) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
   const post = await getBlogPostByIdAdmin(params.id);
-  if (!post) return NextResponse.json({ error: 'Article introuvable' }, { status: 404 });
+  if (!post) return notFound('Article introuvable');
   return NextResponse.json(post);
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
   try {
-    const body = await req.json();
+    const parsed = await readJsonObject(req);
+    if ('response' in parsed) return parsed.response;
+    const body = parsed.body;
 
     // Publication explicite demandée depuis l'admin (ex: bouton "Publier"
     // sans repasser par tout le formulaire) : { publish: true } seul.
     if (body.publish === true && Object.keys(body).length === 1) {
       const { post, error } = await publishBlogPost(params.id);
-      if (!post) return NextResponse.json({ error: error || 'Erreur lors de la publication' }, { status: 500 });
+      if (!post) return dbErrorResponse('PUT /api/blog/[id] (publication)', error || 'publication impossible', 'Erreur lors de la publication');
+      clearTtlCache();
       return NextResponse.json(post);
     }
 
     // Repasser en brouillon depuis la liste : { unpublish: true } seul.
     if (body.unpublish === true && Object.keys(body).length === 1) {
       const { post, error } = await unpublishBlogPost(params.id);
-      if (!post) return NextResponse.json({ error: error || 'Erreur lors du passage en brouillon' }, { status: 500 });
+      if (!post) return dbErrorResponse('PUT /api/blog/[id] (brouillon)', error || 'dépublication impossible', 'Erreur lors du passage en brouillon');
+      clearTtlCache();
       return NextResponse.json(post);
     }
 
-    if (!body.title || !body.content) {
-      return NextResponse.json({ error: 'Le titre et le contenu sont requis' }, { status: 400 });
-    }
+    const result = parseBlogForm(body);
+    if ('error' in result) return badRequest(result.error);
 
-    const form: BlogPostFormData = {
-      title: body.title,
-      slug: body.slug || slugifyBlogTitle(body.title),
-      market: isValidMarket(body.market) ? body.market : 'fr',
-      excerpt: body.excerpt || '',
-      content: body.content,
-      cover_image_url: body.cover_image_url || '',
-      status: body.status === 'published' ? 'published' : 'draft',
-      tags: Array.isArray(body.tags) ? body.tags : [],
-      category_id: body.category_id || null,
-      linked_product_ids: Array.isArray(body.linked_product_ids) ? body.linked_product_ids : [],
-      author_name: body.author_name || '',
-      meta_title: body.meta_title || '',
-      meta_description: body.meta_description || '',
-      generated_by_ai: !!body.generated_by_ai,
-    };
+    const { post, error } = await updateBlogPost(params.id, result.form);
+    if (!post) return dbErrorResponse('PUT /api/blog/[id]', error || 'mise à jour impossible', 'Erreur lors de la mise à jour');
 
-    const { post, error } = await updateBlogPost(params.id, form);
-    if (!post) {
-      return NextResponse.json({ error: error || 'Erreur lors de la mise à jour' }, { status: 500 });
-    }
-
+    clearTtlCache();
     return NextResponse.json(post);
   } catch (error) {
     console.error(`PUT /api/blog/${params.id} error:`, error);
@@ -74,10 +57,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
   const { error } = await deleteBlogPost(params.id);
-  if (error) return NextResponse.json({ error }, { status: 500 });
+  if (error) return dbErrorResponse('DELETE /api/blog/[id]', error);
+  clearTtlCache();
   return NextResponse.json({ ok: true });
 }

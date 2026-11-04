@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabase';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { computeVisitorStats, type VisitRow, type VisitorRow } from '@/lib/visitor-stats';
 import StatsCard from '@/components/admin/StatsCard';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,44 +46,51 @@ interface Props {
  * Les chiffres ne couvrent donc QUE ces visiteurs, pas tout le trafic.
  * Filtré par marché actif, comme Analytics.
  */
-export default async function VisitorsPage({ searchParams }: Props) {
+export default withAdminAuth(async function VisitorsPage({ searchParams }: Props) {
   const market = getActiveMarket();
   const requested = Number(searchParams.days);
   const days = (PERIODS as readonly number[]).includes(requested) ? requested : 30;
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
   const sb = getSupabaseAdmin();
-  const rows: VisitRow[] = [];
   let truncated = false;
   let error: string | null = null;
 
-  for (let from = 0; from < MAX_ROWS; from += PAGE) {
-    const { data, error: err } = await sb
+  const pageQuery = (from: number) =>
+    sb
       .from('page_visits')
-      .select('visitor_id, session_id, path, page_type, referrer_host, duration_seconds')
+      .select('visitor_id, session_id, path, page_type, referrer_host, duration_seconds', from === 0 ? { count: 'exact' } : undefined)
       .eq('market', market)
       .gte('entered_at', since)
       .order('entered_at', { ascending: false })
       .range(from, from + PAGE - 1);
-    if (err) {
-      error = err.message;
-      break;
+
+  // Première page + liste des visiteurs en même temps ; le total connu, les pages suivantes partent
+  // toutes ensemble (avant : jusqu'à 50 requêtes l'une après l'autre).
+  const [first, visitorsRes] = await Promise.all([
+    pageQuery(0),
+    sb.from('visitors').select('visitor_id, visit_count').eq('market', market).gte('last_seen', since).limit(MAX_ROWS),
+  ]);
+  const rows: VisitRow[] = [];
+  if (first.error) {
+    error = first.error.message;
+  } else {
+    rows.push(...((first.data ?? []) as VisitRow[]));
+    const total = Math.min(first.count ?? rows.length, MAX_ROWS);
+    if ((first.count ?? 0) > MAX_ROWS) truncated = true;
+    const offsets: number[] = [];
+    for (let from = PAGE; from < total; from += PAGE) offsets.push(from);
+    const rest = await Promise.all(offsets.map((from) => pageQuery(from)));
+    for (const r of rest) {
+      if (r.error) {
+        error = r.error.message;
+        break;
+      }
+      rows.push(...((r.data ?? []) as VisitRow[]));
     }
-    rows.push(...((data ?? []) as VisitRow[]));
-    if (!data || data.length < PAGE) break;
-    if (from + PAGE >= MAX_ROWS) truncated = true;
   }
 
-  let visitors: VisitorRow[] = [];
-  if (!error) {
-    const { data } = await sb
-      .from('visitors')
-      .select('visitor_id, visit_count')
-      .eq('market', market)
-      .gte('last_seen', since)
-      .limit(MAX_ROWS);
-    visitors = (data ?? []) as VisitorRow[];
-  }
+  const visitors: VisitorRow[] = error ? [] : ((visitorsRes.data ?? []) as VisitorRow[]);
 
   const stats = computeVisitorStats(rows, visitors);
   const maxFreq = Math.max(1, ...stats.frequency.map((f) => f.count));
@@ -234,4 +242,4 @@ export default async function VisitorsPage({ searchParams }: Props) {
       </div>
     </div>
   );
-}
+});

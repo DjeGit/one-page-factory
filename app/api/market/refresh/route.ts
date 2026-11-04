@@ -17,6 +17,7 @@ import { isAuthorizedRequest } from '@/lib/admin-auth';
 import { isValidMarket, type Market } from '@/lib/market';
 import { getActiveDataSources, refreshMarketFromActiveSources } from '@/lib/integrations/data-source-chain';
 import { scoreSignal, trendScoreFromScore, confidenceScoreFromSignal } from '@/lib/market/scoring';
+import { badRequest, dbErrorResponse, readOptionalJsonObject, unauthorized } from '../../_lib/http';
 
 // ─── Auth guard ────────────────────────────────────────────────────────────
 // Double entrée : session admin (cookie, appel depuis le back-office) OU
@@ -27,21 +28,33 @@ import { scoreSignal, trendScoreFromScore, confidenceScoreFromSignal } from '@/l
 
 // GET = pré-check pour l'UI : quelles sources seraient interrogées si on
 // lance un refresh maintenant (évite de lancer un refresh "à l'aveugle").
-export async function GET() {
+export async function GET(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) return unauthorized();
   const activeSources = await getActiveDataSources();
   return NextResponse.json({ activeSources });
 }
 
+const INSERT_CHUNK = 500;
+
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!isAuthorizedRequest(req)) return unauthorized();
+
+  const parsed = await readOptionalJsonObject(req);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
+  if (body.market !== undefined && body.market !== null && body.market !== '' && !isValidMarket(body.market as string)) {
+    return badRequest('Marché invalide (fr, es ou uk)');
   }
+  const market: Market = isValidMarket(body.market as string) ? (body.market as Market) : getActiveMarket();
+  const category: string | undefined = typeof body.category === 'string' && body.category.trim() ? body.category.trim().slice(0, 100) : undefined;
 
-  const body = await req.json().catch(() => ({}));
-  const market: Market = isValidMarket(body.market) ? body.market : getActiveMarket();
-  const category: string | undefined = typeof body.category === 'string' ? body.category : undefined;
-
-  const { signals, sourcesUsed, sourcesSkipped } = await refreshMarketFromActiveSources(market, category);
+  let result;
+  try {
+    result = await refreshMarketFromActiveSources(market, category);
+  } catch (err) {
+    return dbErrorResponse('POST /api/market/refresh (sources)', err, "Impossible d'interroger les sources de données.");
+  }
+  const { signals, sourcesUsed, sourcesSkipped } = result;
 
   if (sourcesUsed.length === 0) {
     return NextResponse.json(
@@ -55,6 +68,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Les sources ont répondu mais ne renvoient aucun produit (panne, quota…) : on garde les données
+  // actuelles. Avant, elles étaient effacées puis remplacées par RIEN et la route répondait « succès ».
+  if (signals.length === 0) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Les sources actives n'ont renvoyé aucun produit : les données précédentes sont conservées.",
+        sourcesUsed,
+        sourcesSkipped,
+      },
+      { status: 502 }
+    );
+  }
+
   const sb = getSupabaseAdmin();
 
   // Cohérence de niche (proxy grossier, cf. lib/market/scoring.ts) : nombre
@@ -65,6 +92,7 @@ export async function POST(req: NextRequest) {
     .eq('market', market)
     .eq('active', true);
 
+  const refreshedAt = new Date().toISOString();
   const rows = signals.map((signal) => {
     const { score, breakdown } = scoreSignal(signal, { existingCategoryCount: existingCategoryCount ?? 0 });
     return {
@@ -84,21 +112,27 @@ export async function POST(req: NextRequest) {
       source_notes: `Score ${score}/100 — ${Object.entries(breakdown)
         .map(([k, v]) => `${k}:${v}`)
         .join(', ')} · lien : ${signal.url}`,
-      last_refreshed: new Date().toISOString(),
+      last_refreshed: refreshedAt,
     };
   });
 
-  // On ne supprime QUE les anciennes données de CE marché — bug corrigé
-  // par rapport à l'ancien code qui effaçait market_products en entier,
-  // tous marchés confondus, à chaque refresh.
-  await sb.from('market_products').delete().eq('market', market);
-
-  if (rows.length > 0) {
-    const { error } = await sb.from('market_products').insert(rows);
+  // INSERTION D'ABORD, suppression des anciennes lignes ensuite : si l'insertion échoue, les
+  // données précédentes restent intactes (avant : tout était effacé avant d'insérer, une erreur
+  // laissait le marché vide). On ne supprime QUE les anciennes données de CE marché (et, pour un
+  // refresh ciblé sur une catégorie, uniquement les catégories rafraîchies).
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
+    const { error } = await sb.from('market_products').insert(rows.slice(i, i + INSERT_CHUNK));
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      // Lignes déjà insérées pendant cet appel : retirées pour ne pas laisser un état à moitié rafraîchi.
+      await sb.from('market_products').delete().eq('market', market).eq('last_refreshed', refreshedAt);
+      return dbErrorResponse('POST /api/market/refresh (insertion)', error);
     }
   }
+
+  let cleanup = sb.from('market_products').delete().eq('market', market).lt('last_refreshed', refreshedAt);
+  if (category) cleanup = cleanup.in('category', Array.from(new Set(rows.map((r) => r.category))));
+  const { error: cleanupError } = await cleanup;
+  if (cleanupError) console.error('[api] POST /api/market/refresh (nettoyage) :', cleanupError.message);
 
   return NextResponse.json({
     success: true,
@@ -106,6 +140,6 @@ export async function POST(req: NextRequest) {
     count: rows.length,
     sourcesUsed,
     sourcesSkipped,
-    refreshed_at: new Date().toISOString(),
+    refreshed_at: refreshedAt,
   });
 }

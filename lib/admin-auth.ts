@@ -24,10 +24,24 @@ export function timingSafeStringEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
+/**
+ * Secret d'administration. En production, un ADMIN_SECRET absent NE DOIT PAS
+ * retomber sur une valeur par défaut connue de tous ('changeme' était lisible
+ * dans le dépôt : n'importe qui se serait connecté) — on renvoie null et toute
+ * l'authentification admin refuse l'accès (échec fermé). En développement et
+ * en test, la valeur par défaut est conservée pour ne pas gêner le travail local.
+ */
+export function getAdminSecret(): string | null {
+  const secret = process.env.ADMIN_SECRET;
+  if (secret) return secret;
+  return process.env.NODE_ENV === 'production' ? null : 'changeme';
+}
+
 /** Vérifie la valeur du cookie admin_auth contre le hash attendu (temps constant). */
 export function isValidAdminCookie(value: string | undefined | null): boolean {
   if (!value) return false;
-  const secret = process.env.ADMIN_SECRET || 'changeme';
+  const secret = getAdminSecret();
+  if (!secret) return false;
   return timingSafeStringEqual(value, hashAdminToken(secret));
 }
 
@@ -58,4 +72,19 @@ export function isAuthorizedRequest(req: NextRequest): boolean {
   }
 
   return false;
+}
+
+/**
+ * Comme isAuthorizedRequest, mais accepte AUSSI la clé INTERNAL_API_KEY
+ * (pipeline Keepa / n8n) : pour les routes appelées à la fois depuis le
+ * back-office (cookie) et par un automate (clé interne), par exemple le
+ * rapport hebdomadaire. Pas de contournement « clé absente = accès libre » :
+ * si INTERNAL_API_KEY n'est pas définie, seule l'authentification admin passe.
+ */
+export function isAuthorizedAdminOrInternal(req: NextRequest): boolean {
+  if (isAuthorizedRequest(req)) return true;
+  const key = process.env.INTERNAL_API_KEY;
+  if (!key) return false;
+  const bearerMatch = (req.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
+  return Boolean(bearerMatch && timingSafeStringEqual(bearerMatch[1].trim(), key));
 }

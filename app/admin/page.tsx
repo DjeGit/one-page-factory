@@ -3,22 +3,24 @@ import StatsCard from '@/components/admin/StatsCard';
 import DashboardClient from '@/components/admin/DashboardClient';
 import CostVsGainSummary from '@/components/admin/CostVsGainSummary';
 import MarketBreakdownCards from '@/components/admin/MarketBreakdownCards';
-import Link from 'next/link';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { MARKETS } from '@/lib/market';
 import { computeMarketROI } from '@/lib/analytics/roi';
 import type { DashboardStats } from '@/types';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminDashboard() {
+export default withAdminAuth(async function AdminDashboard() {
   const market = getActiveMarket();
-  const [stats, roi, allStats, allRoi] = await Promise.all([
-    getDashboardStats(market),
-    computeMarketROI(market),
+  // Une seule série de requêtes par marché (avant : le marché actif était calculé deux fois).
+  const [allStats, allRoi] = await Promise.all([
     Promise.all(MARKETS.map((m) => getDashboardStats(m.code))),
     Promise.all(MARKETS.map((m) => computeMarketROI(m.code))),
   ]);
+  const activeIndex = Math.max(0, MARKETS.findIndex((m) => m.code === market));
+  const stats = allStats[activeIndex];
+  const roi = allRoi[activeIndex];
 
   // Vue consolidée : somme des 3 marchés (tous en EUR à ce jour, cf.
   // lib/market.ts getCurrencyForMarket — pas de conversion nécessaire).
@@ -178,28 +180,6 @@ export default async function AdminDashboard() {
         <h2 className="text-lg font-bold text-gray-900 mb-4">Par marché</h2>
         <MarketBreakdownCards rows={marketRows} />
       </div>
-
-      {/* Quick actions */}
-      <div className="mt-6 flex gap-4">
-        <Link
-          href="/admin/products/new"
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nouveau produit
-        </Link>
-        <Link
-          href="/admin/analytics"
-          className="inline-flex items-center gap-2 px-5 py-2.5 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-          </svg>
-          Analytics
-        </Link>
-      </div>
     </div>
   );
-}
+});

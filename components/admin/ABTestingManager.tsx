@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import type { ABTest, Product } from '@/types';
+import { MIN_VIEWS_PER_VARIANT, readABTest } from '@/components/admin/ab-stats';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 interface ABTestingManagerProps {
   initialTests: ABTest[];
-  products: Product[];
+  products: Pick<Product, 'id' | 'name' | 'hero_title' | 'hero_subtitle'>[];
 }
 
 type TabType = 'active' | 'ended';
@@ -17,6 +19,7 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
   const [activeTab, setActiveTab] = useState<TabType>('active');
   const [loading, setLoading] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const [form, setForm] = useState({
     product_id: '',
@@ -81,27 +84,35 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error('Erreur');
+      if (!res.ok) throw new Error(await readApiError(res, 'Enregistrement impossible'));
       const data = await res.json();
       if (editingTest) {
         setTests(prev => prev.map(t => t.id === editingTest.id ? data : t));
       } else {
-        setTests(prev => [...prev, data]);
+        setTests(prev => [data, ...prev]);
       }
+      setSaveError('');
       setShowModal(false);
-    } catch {
-      setSaveError('Une erreur est survenue. Vérifiez vos données et réessayez.');
+    } catch (err) {
+      setSaveError(networkErrorMessage(err, 'Une erreur est survenue. Vérifiez vos données et réessayez.'));
     } finally {
       setLoading(null);
     }
   };
 
   const handleAction = async (testId: string, action: 'winner_a' | 'winner_b' | 'archive' | 'delete') => {
+    const test = tests.find(t => t.id === testId);
+    const label = test?.name ? `« ${test.name} »` : 'ce test';
+    if (action === 'delete' && !confirm(`Supprimer définitivement le test ${label} et ses résultats ?`)) return;
+    if ((action === 'winner_a' || action === 'winner_b') && !confirm(`Choisir la variante ${action === 'winner_a' ? 'A' : 'B'} comme gagnante de ${label} ? Le test sera terminé.`)) return;
+    if (action === 'archive' && !confirm(`Terminer le test ${label} sans désigner de gagnant ?`)) return;
     setLoading(testId + action);
+    setActionError('');
     try {
       if (action === 'delete') {
         const res = await fetch(`/api/ab-test/${testId}`, { method: 'DELETE' });
-        if (res.ok) setTests(prev => prev.filter(t => t.id !== testId));
+        if (!res.ok) throw new Error(await readApiError(res, 'Suppression impossible'));
+        setTests(prev => prev.filter(t => t.id !== testId));
       } else {
         const body = action === 'archive'
           ? { active: false }
@@ -111,11 +122,12 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        if (res.ok) {
-          const data = await res.json();
-          setTests(prev => prev.map(t => t.id === testId ? data : t));
-        }
+        if (!res.ok) throw new Error(await readApiError(res, 'Modification impossible'));
+        const data = await res.json();
+        setTests(prev => prev.map(t => t.id === testId ? data : t));
       }
+    } catch (err) {
+      setActionError(networkErrorMessage(err));
     } finally {
       setLoading(null);
     }
@@ -134,42 +146,38 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
     return <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Actif</span>;
   };
 
+  // Lecture statistique (test sur deux proportions, confiance 95 %) : voir components/admin/ab-stats.ts.
   const getWinnerBanner = (test: ABTest) => {
-    const ctrA = getCTR(test.variant_a_clicks, test.variant_a_views);
-    const ctrB = getCTR(test.variant_b_clicks, test.variant_b_views);
-    const totalViews = test.variant_a_views + test.variant_b_views;
-    if (totalViews < 200) return null;
     if (test.winner) {
       return (
         <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm font-semibold text-yellow-800">
-          🏆 Variante {test.winner.toUpperCase()} gagne !
+          🏆 Variante {test.winner.toUpperCase()} retenue
         </div>
       );
     }
-    const diff = Math.abs(ctrA - ctrB);
-    if (diff >= 20 && test.variant_a_views > 100 && test.variant_b_views > 100) {
-      const winner = ctrA > ctrB ? 'A' : 'B';
+    const r = readABTest(
+      { views: test.variant_a_views, clicks: test.variant_a_clicks },
+      { views: test.variant_b_views, clicks: test.variant_b_clicks },
+    );
+    if (!r.enoughData) {
+      return (
+        <div className="mt-3 text-xs text-gray-400">
+          Pas encore assez de visites pour conclure (au moins {MIN_VIEWS_PER_VARIANT} vues par variante).
+        </div>
+      );
+    }
+    if (r.significant && r.leader) {
       return (
         <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 text-sm font-semibold text-yellow-800">
-          🏆 Variante {winner} gagne !
+          🏆 Variante {r.leader.toUpperCase()} en tête, écart fiable à {r.confidence}% — vous pouvez la désigner gagnante.
         </div>
       );
     }
-    return null;
-  };
-
-  const getSignificance = (test: ABTest) => {
-    const total = test.variant_a_views + test.variant_b_views;
-    const ctrA = getCTR(test.variant_a_clicks, test.variant_a_views);
-    const ctrB = getCTR(test.variant_b_clicks, test.variant_b_views);
-    if (total > 200 && Math.abs(ctrA - ctrB) > 15) {
-      return (
-        <div className="mt-2 text-xs text-green-700 font-semibold">
-          ✅ Résultat statistiquement significatif
-        </div>
-      );
-    }
-    return null;
+    return (
+      <div className="mt-3 text-xs text-gray-500">
+        Écart pas encore concluant (fiabilité {r.confidence}%) : laissez tourner le test.
+      </div>
+    );
   };
 
   const filteredTests = tests.filter(t =>
@@ -196,6 +204,13 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
           Nouveau test
         </button>
       </div>
+
+      {actionError && (
+        <div role="alert" className="mb-4 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 flex justify-between gap-3">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError('')} aria-label="Fermer le message" className="font-bold">×</button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-gray-200 mb-6">
@@ -321,7 +336,6 @@ export default function ABTestingManager({ initialTests, products }: ABTestingMa
                 </div>
 
                 {getWinnerBanner(test)}
-                {getSignificance(test)}
 
                 {/* Actions */}
                 {test.active && !test.winner && (

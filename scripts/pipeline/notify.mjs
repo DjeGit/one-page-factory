@@ -1,4 +1,6 @@
 // Emails du flux automatique (Brevo, transactionnel). Aucune exception : un email raté ne doit jamais bloquer le flux.
+// Aucun secret dans le contenu : seulement le nom du produit, les fiches et la raison (déjà passée par redact()).
+import { when } from './report.mjs';
 
 export const NOTIFY_TO = 'onepagefactory.pro@gmail.com';
 const SENDER = { name: 'Tendpick Alerts', email: 'contact@tendpick.com' };
@@ -6,7 +8,6 @@ const ADMIN_PRODUCTS = 'https://tendpick.com/admin/products';
 const ADMIN_TRENDS = 'https://tendpick.com/admin/market/trends';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-const when = (d) => new Date(d).toLocaleString('fr-FR', { timeZone: 'Europe/Madrid', dateStyle: 'full', timeStyle: 'short' });
 const pct = (r) => (r == null ? '—' : `${(Number(r) * 100).toFixed(1).replace('.0', '')} %`);
 
 function page(title, body) {
@@ -26,7 +27,7 @@ function table(products) {
 const list = (items) => (items?.length ? `<ul style="padding-left:18px;margin:8px 0">${items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>` : '');
 
 /**
- * @param {{kind:'ready'|'live'|'problem', candidate:{name:string,aliexpress_id:string}, products?:object[], photos?:number, publishAt?:Date|string, holdReason?:string|null, skipped?:{market:string,reasons:string[]}[], warnings?:string[], error?:string}} d
+ * @param {{kind:'ready'|'live'|'problem', candidate:{name:string,aliexpress_id:string}, products?:object[], photos?:number, publishAt?:Date|string, holdReason?:string|null, skipped?:{market:string,reasons:string[]}[], summary?:string[], warnings?:string[], error?:string}} d
  */
 export function renderEmail(d) {
   const name = d.candidate.name;
@@ -41,16 +42,17 @@ ${d.products?.length ? `<p>Fiches déjà créées (en brouillon) :</p>${table(d.
     const body = `<p>Le produit <b>${esc(name)}</b> est <b>en ligne</b> sur ${d.products.length} marché(s).</p>${table(d.products)}${list(d.warnings)}`;
     return { subject: `[Tendpick] En ligne : ${name}`, html: page('Fiche mise en ligne', body) };
   }
+  const summary = d.summary?.length ? `<p style="margin:12px 0 4px"><b>Résumé</b></p>${list(d.summary)}` : '';
   const hold = d.holdReason ? `<p style="background:#fffbeb;padding:10px;border-radius:8px"><b>Mise en ligne non automatique :</b> ${esc(d.holdReason)}. Active la fiche toi-même dans l'admin après vérification.</p>` : `<p>Mise en ligne automatique : <b>${esc(when(d.publishAt))}</b>. Pour annuler, remets le produit sur NON dans la page Tendance avant cette heure.</p>`;
   const skipped = d.skipped?.length ? `<p>Marchés non créés :</p>${list(d.skipped.map((s) => `${s.market.toUpperCase()} : ${s.reasons.join(' ; ')}`))}` : '';
-  const body = `<p>La fiche <b>${esc(name)}</b> est prête (liens affiliés vérifiés, ${d.photos ?? 0} photos, textes rédigés).</p>${table(d.products)}${skipped}${hold}
-<p style="font-size:13px;color:#374151">Relis surtout les textes : ils sont rédigés automatiquement à partir du titre de l'annonce, sans la vidéo du fabricant (à ajouter dans l'admin).</p>${list(d.warnings)}`;
+  const body = `<p>La fiche <b>${esc(name)}</b> est prête (liens affiliés vérifiés, ${d.photos ?? 0} photos, textes rédigés).</p>${table(d.products)}${summary}${skipped}${hold}
+<p style="font-size:13px;color:#374151">Relis surtout les textes : ils sont rédigés automatiquement à partir du titre de l'annonce.</p>${list(d.warnings)}`;
   return { subject: `[Tendpick] Fiche prête : ${name}`, html: page('Fiche prête', body) };
 }
 
-/** Envoie un email via Brevo. @returns {{ok:boolean,status:number}} */
+/** Envoie un email via Brevo. Ne lève jamais d'exception. @returns {{ok:boolean,status:number,error?:string}} */
 export async function sendMail({ subject, html }, { apiKey = process.env.BREVO_API_KEY, to = process.env.PIPELINE_NOTIFY_EMAIL || NOTIFY_TO, fetchImpl = fetch } = {}) {
-  if (!apiKey) return { ok: false, status: 0 };
+  if (!apiKey) return { ok: false, status: 0, error: 'clé Brevo (BREVO_API_KEY) absente' };
   try {
     const res = await fetchImpl('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -58,8 +60,8 @@ export async function sendMail({ subject, html }, { apiKey = process.env.BREVO_A
       body: JSON.stringify({ sender: SENDER, to: [{ email: to }], subject, htmlContent: html }),
       signal: AbortSignal.timeout(20000),
     });
-    return { ok: res.ok, status: res.status };
-  } catch {
-    return { ok: false, status: 0 };
+    return res.ok ? { ok: true, status: res.status } : { ok: false, status: res.status, error: `Brevo a répondu ${res.status}` };
+  } catch (e) {
+    return { ok: false, status: 0, error: `Brevo injoignable (${e?.name === 'TimeoutError' ? 'délai dépassé' : 'réseau'})` };
   }
 }

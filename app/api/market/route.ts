@@ -1,11 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { isValidMarket } from '@/lib/market';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { badRequest, dbErrorResponse, readJsonObject, unauthorized } from '../_lib/http';
+import { pickMarketProductFields } from '../_lib/market-input';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const category = searchParams.get('category');
+// Avant : GET et POST étaient ouverts à tous — n'importe qui pouvait lire l'étude de marché
+// ET y insérer des lignes. Réservé à l'admin.
+export async function GET(request: NextRequest) {
+  if (!isAuthorizedRequest(request)) return unauthorized();
+
+  const category = request.nextUrl.searchParams.get('category');
   const market = getActiveMarket();
 
   const supabaseAdmin = getSupabaseAdmin();
@@ -21,21 +27,34 @@ export async function GET(request: Request) {
   }
 
   const { data, error } = await query.limit(200);
-  if (error) return NextResponse.json([], { status: 500 });
+  if (error) {
+    console.error('[api] GET /api/market :', error.message);
+    return NextResponse.json([], { status: 500 });
+  }
   return NextResponse.json(data || []);
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  if (!isAuthorizedRequest(request)) return unauthorized();
   const supabaseAdmin = getSupabaseAdmin();
-  const body = await request.json();
-  const market = isValidMarket(body.market) ? body.market : getActiveMarket();
+  const parsed = await readJsonObject(request);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
+  if (body.market !== undefined && body.market !== null && body.market !== '' && !isValidMarket(body.market as string)) {
+    return badRequest('Marché invalide (fr, es ou uk)');
+  }
+  const market = isValidMarket(body.market as string) ? (body.market as 'fr' | 'es' | 'uk') : getActiveMarket();
+
+  // Champs connus uniquement (avant : le corps entier était inséré tel quel).
+  const fields = pickMarketProductFields(body, 'create');
+  if ('error' in fields) return badRequest(fields.error);
 
   const { data, error } = await supabaseAdmin
     .from('market_products')
-    .insert({ ...body, market })
+    .insert({ ...fields.data, market })
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return dbErrorResponse('POST /api/market', error);
   return NextResponse.json(data);
 }

@@ -58,4 +58,12 @@ describe('video (YouTube)', () => {
     await expect(findVideo({ name: 'Garmin Forerunner 165', market: 'fr' }, {})).rejects.toThrow('YOUTUBE_API_KEY');
     await expect(findVideo({ name: 'Garmin Forerunner 165', market: 'fr' }, { apiKey: 'SECRET', fetchImpl: (async () => new Response('x', { status: 403 })) as any })).rejects.toThrow(/^YouTube 403$/);
   });
+
+  it('findVideo : chaque appel à YouTube a un délai maximal (un service muet ne bloque pas le flux)', async () => {
+    const inits: any[] = [];
+    const fetchImpl = (async (_u: string, init: any) => { inits.push(init); return new Response(JSON.stringify({ items: [] }), { status: 200 }); }) as any;
+    await findVideo({ name: 'Garmin Forerunner 165 montre GPS', market: 'fr' }, { apiKey: 'K', fetchImpl });
+    expect(inits.length).toBeGreaterThan(0);
+    expect(inits.every((i) => i?.signal instanceof AbortSignal)).toBe(true);
+  });
 });

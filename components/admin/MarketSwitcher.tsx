@@ -15,8 +15,15 @@ export default function MarketSwitcher() {
     function onClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
     document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   return (
@@ -32,6 +39,7 @@ export default function MarketSwitcher() {
         )}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={`Marché affiché : ${current.label}. Changer de marché`}
       >
         <span className="text-lg leading-none">{current.flag}</span>
         <span>{current.label}</span>

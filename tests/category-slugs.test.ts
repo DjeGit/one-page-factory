@@ -55,4 +55,21 @@ describe('category-slugs', () => {
       expect(new Set(slugs).size).toBe(slugs.length);
     }
   });
+
+  it("hreflang : on ne déclare que les marchés où la page existe (les autres répondent 404)", () => {
+    const alt = categoryAlternates('maison-deco', 'fr', ['fr']);
+    expect(alt.languages).toEqual({
+      fr: 'https://tendpick.fr/c/maison-deco',
+      'x-default': 'https://tendpick.fr/c/maison-deco',
+    });
+    const two = categoryAlternates('tech', 'es', ['es', 'uk']);
+    expect(Object.keys(two.languages).sort()).toEqual(['en', 'es', 'x-default']);
+    expect(two.languages['x-default']).toBe('https://tendpick.com/c/tech-gadgets');
+  });
+
+  it('hreflang : la page courante est toujours déclarée (auto-référence)', () => {
+    const alt = categoryAlternates('tech', 'es', []);
+    expect(alt.languages.es).toBe('https://tendpick.es/c/tecnologia');
+    expect(alt.canonical).toBe('https://tendpick.es/c/tecnologia');
+  });
 });

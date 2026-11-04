@@ -8,6 +8,7 @@ import type { BlogPost, BlogCategory, Product } from '@/types';
 import type { Market } from '@/lib/market';
 import { slugifyBlogTitle } from '@/lib/slugify';
 import { useMarket } from '@/lib/market-context';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 // MDEditor touche `window`/`navigator` au chargement — import dynamique
 // sans SSR, comme tout composant d'édition riche dans un App Router
@@ -17,7 +18,8 @@ const MDEditor = dynamic(() => import('@uiw/react-md-editor'), { ssr: false });
 interface BlogPostFormProps {
   post?: BlogPost;
   mode: 'create' | 'edit';
-  products: Pick<Product, 'id' | 'name' | 'slug'>[];
+  /** `market` : permet de ne proposer que les produits du marché de l'article. */
+  products: (Pick<Product, 'id' | 'name' | 'slug'> & { market?: string })[];
   categories: BlogCategory[];
 }
 
@@ -48,11 +50,11 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
       body.append('file', file);
       body.append('kind', 'blog');
       const res = await fetch('/api/upload', { method: 'POST', body });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Erreur lors de l'upload");
+      if (!res.ok) throw new Error(await readApiError(res, "Erreur lors de l'envoi de l'image"));
+      const data = await res.json();
       handleChange('cover_image_url', data.url || data.public_id);
     } catch (err) {
-      setCoverError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setCoverError(networkErrorMessage(err));
     } finally {
       setCoverUploading(false);
       if (coverInputRef.current) coverInputRef.current.value = '';
@@ -116,10 +118,7 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subject: aiSubject, angle: aiAngle, market: form.market }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la génération');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la génération'));
       const draft = await res.json();
       // Pré-remplit SANS sauvegarder ni publier — relecture obligatoire
       // avant tout enregistrement, exactement comme pour les one-pages
@@ -136,7 +135,7 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
         generated_by_ai: true,
       }));
     } catch (err) {
-      setAiError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setAiError(networkErrorMessage(err));
     } finally {
       setGenerating(false);
     }
@@ -178,10 +177,7 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la sauvegarde');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la sauvegarde'));
 
       setSuccess(true);
       setTimeout(() => {
@@ -189,7 +185,7 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
         router.refresh();
       }, 800);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -386,7 +382,7 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
             {selectedProducts.map((p) => (
               <span key={p.id} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs bg-primary-100 text-primary-800">
                 {p.name}
-                <button type="button" onClick={() => toggleProduct(p.id)} className="hover:text-primary-900">×</button>
+                <button type="button" onClick={() => toggleProduct(p.id)} aria-label={`Retirer ${p.name}`} className="hover:text-primary-900">×</button>
               </span>
             ))}
           </div>
@@ -398,7 +394,7 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
         >
           <option value="">+ Ajouter un produit...</option>
           {products
-            .filter((p) => !form.linked_product_ids.includes(p.id))
+            .filter((p) => !form.linked_product_ids.includes(p.id) && (!p.market || p.market === form.market))
             .map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
+import { useMarket } from '@/lib/market-context';
+import { publicUrl } from '@/lib/admin-products-view';
 
 interface NavItem {
   href: string;
@@ -233,7 +235,8 @@ const navSections: NavSection[] = [
 ];
 
 export default function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
+  const { market } = useMarket();
 
   const isActive = (href: string, exact: boolean) => {
     if (exact) return pathname === href;
@@ -241,7 +244,7 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col">
+    <aside className="w-64 shrink-0 bg-white border-r border-gray-200 h-screen sticky top-0 self-start overflow-y-auto flex flex-col">
       {/* Logo */}
       <div className="p-6 border-b border-gray-200">
         <Link href="/admin" className="flex items-center gap-3">
@@ -258,7 +261,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-0.5">
+      <nav aria-label="Navigation principale" className="flex-1 p-4 space-y-0.5">
         {navSections.map((section, sectionIndex) => (
           <div key={sectionIndex}>
             {section.label && (
@@ -270,6 +273,7 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                aria-current={isActive(item.href, item.exact) ? 'page' : undefined}
                 className={clsx(
                   'flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-150',
                   isActive(item.href, item.exact)
@@ -293,16 +297,18 @@ export default function Sidebar() {
 
       {/* Footer links */}
       <div className="p-4 border-t border-gray-200 space-y-1">
-        <Link
-          href="/"
+        {/* Site public du marché affiché : un lien « / » ramènerait ici, le back-office renvoie tout vers /admin. */}
+        <a
+          href={publicUrl(market, '/')}
           target="_blank"
+          rel="noopener noreferrer"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all"
         >
           <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
-          Voir les pages
-        </Link>
+          Voir le site {market.toUpperCase()}
+        </a>
 
         <form action="/api/admin/logout" method="POST">
           <button

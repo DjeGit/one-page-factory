@@ -167,6 +167,24 @@ interface SiteCopy {
     noProduct: string;
     affiliateFooter: string;
   };
+  // Fenêtres surgissantes de la fiche produit (sortie de page, e-mail).
+  popups: {
+    close: string;
+    exit: { title: string; leaving: (name: string) => [string, string, string]; cta: string; decline: string };
+    email: {
+      success: string;
+      useCode: (code: string) => [string, string, string];
+      checkMailbox: string;
+      closeButton: string;
+      title: (discount: number) => string;
+      subtitle: string;
+      placeholder: string;
+      invalid: string;
+      sending: string;
+      submit: string;
+      noSpam: string;
+    };
+  };
   global: {
     siteTitleDefault: string;
     siteDescription: string;
@@ -354,6 +372,28 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       noProduct: 'Aucun produit disponible pour le moment.',
       affiliateFooter: "Liens d'affiliation ·",
     },
+    popups: {
+      close: 'Fermer',
+      exit: {
+        title: 'Attendez !',
+        leaving: (name) => ['Vous partez sans votre', name, ' ?'],
+        cta: "Je profite de l'offre maintenant",
+        decline: 'Non merci',
+      },
+      email: {
+        success: 'Code envoyé !',
+        useCode: (code) => ['Utilisez', code, 'à la caisse'],
+        checkMailbox: 'Vérifiez votre boîte mail pour les détails.',
+        closeButton: 'Fermer',
+        title: (d) => `Obtenez -${d}% sur votre commande`,
+        subtitle: 'Entrez votre email pour recevoir votre code promo exclusif',
+        placeholder: 'votre@email.com',
+        invalid: 'Veuillez entrer une adresse email valide.',
+        sending: 'Envoi en cours...',
+        submit: 'Recevoir mon code',
+        noSpam: 'Pas de spam. Désabonnement en 1 clic.',
+      },
+    },
     global: {
       siteTitleDefault: "Tendpick — Produits tendance, guides d'achat et sélections",
       siteDescription: "Sélection de produits tendance issue de sources publiées, fiches détaillées et guides d'achat pour acheter en ligne en toute confiance.",
@@ -540,6 +580,28 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       noProduct: 'Ningún producto disponible por el momento.',
       affiliateFooter: 'Enlaces de afiliados ·',
     },
+    popups: {
+      close: 'Cerrar',
+      exit: {
+        title: '¡Espera!',
+        leaving: (name) => ['¿Te vas sin tu', name, '?'],
+        cta: 'Aprovechar la oferta ahora',
+        decline: 'No, gracias',
+      },
+      email: {
+        success: '¡Código enviado!',
+        useCode: (code) => ['Usa', code, 'al pagar'],
+        checkMailbox: 'Revisa tu correo para ver los detalles.',
+        closeButton: 'Cerrar',
+        title: (d) => `Consigue un ${d}% de descuento en tu pedido`,
+        subtitle: 'Introduce tu correo para recibir tu código promocional exclusivo',
+        placeholder: 'tu@correo.com',
+        invalid: 'Introduce una dirección de correo válida.',
+        sending: 'Enviando...',
+        submit: 'Recibir mi código',
+        noSpam: 'Sin spam. Cancela la suscripción con un clic.',
+      },
+    },
     global: {
       siteTitleDefault: 'Tendpick — Productos de moda, guías de compra y selecciones',
       siteDescription: 'Selección de productos de moda a partir de fuentes publicadas, fichas detalladas y guías de compra para comprar online con confianza.',
@@ -725,6 +787,28 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       productCount: (n) => `${n} carefully selected product${n !== 1 ? 's' : ''}`,
       noProduct: 'No products available right now.',
       affiliateFooter: 'Affiliate links ·',
+    },
+    popups: {
+      close: 'Close',
+      exit: {
+        title: 'Wait!',
+        leaving: (name) => ['Leaving without your', name, '?'],
+        cta: 'Get the offer now',
+        decline: 'No thanks',
+      },
+      email: {
+        success: 'Code sent!',
+        useCode: (code) => ['Use', code, 'at checkout'],
+        checkMailbox: 'Check your inbox for the details.',
+        closeButton: 'Close',
+        title: (d) => `Get ${d}% off your order`,
+        subtitle: 'Enter your email to receive your exclusive promo code',
+        placeholder: 'you@email.com',
+        invalid: 'Please enter a valid email address.',
+        sending: 'Sending...',
+        submit: 'Get my code',
+        noSpam: 'No spam. Unsubscribe in one click.',
+      },
     },
     global: {
       siteTitleDefault: 'Tendpick — Trending products, buying guides and picks',

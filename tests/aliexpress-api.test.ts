@@ -90,6 +90,14 @@ describe('aliexpress api', () => {
     expect(parseRate(undefined)).toBeNull();
   });
 
+  it('parseRate : un « % » veut toujours dire pourcentage (0,5 % n’est pas 50 %, 1 % n’est pas 100 %)', () => {
+    expect(parseRate('0.5%')).toBe(0.005);
+    expect(parseRate('1%')).toBe(0.01);
+    expect(parseRate('1.0 %')).toBe(0.01);
+    expect(parseRate('12.5%')).toBe(0.125);
+    expect(parseRate('')).toBeNull();
+  });
+
   it('parseProductDetail / parseLinkGenerate', () => {
     const d = parseProductDetail(detailJson(), '1005010644996006');
     expect(d).toMatchObject({ productId: '1005010644996006', price: 125.45, currency: 'EUR', commissionRate: 0.07, shopName: 'Euro Frame Store' });

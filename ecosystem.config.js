@@ -1,4 +1,4 @@
-require('dotenv').config({ path: '/var/www/one-page-factory/.env.local' });
+require('dotenv').config({ path: '/var/www/one-page-factory/.env.local', quiet: true });
 
 // Liste blanche des variables d'env transmises au process Next.js par PM2.
 // Toute variable présente dans .env.local mais absente d'ici est silencieusement
@@ -67,6 +67,11 @@ module.exports = {
     script: 'node_modules/.bin/next',
     args: 'start -p 3000',
     cwd: '/var/www/one-page-factory',
+    // Redémarrage automatique en cas de plantage, avec délai croissant (pas de boucle folle), et horodatage des journaux pm2.
+    autorestart: true,
+    exp_backoff_restart_delay: 200,
+    kill_timeout: 8000,
+    time: true,
     env: {
       NODE_ENV: 'production',
       ...Object.fromEntries(

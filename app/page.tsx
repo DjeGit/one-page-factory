@@ -1,10 +1,7 @@
 import Link from 'next/link';
-import Image from 'next/image';
-import { getSupabaseAdmin, getActiveCategories } from '@/lib/supabase';
+import { getMarketCatalog, getNavCategories } from '@/lib/site-products';
 import type { Product } from '@/types';
-import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { headers } from 'next/headers';
-import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Market } from '@/lib/market';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
@@ -14,12 +11,11 @@ import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/li
 import { SITE_COPY } from '@/lib/site-copy';
 import { getLatestPublishedBlogPosts, getBlogCategoriesCached } from '@/lib/blog';
 import { GUIDE_BASE_PATH, GUIDE_CATEGORY_SLUG } from '@/lib/buying-guide';
-import { ttlCache } from '@/lib/ttl-cache';
 import type { Metadata } from 'next';
 import SiteStructuredData from '@/components/landing/SiteStructuredData';
-import { buildAlternates, hasIndexBlockingParams } from '@/lib/site-url';
-import { getCardPrice } from '@/lib/pricing';
-import FreeShippingBadge from '@/components/product/FreeShippingBadge';
+import { buildAlternates, getRequestMarket, hasIndexBlockingParams } from '@/lib/site-url';
+import ProductCard from '@/components/site/ProductCard';
+import SiteImage from '@/components/site/SiteImage';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +28,7 @@ interface Props {
 // indexée.
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const h = headers();
-  const copy = SITE_COPY[getMarketFromHost(h.get('host'))].global;
+  const copy = SITE_COPY[getRequestMarket(h)].global;
   const alternates = buildAlternates(h, '/');
   return {
     // Titre et description propres à l'accueil (mots-clés de la marque et des
@@ -51,44 +47,22 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   };
 }
 
-// Top Ventes (accueil) : pool plus large que "Sélection du moment" pour avoir
-// de quoi remplir les 3 onglets Amazon/Rakuten/AliExpress (30/09).
-async function getTopVentesPool(market: Market): Promise<Product[]> {
-  // Cache 60 s : même requête pour "Sélection du moment" (6 premiers) et Top Ventes.
-  return ttlCache(`home:pool:${market}`, 60_000, () => fetchTopVentesPool(market));
-}
-
-async function fetchTopVentesPool(market: Market): Promise<Product[]> {
-  try {
-    const sb = getSupabaseAdmin();
-    const { data } = await sb
-      .from('products')
-      .select('*')
-      .eq('active', true)
-      .eq('market', market)
-      .order('updated_at', { ascending: false })
-      .limit(24);
-    return (data as Product[]) || [];
-  } catch {
-    return [];
-  }
-}
-
 export default async function HomePage({ searchParams }: Props) {
   // Marché déduit du domaine (pas de produit ici pour le déduire autrement),
   // même logique que app/layout.tsx (lib/market-from-host.ts).
-  const market = getMarketFromHost(headers().get('host'));
+  const market = getRequestMarket(headers());
   const t = SITE_COPY[market];
-  const [topVentesPool, categories, latestBlogPosts, blogCategories] = await Promise.all([
-    getTopVentesPool(market),
-    getActiveCategories(market),
-    getLatestPublishedBlogPosts(market, 3),
-    getBlogCategoriesCached(),
+  const [catalog, categories, latestBlogPosts, blogCategories] = await Promise.all([
+    getMarketCatalog(market),
+    getNavCategories(market),
+    // Le blog est un bonus : s'il est indisponible, l'accueil s'affiche quand même.
+    getLatestPublishedBlogPosts(market, 3).catch(() => []),
+    getBlogCategoriesCached().catch(() => []),
   ]);
-  // Mêmes produits, même tri (updated_at desc) : les 6 premiers du pool.
-  const featured = topVentesPool.slice(0, 6);
+  // Catalogue en cache 60 s (lib/site-products.ts), du plus récent au plus ancien : les 6 premiers.
+  const featured = catalog.slice(0, 6);
 
-  const topVentesWithSource = topVentesPool
+  const topVentesWithSource = catalog
     .map((p) => ({ product: p, source: getProductSource(p.affiliate_url) }))
     .filter((x): x is { product: Product; source: TopVentesSource } => x.source !== null);
 
@@ -148,58 +122,9 @@ export default async function HomePage({ searchParams }: Props) {
           <p className="text-site-text-secondary">{t.home.emptyPlatform}</p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-            {topVentesProducts.map(({ product: p, source }) => {
-              const img = p.image_url
-                ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
-                : null;
-              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === source);
-              return (
-                <Link
-                  key={p.id}
-                  href={`/${p.slug}`}
-                  className="bg-white border border-site-border rounded-xl p-4 flex flex-col gap-2 hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group"
-                >
-                  <div className="h-40 relative bg-site-bg rounded-lg overflow-hidden flex-shrink-0">
-                    {img ? (
-                      <Image
-                        src={img}
-                        alt={p.name}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        unoptimized={img.includes('/fetch/')}
-                        sizes="(max-width: 640px) 50vw, 25vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
-                    )}
-                  </div>
-                  {/* Étiquette plateforme (source réelle, déduite de
-                      l'URL affiliée) — pas de mention "Best-seller / Promo /
-                      Livraison rapide" comme sur la maquette : ce sont des
-                      affirmations non vérifiées pour des vrais produits
-                      vendus à de vrais clients. */}
-                  {sourceMeta && (
-                    <span className="text-xs text-site-text-secondary">{sourceMeta.label}</span>
-                  )}
-                  <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
-                    {p.hero_title || p.name}
-                  </p>
-                  {(() => {
-                    const price = getCardPrice(p, t.product.locale, market);
-                    return price ? (
-                      <span className="text-site-cta font-bold text-base">{price}</span>
-                    ) : (
-                      <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
-                    );
-                  })()}
-                  {p.free_shipping && (
-                    <span className="self-start">
-                      <FreeShippingBadge size="small" label={t.common.freeShipping} />
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            {topVentesProducts.map(({ product: p }) => (
+              <ProductCard key={p.id} product={p} market={market} variant="boxed" />
+            ))}
           </div>
         )}
 
@@ -222,53 +147,9 @@ export default async function HomePage({ searchParams }: Props) {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.momentSelection}</h2>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-            {featured.map((p) => {
-              const img = p.image_url
-                ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
-                : null;
-              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === getProductSource(p.affiliate_url));
-              return (
-                <Link
-                  key={p.id}
-                  href={`/${p.slug}`}
-                  className="bg-white border border-site-border rounded-xl p-4 flex flex-col gap-2 hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group"
-                >
-                  <div className="h-40 relative bg-site-bg rounded-lg overflow-hidden flex-shrink-0">
-                    {img ? (
-                      <Image
-                        src={img}
-                        alt={p.name}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        unoptimized={img.includes('/fetch/')}
-                        sizes="(max-width: 640px) 50vw, 25vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
-                    )}
-                  </div>
-                  {sourceMeta && (
-                    <span className="text-xs text-site-text-secondary">{sourceMeta.label}</span>
-                  )}
-                  <p className="text-[15px] font-semibold text-site-text line-clamp-2 leading-snug">
-                    {p.hero_title || p.name}
-                  </p>
-                  {(() => {
-                    const price = getCardPrice(p, t.product.locale, market);
-                    return price ? (
-                      <span className="text-site-cta font-bold text-base">{price}</span>
-                    ) : (
-                      <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
-                    );
-                  })()}
-                  {p.free_shipping && (
-                    <span className="self-start">
-                      <FreeShippingBadge size="small" label={t.common.freeShipping} />
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+            {featured.map((p) => (
+              <ProductCard key={p.id} product={p} market={market} variant="boxed" />
+            ))}
           </div>
           <div className="text-center mt-8">
             <Link href="/produits" className="text-site-primary hover:text-site-cta font-medium transition-colors">
@@ -336,11 +217,13 @@ export default async function HomePage({ searchParams }: Props) {
               {latestBlogPosts.map((post) => (
                 <Link key={post.id} href={`/blog/${post.slug}`} className="flex flex-col gap-2 group">
                   <div className="h-36 bg-site-bg border border-site-border rounded-lg overflow-hidden flex items-center justify-center text-site-text-secondary text-sm relative">
-                    {post.cover_image_url ? (
-                      <Image src={post.cover_image_url} alt={t.home.blogImageAlt} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
-                    ) : (
-                      t.home.blogImageAlt
-                    )}
+                    <SiteImage
+                      src={post.cover_image_url}
+                      alt={post.title}
+                      sizes="(max-width: 640px) 100vw, 33vw"
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      fallback={<span aria-hidden="true" className="text-3xl text-site-border">📝</span>}
+                    />
                   </div>
                   <span className="text-base font-bold text-site-text group-hover:text-site-primary transition-colors">{post.title}</span>
                   <span className="text-[13px] text-site-text-secondary">{post.excerpt}</span>

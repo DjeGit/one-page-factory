@@ -9,14 +9,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { unauthorized } from '../../_lib/http';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
   const { data, error } = await getSupabaseAdmin().rpc('purge_visitor_data');
-  if (error) return NextResponse.json({ success: false, error: error.message }, { status: 502 });
+  if (error) {
+    console.error('[api] POST /api/cron/purge-visits :', error.message);
+    return NextResponse.json({ success: false, error: 'La purge des données de visite a échoué (détail dans les logs serveur).' }, { status: 502 });
+  }
   return NextResponse.json({ success: true, removed: data ?? 0 });
 }

@@ -1,12 +1,12 @@
 import { headers } from 'next/headers';
 import { notFound, permanentRedirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { getMarketFromHost } from '@/lib/market-from-host';
 import { getPublishedBlogPostBySlug } from '@/lib/blog';
+import { requestCache } from '@/lib/site-request-cache';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import PostView from '@/components/blog/PostView';
 import { isValidMarket, DEFAULT_MARKET } from '@/lib/market';
-import { marketUrl } from '@/lib/site-url';
+import { getRequestMarket, marketUrl } from '@/lib/site-url';
 import { redirectToMarketDomain } from '@/lib/market-redirect';
 import { GUIDE_BASE_PATH, GUIDE_CATEGORY_SLUG, isGuidePillar } from '@/lib/buying-guide';
 
@@ -16,11 +16,14 @@ interface Props {
   params: { slug: string };
 }
 
+// generateMetadata et la page lisent le même article : une seule requête par visite.
+const loadPost = requestCache((slug: string) => getPublishedBlogPostBySlug(slug));
+
 // Guide d'achat par produit (21/10) : /guide-achat/[slug]. Seuls les articles
 // de la catégorie « guides-achat » répondent ici ; le guide général (pilier)
 // vit sur /guide-achat.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const post = await getPublishedBlogPostBySlug(params.slug);
+  const post = await loadPost(params.slug);
   if (!post || post.category?.slug !== GUIDE_CATEGORY_SLUG) return {};
   const postMarket = isValidMarket(post.market) ? post.market : DEFAULT_MARKET;
   const url = marketUrl(postMarket, `${GUIDE_BASE_PATH}/${post.slug}`);
@@ -39,16 +42,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description,
       url,
-      images: image ? [image] : undefined,
+      // Clé omise sans image : Next applique alors l'image de partage par défaut du site.
+      ...(image ? { images: [image] } : {}),
       publishedTime: post.published_at ?? undefined,
       modifiedTime: post.updated_at,
     },
-    twitter: { card: 'summary_large_image', title, description, images: image ? [image] : undefined },
+    twitter: { card: 'summary_large_image', title, description, ...(image ? { images: [image] } : {}) },
   };
 }
 
 export default async function GuideArticlePage({ params }: Props) {
-  const post = await getPublishedBlogPostBySlug(params.slug);
+  const post = await loadPost(params.slug);
   if (!post || post.category?.slug !== GUIDE_CATEGORY_SLUG) notFound();
 
   const postMarket = isValidMarket(post.market) ? post.market : DEFAULT_MARKET;
@@ -56,6 +60,6 @@ export default async function GuideArticlePage({ params }: Props) {
   redirectToMarketDomain(postMarket, path);
   if (path === GUIDE_BASE_PATH) permanentRedirect(GUIDE_BASE_PATH);
 
-  const market = getMarketFromHost(headers().get('host'));
+  const market = getRequestMarket(headers());
   return <PostView post={post} market={market} section="guide" path={path} />;
 }

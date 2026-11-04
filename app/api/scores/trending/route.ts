@@ -36,6 +36,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getTrendsInterest, cleanKeyword, type MarketId } from '@/lib/serpapi';
 import { requireInternalAuth, logSyncStart, logSyncEnd } from '@/lib/api-auth';
+import { badRequest, intParam, serverError } from '../../_lib/http';
+import { isLegacyMarket, parseProductIds, readSyncBody, shortError } from '../../_lib/legacy-sync-input';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -184,34 +186,32 @@ export async function POST(request: NextRequest) {
 
   const globalStart = Date.now();
 
-  let body: {
-    market?: MarketId;
-    product_ids?: string[];  // UUIDs
-    skip_trends?: boolean;
-  } = {};
+  const parsed = await readSyncBody(request);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
 
-  try {
-    body = await request.json();
-  } catch {
-    // Use defaults
+  if (body.market !== undefined && body.market !== null && !isLegacyMarket(body.market)) {
+    return badRequest('market invalide : fr, es ou com');
   }
-
-  const marketId: MarketId = body.market ?? 'fr';
+  const marketId: MarketId = (body.market as MarketId | undefined | null) ?? 'fr';
+  const pid = parseProductIds(body.product_ids);
+  if ('response' in pid) return pid.response;
+  const productIds = pid.ids;
+  if (body.skip_trends !== undefined && typeof body.skip_trends !== 'boolean') return badRequest('skip_trends doit être un booléen');
   const skipTrends = body.skip_trends ?? false;
   let logId = 0;
   try {
     logId = await logSyncStart(marketId, 'trending');
   } catch (dbErr) {
-    const msg = dbErr instanceof Error ? dbErr.message : String(dbErr);
+    const msg = shortError(dbErr);
     console.error('[TrendingScore] DB unavailable:', msg);
-    return NextResponse.json({ error: 'Database unavailable', detail: msg }, { status: 503 });
+    return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
   }
 
   // ─── Fetch products with click stats ───────────────────────────────────────
 
-  const productFilter =
-    body.product_ids?.length ? `AND p.id = ANY($1::uuid[])` : '';
-  const params = body.product_ids?.length ? [body.product_ids] : [];
+  const productFilter = productIds.length ? `AND p.id = ANY($1::uuid[])` : '';
+  const params = productIds.length ? [productIds] : [];
 
   let products: ProductForScoring[];
   try {
@@ -241,9 +241,10 @@ export async function POST(request: NextRequest) {
       [...params, marketId]
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = shortError(err);
     await logSyncEnd(logId, 'error', 0, 1, msg);
-    return NextResponse.json({ error: `DB error: ${msg}` }, { status: 500 });
+    console.error('[TrendingScore] lecture des produits :', msg);
+    return serverError('Erreur de base de données');
   }
 
   if (products.length === 0) {
@@ -312,9 +313,10 @@ export async function POST(request: NextRequest) {
       flatParams
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = shortError(err);
     await logSyncEnd(logId, 'error', 0, 1, msg);
-    return NextResponse.json({ error: `Update error: ${msg}` }, { status: 500 });
+    console.error('[TrendingScore] mise à jour :', msg);
+    return serverError('Erreur de base de données');
   }
 
   // Sort by score for the response
@@ -347,30 +349,38 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   const { searchParams } = new URL(request.url);
-  const market = (searchParams.get('market') ?? 'fr') as MarketId;
-  const limit = Math.min(50, parseInt(searchParams.get('limit') ?? '20', 10));
+  const rawMarket = searchParams.get('market') ?? 'fr';
+  if (!isLegacyMarket(rawMarket)) return badRequest('market invalide : fr, es ou com');
+  const market: MarketId = rawMarket;
+  const limit = intParam(searchParams.get('limit'), 20, 1, 50);
 
-  const products = await query<{
-    id: string;  // UUID
-    name: string;
-    trending_score: number;
-    trending_updated_at: string;
-    clicks_7d: number;
-  }>(
-    `SELECT
-       p.id,
-       COALESCE(p.name_fr, p.name) AS name,
-       p.trending_score,
-       p.trending_updated_at,
-       COUNT(c.id) FILTER (WHERE c.clicked_at >= NOW() - INTERVAL '7 days')::int AS clicks_7d
-     FROM products p
-     LEFT JOIN product_clicks c ON c.product_id = p.id AND c.market_id = $1
-     WHERE p.trending_score > 0
-     GROUP BY p.id, p.name_fr, p.trending_score, p.trending_updated_at
-     ORDER BY p.trending_score DESC
-     LIMIT $2`,
-    [market, limit]
-  );
+  let products: Array<{ id: string; name: string; trending_score: number; trending_updated_at: string; clicks_7d: number }>;
+  try {
+    products = await query<{
+      id: string;  // UUID
+      name: string;
+      trending_score: number;
+      trending_updated_at: string;
+      clicks_7d: number;
+    }>(
+      `SELECT
+         p.id,
+         COALESCE(p.name_fr, p.name) AS name,
+         p.trending_score,
+         p.trending_updated_at,
+         COUNT(c.id) FILTER (WHERE c.clicked_at >= NOW() - INTERVAL '7 days')::int AS clicks_7d
+       FROM products p
+       LEFT JOIN product_clicks c ON c.product_id = p.id AND c.market_id = $1
+       WHERE p.trending_score > 0
+       GROUP BY p.id, p.name_fr, p.trending_score, p.trending_updated_at
+       ORDER BY p.trending_score DESC
+       LIMIT $2`,
+      [market, limit]
+    );
+  } catch (err) {
+    console.error('[TrendingScore] classement :', shortError(err));
+    return serverError('Erreur de base de données');
+  }
 
   return NextResponse.json({ market, products });
 }

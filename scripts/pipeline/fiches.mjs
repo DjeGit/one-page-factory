@@ -22,9 +22,10 @@ export function slugify(s) {
 
 /** Slug libre : ajoute -2, -3… tant qu'il est déjà pris. */
 export function uniqueSlug(base, taken) {
-  let s = base || 'produit';
+  const root = base || 'produit';
+  let s = root;
   let i = 2;
-  while (taken.has(s)) s = `${base}-${i++}`;
+  while (taken.has(s)) s = `${root}-${i++}`;
   taken.add(s);
   return s;
 }

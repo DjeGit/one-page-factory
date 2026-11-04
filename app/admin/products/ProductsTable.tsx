@@ -3,14 +3,17 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Product, AnalyticsData } from '@/types';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import { getProductGallery } from '@/lib/product-images';
-import { filterList, presenceOf, statusCounts, type StatusTab } from '@/lib/admin-products-view';
+import { filterList, presenceOf, publicUrl, statusCounts, summarizeSync, type StatusTab, type SyncReport, type TableProduct } from '@/lib/admin-products-view';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
+
+/** Statistiques d'un produit (vues, clics, CTR en %), indexées par id. */
+export type ProductStats = Record<string, { views: number; clicks: number; ctr: number }>;
 
 interface ProductsTableProps {
-  products: Product[];
-  analyticsMap: Map<string, AnalyticsData>;
+  products: TableProduct[];
+  analyticsMap: ProductStats;
   /** Marchés où existe chaque produit (clé = produit racine) : pastilles FR / ES / UK. */
   presence?: Record<string, { market: string; active: boolean }[]>;
 }
@@ -25,50 +28,57 @@ export default function ProductsTable({ products, analyticsMap, presence = {} }:
   const router = useRouter();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ kind: 'info' | 'warning' | 'error'; text: string } | null>(null);
   const [status, setStatus] = useState<StatusTab>('all');
   const [query, setQuery] = useState('');
 
   const counts = useMemo(() => statusCounts(products), [products]);
   const shown = useMemo(() => filterList(products, status, query), [products, status, query]);
 
-  const handleDelete = async (product: Product) => {
-    if (!confirm(`Supprimer "${product.name}" ? Cette action est irréversible.`)) return;
+  const handleDelete = async (product: TableProduct) => {
+    const others = presenceOf(product, presence).filter((m) => m.market !== product.market);
+    const warning = others.length
+      ? `\n\nSeule la version de ce marché est supprimée : ${others.map((m) => m.market.toUpperCase()).join(', ')} ${others.length > 1 ? 'restent' : 'reste'} en place.`
+      : '';
+    if (!confirm(`Supprimer "${product.name}" ? Cette action est irréversible.${warning}`)) return;
 
     setDeletingId(product.id);
+    setNotice(null);
     try {
       const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
       if (res.ok) {
+        setNotice({ kind: 'info', text: `« ${product.name} » supprimé.` });
         router.refresh();
+      } else {
+        setNotice({ kind: 'error', text: `Suppression impossible : ${await readApiError(res, 'Suppression refusée')}` });
       }
+    } catch (err) {
+      setNotice({ kind: 'error', text: `Suppression impossible : ${networkErrorMessage(err)}` });
     } finally {
       setDeletingId(null);
     }
   };
 
-  const handleToggleActive = async (product: Product) => {
+  const handleToggleActive = async (product: TableProduct) => {
     setTogglingId(product.id);
+    setNotice(null);
     try {
       const res = await fetch(`/api/products/${product.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !product.active }),
       });
+      if (!res.ok) {
+        setNotice({ kind: 'error', text: `Changement impossible : ${await readApiError(res, 'Modification refusée')}` });
+        return;
+      }
       // Les autres marchés du même produit suivent ; ceux qui ne sont pas prêts (lien neutre, pas de photo) restent en brouillon.
       const data = await res.json().catch(() => null);
-      const sync = data?.sync as
-        | { activated: { market: string }[]; deactivated: { market: string }[]; skipped: { market: string; reasons: string[] }[] }
-        | undefined;
-      if (sync) {
-        const parts: string[] = [];
-        const moved = [...sync.activated, ...sync.deactivated].map((x) => x.market.toUpperCase());
-        if (moved.length) parts.push(`${product.active ? 'Désactivé' : 'Activé'} aussi sur : ${moved.join(', ')}.`);
-        for (const s of sync.skipped) parts.push(`${s.market.toUpperCase()} resté en brouillon (${s.reasons.join(', ')}).`);
-        setNotice(parts.length ? parts.join(' ') : null);
-      } else {
-        setNotice(null);
-      }
+      const summary = summarizeSync(data?.sync as SyncReport | undefined, !product.active);
+      setNotice(summary.text ? { kind: summary.blocked ? 'warning' : 'info', text: summary.text } : null);
       router.refresh();
+    } catch (err) {
+      setNotice({ kind: 'error', text: `Changement impossible : ${networkErrorMessage(err)}` });
     } finally {
       setTogglingId(null);
     }
@@ -77,9 +87,18 @@ export default function ProductsTable({ products, analyticsMap, presence = {} }:
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
       {notice && (
-        <div className="px-6 py-3 text-sm bg-amber-50 text-amber-800 border-b border-amber-200 flex items-start justify-between gap-4">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} className="text-amber-700 font-semibold shrink-0">Fermer</button>
+        <div
+          role={notice.kind === 'error' ? 'alert' : 'status'}
+          className={`px-6 py-3 text-sm border-b flex items-start justify-between gap-4 ${
+            notice.kind === 'error'
+              ? 'bg-red-50 text-red-800 border-red-200'
+              : notice.kind === 'warning'
+                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                : 'bg-green-50 text-green-800 border-green-200'
+          }`}
+        >
+          <span>{notice.text}</span>
+          <button type="button" onClick={() => setNotice(null)} className="font-semibold shrink-0">Fermer</button>
         </div>
       )}
 
@@ -133,7 +152,7 @@ export default function ProductsTable({ products, analyticsMap, presence = {} }:
               </tr>
             )}
             {shown.map((product) => {
-              const analytics = analyticsMap.get(product.id);
+              const analytics = analyticsMap[product.id];
               const ctr = analytics ? analytics.ctr : 0;
               const cover = getProductGallery(product)[0];
               const markets = presenceOf(product, presence);
@@ -162,7 +181,7 @@ export default function ProductsTable({ products, analyticsMap, presence = {} }:
                         <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-400">
                           <span className="flex items-center gap-1">
                             <span className="truncate max-w-[16rem]">/{product.slug}</span>
-                            <a href={`/${product.slug}`} target="_blank" rel="noreferrer" className="text-primary-500 hover:text-primary-700 transition-colors" aria-label="Voir la page">
+                            <a href={publicUrl(product.market, `/${product.slug}`)} target="_blank" rel="noopener noreferrer" className="text-primary-500 hover:text-primary-700 transition-colors" aria-label="Voir la page sur le site">
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                               </svg>
@@ -219,9 +238,13 @@ export default function ProductsTable({ products, analyticsMap, presence = {} }:
                   {/* Active toggle */}
                   <td className="px-4 py-4 text-center">
                     <button
+                      type="button"
+                      role="switch"
+                      aria-checked={product.active}
                       onClick={() => handleToggleActive(product)}
                       disabled={togglingId === product.id}
-                      aria-label={product.active ? 'Désactiver' : 'Activer'}
+                      title={product.active ? 'En ligne : cliquer pour passer en brouillon' : 'Brouillon : cliquer pour mettre en ligne'}
+                      aria-label={`${product.active ? 'Passer en brouillon' : 'Mettre en ligne'} : ${product.name}`}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
                         product.active ? 'bg-green-500' : 'bg-gray-300'
                       } disabled:opacity-60`}
@@ -243,6 +266,7 @@ export default function ProductsTable({ products, analyticsMap, presence = {} }:
                         Modifier
                       </Link>
                       <button
+                        type="button"
                         onClick={() => handleDelete(product)}
                         disabled={deletingId === product.id}
                         className="text-sm text-red-500 hover:text-red-700 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-60"

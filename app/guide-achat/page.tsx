@@ -1,31 +1,31 @@
 import Link from 'next/link';
-import Image from 'next/image';
+import SiteImage from '@/components/site/SiteImage';
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
-import { getMarketFromHost } from '@/lib/market-from-host';
 import { getPublishedBlogPostBySlug, getPublishedGuidePosts } from '@/lib/blog';
-import { getActiveCategories } from '@/lib/supabase';
+import { getNavCategories } from '@/lib/site-products';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import PostView from '@/components/blog/PostView';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { SITE_COPY } from '@/lib/site-copy';
-import { buildAlternates } from '@/lib/site-url';
+import { buildAlternates, getRequestMarket } from '@/lib/site-url';
 import { GUIDE_BASE_PATH, GUIDE_PILLAR_SLUG } from '@/lib/buying-guide';
+import { requestCache } from '@/lib/site-request-cache';
 
 export const dynamic = 'force-dynamic';
 
 // Guide d'achat (21/10) : page à part entière, dans le menu entre les
 // catégories et le Blog. Elle sert l'article « pilier » du marché (guide
 // général d'achat en ligne) et, dessous, la liste des autres guides.
-async function getPillar(market: 'fr' | 'es' | 'uk') {
+const getPillar = requestCache(async (market: 'fr' | 'es' | 'uk') => {
   const post = await getPublishedBlogPostBySlug(GUIDE_PILLAR_SLUG[market]);
   return post && post.market === market ? post : null;
-}
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const h = headers();
-  const market = getMarketFromHost(h.get('host'));
+  const market = getRequestMarket(h);
   const t = SITE_COPY[market];
   const pillar = await getPillar(market);
   const alternates = buildAlternates(h, GUIDE_BASE_PATH);
@@ -44,23 +44,24 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       url: alternates.canonical,
-      images: image ? [image] : undefined,
+      // Clé omise sans image : Next applique alors l'image de partage par défaut du site.
+      ...(image ? { images: [image] } : {}),
       publishedTime: pillar?.published_at ?? undefined,
       modifiedTime: pillar?.updated_at,
     },
-    twitter: { card: 'summary_large_image', title, description, images: image ? [image] : undefined },
+    twitter: { card: 'summary_large_image', title, description, ...(image ? { images: [image] } : {}) },
     // Page vide (guide pas encore publié) = page mince : non indexée.
     robots: pillar ? undefined : { index: false, follow: true },
   };
 }
 
 export default async function GuideAchatPage() {
-  const market = getMarketFromHost(headers().get('host'));
+  const market = getRequestMarket(headers());
   const t = SITE_COPY[market];
   const pillar = await getPillar(market);
 
   if (!pillar) {
-    const categories = await getActiveCategories(market);
+    const categories = await getNavCategories(market);
     return (
       <div className="min-h-screen bg-site-bg text-site-text">
         <SiteHeader categories={categories} market={market} />
@@ -91,16 +92,13 @@ export default async function GuideAchatPage() {
                 className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all group flex flex-col"
               >
                 <div className="h-36 relative bg-site-bg flex-shrink-0">
-                  {img && (
-                    <Image
-                      src={img}
-                      alt={post.title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      unoptimized={img.includes('/fetch/')}
-                      sizes="(max-width: 640px) 100vw, 50vw"
-                    />
-                  )}
+                  <SiteImage
+                    src={img}
+                    alt={post.title}
+                    sizes="(max-width: 640px) 100vw, 50vw"
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
+                    fallback={<div className="w-full h-full" />}
+                  />
                 </div>
                 <div className="p-4 flex flex-col gap-1.5">
                   <p className="text-base font-bold text-site-text group-hover:text-site-primary transition-colors leading-snug">

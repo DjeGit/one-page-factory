@@ -11,7 +11,7 @@
  * `actualConversionRate` permet de brancher un taux réel plus tard sans
  * changer la signature de computeProductROI.
  */
-import { countsByProduct } from '@/lib/analytics/counts';
+import { loadProductCounts } from '@/lib/analytics/stats';
 import type { Market } from '@/lib/market';
 import { getCurrencyForMarket } from '@/lib/market';
 import { getSupabaseAdmin } from '@/lib/supabase';
@@ -117,7 +117,7 @@ export function computeProductROI(input: ProductROIInput): ProductROIResult {
 export async function getLatestExchangeRate(currency: 'EUR' | 'GBP'): Promise<number | null> {
   if (currency === 'EUR') return 1;
   const sb = getSupabaseAdmin();
-  const { data } = await sb
+  const { data, error } = await sb
     .from('exchange_rates')
     .select('rate')
     .eq('base_currency', 'EUR')
@@ -125,6 +125,7 @@ export async function getLatestExchangeRate(currency: 'EUR' | 'GBP'): Promise<nu
     .order('fetched_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error) console.error('[roi] lecture du taux de change impossible :', error.message);
   return data?.rate != null ? Number(data.rate) : null;
 }
 
@@ -143,22 +144,19 @@ export async function computeMarketROI(market: Market): Promise<MarketROISummary
   const currency = getCurrencyForMarket(market);
   const sb = getSupabaseAdmin();
 
-  const [{ data: products }, eurRate] = await Promise.all([
+  // Trois lectures en parallèle (avant : une requête de comptage par produit, en file indienne).
+  const [{ data: products, error: productsError }, eurRate, counts] = await Promise.all([
     sb
       .from('products')
       .select('id, name, price, cost_price, ad_spend_allocated, commission_rate, product_source')
       .eq('market', market),
     getLatestExchangeRate(currency),
+    loadProductCounts(sb, { market, skipViews: true }),
   ]);
+  if (productsError) console.error('[roi] lecture des produits impossible :', productsError.message);
 
   const results: (ProductROIResult & { productId: string; productName: string })[] = [];
-
-  // Clics comptés en parallèle (avant : une requête par produit, en file indienne).
-  const clickCounts = await countsByProduct(
-    (table, id) => sb.from(table).select('*', { count: 'exact', head: true }).eq('product_id', id),
-    'clicks',
-    (products || []).map((p) => p.id as string),
-  );
+  const clickCounts = new Map(counts.map((c) => [c.product_id, c.clicks]));
 
   for (const p of products || []) {
     const clickCount = clickCounts.get(p.id as string) ?? 0;

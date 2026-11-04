@@ -1,16 +1,39 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type { Market } from '@/lib/market';
+import { SITE_COPY } from '@/lib/site-copy';
 
 interface ExitIntentPopupProps {
   productName: string;
   redirectCode: string;
+  /** Marché de la fiche : langue du texte. */
+  market: Market;
+}
+
+// localStorage peut lever une exception (navigation privée, stockage bloqué) :
+// la fenêtre ne doit jamais faire planter la page.
+function storageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function storageSet(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignoré
+  }
 }
 
 export default function ExitIntentPopup({
   productName,
   redirectCode,
+  market,
 }: ExitIntentPopupProps) {
+  const copy = SITE_COPY[market].popups;
   const [visible, setVisible] = useState(false);
   const shownRef = useRef(false);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -21,11 +44,10 @@ export default function ExitIntentPopup({
   function show() {
     if (shownRef.current) return;
     if (typeof window === 'undefined') return;
-    if (localStorage.getItem(storageKey)) return;
-    if (localStorage.getItem(ctaClickedKey)) return;
+    if (storageGet(storageKey) || storageGet(ctaClickedKey)) return;
 
     shownRef.current = true;
-    localStorage.setItem(storageKey, '1');
+    storageSet(storageKey, '1');
     setVisible(true);
   }
 
@@ -67,10 +89,25 @@ export default function ExitIntentPopup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Échap ferme la fenêtre (accessibilité clavier).
+  useEffect(() => {
+    if (!visible) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setVisible(false);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [visible]);
+
   if (!visible) return null;
+
+  const [before, name, after] = copy.exit.leaving(productName);
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="exit-popup-title"
       className="fixed inset-0 z-[200] flex items-center justify-center p-4"
       style={{ backdropFilter: 'blur(6px)', backgroundColor: 'rgba(0,0,0,0.65)' }}
     >
@@ -83,32 +120,30 @@ export default function ExitIntentPopup({
         <button
           onClick={close}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
-          aria-label="Fermer"
+          aria-label={copy.close}
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
 
         {/* Headline */}
-        <div className="text-4xl mb-2">🛑</div>
-        <h2 className="text-3xl font-black text-gray-900 mb-2">Attendez !</h2>
+        <div className="text-4xl mb-2" aria-hidden="true">🛑</div>
+        <h2 id="exit-popup-title" className="text-3xl font-black text-gray-900 mb-2">{copy.exit.title}</h2>
         <p className="text-lg text-gray-600 mb-6">
-          Vous partez sans votre{' '}
-          <span className="font-bold text-gray-900">{productName}</span> ?
+          {before}{' '}
+          <span className="font-bold text-gray-900">{name}</span>
+          {after}
         </p>
 
         {/* CTA */}
         <a
           href={`/api/go/${redirectCode}`}
-          onClick={() => {
-            if (typeof window !== 'undefined') {
-              localStorage.setItem(ctaClickedKey, '1');
-            }
-          }}
+          rel="sponsored nofollow noopener"
+          onClick={() => storageSet(ctaClickedKey, '1')}
           className="block w-full bg-orange-500 hover:bg-orange-600 text-white font-black text-xl py-4 rounded-xl transition-colors shadow-lg shadow-orange-500/30 mb-4"
         >
-          🛒 Je profite de l&apos;offre maintenant
+          🛒 {copy.exit.cta}
         </a>
 
         {/* Decline */}
@@ -116,7 +151,7 @@ export default function ExitIntentPopup({
           onClick={close}
           className="text-gray-400 text-sm hover:text-gray-600 transition-colors underline"
         >
-          Non merci
+          {copy.exit.decline}
         </button>
       </div>
 

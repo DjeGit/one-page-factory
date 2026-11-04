@@ -20,5 +20,10 @@ export const SHOW_TESTIMONIALS = false;
  * (price_checked_at). Le prix est suivi d'un astérisque et d'une mention
  * encadrée « prix à confirmer avec le revendeur » (décision du 01/11/2026).
  * Les produits Amazon restent masqués tant que SHOW_PRICES = false.
+ *
+ * Règle commune (lib/pricing.ts, getPublishablePrice) : un prix sans date de
+ * relevé valide n'est JAMAIS publié, quel que soit le réglage — ni sur la
+ * page, ni dans les données structurées Google (JSON-LD), qui reprennent
+ * exactement le prix et la devise affichés.
  */
 export const SHOW_MERCHANT_PRICES = true;

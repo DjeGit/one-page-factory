@@ -1,52 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateCategory, deleteCategory, setCategoryMarketActive } from '@/lib/supabase';
-import { isValidMarket } from '@/lib/market';
+import { updateCategory, deleteCategory, getSupabaseAdmin } from '@/lib/supabase';
+import { clearTtlCache } from '@/lib/ttl-cache';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { badRequest, dbErrorResponse, invalidId, isUuid, notFound, readJsonObject, unauthorized } from '../../_lib/http';
+import { parseCategoryNames, parseSortOrder } from '../../_lib/blog-input';
 import type { Category } from '@/types';
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
   try {
-    const body = await req.json();
+    const parsed = await readJsonObject(req);
+    if ('response' in parsed) return parsed.response;
+    const body = parsed.body;
 
-    // Mise à jour partielle (05/10, fix) : le bouton Actif/Masqué de
-    // CategoriesManager.tsx n'envoie QUE { is_active }. Avant ce correctif,
-    // les autres champs (slug/name_*/sort_order non envoyés -> undefined,
-    // mais `icon: body.icon ?? null` forçait explicitement icon à null)
-    // étaient écrasés à chaque bascule Actif/Masqué. On ne touche
-    // désormais que les champs réellement présents dans la requête.
-    const update: Partial<Category> = {};
-    if (body.slug !== undefined) update.slug = body.slug;
-    if (body.name_fr !== undefined) update.name_fr = body.name_fr;
-    if (body.name_es !== undefined) update.name_es = body.name_es;
-    if (body.name_uk !== undefined) update.name_uk = body.name_uk;
-    if (body.icon !== undefined) update.icon = body.icon ?? null;
-    if (body.sort_order !== undefined) update.sort_order = body.sort_order;
-    if (body.is_active !== undefined) update.is_active = body.is_active;
+    // Mise à jour partielle : on ne touche que les champs réellement présents dans la requête.
+    //
+    // La visibilité d'une catégorie n'est plus réglable à la main : elle est AUTOMATIQUE (une catégorie
+    // s'affiche sur un marché dès qu'elle y contient un produit en ligne, lib/category-visibility.ts).
+    // Les anciens interrupteurs `is_active` et `market_active` (activation par marché) ne sont donc
+    // plus acceptés ici — plus aucun écran ne les envoie, et les accepter laissait croire qu'ils
+    // agissaient encore sur le site.
+    const names = parseCategoryNames(body, true);
+    if ('error' in names) return badRequest(names.error);
+    const update: Partial<Category> = { ...names.data };
+    if ('sort_order' in body) {
+      const sortOrder = parseSortOrder(body.sort_order);
+      if (sortOrder === null) return badRequest("Ordre d'affichage invalide (entier entre 0 et 9999)");
+      if (sortOrder !== undefined) update.sort_order = sortOrder;
+    }
+    if (Object.keys(update).length === 0) return badRequest('Aucune modification à enregistrer');
 
-    // Activation par marché (18/10) : { market: 'es', market_active: true }.
-    if (body.market_active !== undefined) {
-      if (!isValidMarket(body.market)) {
-        return NextResponse.json({ error: 'Marché invalide' }, { status: 400 });
-      }
-      const toggled = await setCategoryMarketActive(params.id, body.market, !!body.market_active);
-      if (!toggled) {
-        return NextResponse.json(
-          { error: 'Mise à jour impossible (migration 20261018000001 appliquée dans Supabase ?)' },
-          { status: 500 }
-        );
-      }
-      return NextResponse.json(toggled);
+    if (update.slug) {
+      const { data: taken } = await getSupabaseAdmin().from('categories').select('id').eq('slug', update.slug).neq('id', params.id).maybeSingle();
+      if (taken) return NextResponse.json({ error: 'Ce slug est déjà utilisé par une autre catégorie' }, { status: 409 });
     }
 
     const category = await updateCategory(params.id, update);
-
     if (!category) {
-      return NextResponse.json({ error: 'Erreur lors de la mise à jour de la catégorie' }, { status: 500 });
+      // updateCategory ne distingue pas « introuvable » d'une erreur : on vérifie l'existence.
+      const { data: exists } = await getSupabaseAdmin().from('categories').select('id').eq('id', params.id).maybeSingle();
+      if (!exists) return notFound('Catégorie introuvable');
+      return dbErrorResponse('PUT /api/categories/[id]', 'mise à jour impossible', 'Erreur lors de la mise à jour de la catégorie');
     }
 
+    clearTtlCache();
     return NextResponse.json(category);
   } catch (error) {
     console.error('PUT /api/categories/[id] error:', error);
@@ -55,14 +53,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
   try {
     const ok = await deleteCategory(params.id);
     if (!ok) {
-      return NextResponse.json({ error: 'Erreur lors de la suppression de la catégorie' }, { status: 500 });
+      return dbErrorResponse('DELETE /api/categories/[id]', 'suppression impossible', 'Erreur lors de la suppression de la catégorie');
     }
+    clearTtlCache();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('DELETE /api/categories/[id] error:', error);

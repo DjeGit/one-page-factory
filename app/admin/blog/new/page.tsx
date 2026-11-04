@@ -1,12 +1,20 @@
 import Link from 'next/link';
 import BlogPostForm from '@/components/admin/BlogPostForm';
-import { getAllProducts } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabase';
 import { getBlogCategories } from '@/lib/blog';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function NewBlogPostPage() {
-  const [products, categories] = await Promise.all([getAllProducts(), getBlogCategories()]);
+// Seuls l'identifiant, le nom, l'adresse et le marché servent au sélecteur de produits liés
+// (avant : tous les produits complets des 3 marchés étaient envoyés au navigateur).
+async function getBlogProductChoices() {
+  const { data } = await getSupabaseAdmin().from('products').select('id, name, slug, market').order('name');
+  return (data ?? []) as { id: string; name: string; slug: string; market: string }[];
+}
+
+export default withAdminAuth(async function NewBlogPostPage() {
+  const [products, categories] = await Promise.all([getBlogProductChoices(), getBlogCategories()]);
 
   return (
     <div className="p-8">
@@ -27,4 +35,4 @@ export default async function NewBlogPostPage() {
       </div>
     </div>
   );
-}
+});

@@ -5,25 +5,26 @@ import CostVsGainSummary from '@/components/admin/CostVsGainSummary';
 import TopProductsLive from '@/components/admin/TopProductsLive';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { computeMarketROI } from '@/lib/analytics/roi';
+import { publicUrl } from '@/lib/admin-products-view';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AnalyticsPage() {
+export default withAdminAuth(async function AnalyticsPage() {
   const market = getActiveMarket();
-  const [analytics, stats, roi, topProductsRes] = await Promise.all([
+  // Le « Top 10 live » se charge côté navigateur (il se rafraîchit tout seul) : avant, la page
+  // l'attendait en refaisant un appel HTTP vers le site public, ce qui ajoutait plusieurs secondes.
+  const [analytics, stats, roi] = await Promise.all([
     getAnalytics(market),
     getDashboardStats(market),
     computeMarketROI(market),
-    fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/top-products?market=${market}`, { cache: 'no-store' })
-      .then(r => r.json())
-      .catch(() => []),
   ]);
   const roiByProduct = new Map(roi.products.map((r) => [r.productId, r]));
+  const sortedAnalytics = [...analytics].sort((a, b) => b.clicks - a.clicks);
 
   const totalRevenue = roi.totalRevenueEur ?? 0;
-  const avgCtr = analytics.length > 0
-    ? analytics.reduce((sum, a) => sum + a.ctr, 0) / analytics.length
-    : 0;
+  // CTR global (total clics / total vues), comme le tableau de bord — et non la moyenne des CTR par produit.
+  const avgCtr = stats.total_views > 0 ? (stats.total_clicks / stats.total_views) * 100 : 0;
 
   return (
     <div className="p-8">
@@ -88,7 +89,7 @@ export default async function AnalyticsPage() {
       </div>
 
       {/* Top 10 Live */}
-      <TopProductsLive initialData={topProductsRes} market={market} />
+      <TopProductsLive initialData={[]} market={market} />
 
       {/* Per-product analytics */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -121,8 +122,7 @@ export default async function AnalyticsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {analytics
-                  .sort((a, b) => b.clicks - a.clicks)
+                {sortedAnalytics
                   .map((item) => (
                     <tr key={item.product_id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
@@ -170,8 +170,9 @@ export default async function AnalyticsPage() {
                             Modifier
                           </Link>
                           <a
-                            href={`/${item.slug}`}
+                            href={publicUrl(market, `/${item.slug}`)}
                             target="_blank"
+                            rel="noopener noreferrer"
                             className="text-sm text-gray-500 hover:text-gray-700 font-medium"
                           >
                             Voir
@@ -197,4 +198,4 @@ export default async function AnalyticsPage() {
       </div>
     </div>
   );
-}
+});

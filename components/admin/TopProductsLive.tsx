@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useMarket } from '@/lib/market-context';
+import { publicUrl } from '@/lib/admin-products-view';
 
 interface TopProduct {
   id: string;
@@ -18,7 +19,8 @@ interface TopProduct {
 }
 
 interface Props {
-  initialData: TopProduct[];
+  /** Données déjà chargées côté serveur (facultatif : sans elles, le tableau se charge à l'ouverture). */
+  initialData?: TopProduct[];
   market?: string;
 }
 
@@ -36,48 +38,52 @@ export default function TopProductsLive({ initialData, market: marketProp = 'fr'
   const { market: contextMarket } = useMarket();
   const market = contextMarket || marketProp;
 
-  const [data, setData] = useState<TopProduct[]>(initialData);
+  const hasInitial = !!initialData && initialData.length > 0;
+  const [data, setData] = useState<TopProduct[]>(initialData ?? []);
+  const [loadedOnce, setLoadedOnce] = useState(hasInitial);
+  const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [secondsAgo, setSecondsAgo] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [flash, setFlash] = useState(false);
-  const prevMarket = useRef(market);
+  // Numéro de la dernière requête : une réponse lente d'un ancien marché ne doit jamais écraser la bonne.
+  const requestId = useRef(0);
 
   const maxClicks = data.length > 0 ? Math.max(...data.map(p => p.clicks_24h), 1) : 1;
 
   const refresh = useCallback(async (m: string) => {
+    const id = ++requestId.current;
     setIsRefreshing(true);
     try {
       const res = await fetch(`/api/top-products?market=${m}`, { cache: 'no-store' });
-      if (res.ok) {
-        const fresh = await res.json();
-        setData(fresh);
-        setLastUpdated(new Date());
-        setSecondsAgo(0);
-        setFlash(true);
-        setTimeout(() => setFlash(false), 600);
-      }
+      if (!res.ok) throw new Error('Chargement impossible');
+      const fresh = await res.json();
+      if (id !== requestId.current) return;
+      setData(Array.isArray(fresh) ? fresh : []);
+      setError(null);
+      setLoadedOnce(true);
+      setLastUpdated(new Date());
+      setSecondsAgo(0);
+      setFlash(true);
+      setTimeout(() => setFlash(false), 600);
+    } catch {
+      if (id === requestId.current) setError('Impossible de charger le classement pour le moment.');
     } finally {
-      setIsRefreshing(false);
+      if (id === requestId.current) setIsRefreshing(false);
     }
   }, []);
 
-  // Re-fetch instantanément quand le marché change (via contexte)
+  // Chargement à l'ouverture, puis à chaque changement de marché.
   useEffect(() => {
-    if (prevMarket.current !== market) {
-      prevMarket.current = market;
-      refresh(market);
-    }
+    refresh(market);
   }, [market, refresh]);
 
-  // Sync server-provided initialData (e.g. après router.refresh())
+  // Rafraîchissement auto toutes les 30 s, uniquement si l'onglet est visible (chaque passage lance
+  // plusieurs requêtes par produit : inutile quand personne ne regarde).
   useEffect(() => {
-    setData(initialData);
-  }, [initialData]);
-
-  // Auto-refresh toutes les 30s
-  useEffect(() => {
-    const interval = setInterval(() => refresh(market), REFRESH_INTERVAL);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') refresh(market);
+    }, REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, [market, refresh]);
 
@@ -117,6 +123,7 @@ export default function TopProductsLive({ initialData, market: marketProp = 'fr'
             disabled={isRefreshing}
             className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
             title="Rafraîchir"
+            aria-label="Rafraîchir le classement"
           >
             <svg
               className={`w-4 h-4 text-gray-500 ${isRefreshing ? 'animate-spin' : ''}`}
@@ -129,7 +136,13 @@ export default function TopProductsLive({ initialData, market: marketProp = 'fr'
         </div>
       </div>
 
-      {data.length === 0 ? (
+      {error && (
+        <div role="alert" className="px-6 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800">{error}</div>
+      )}
+
+      {!loadedOnce && !error ? (
+        <div className="py-12 text-center text-sm text-gray-400">Chargement du classement…</div>
+      ) : data.length === 0 ? (
         <div className="py-12 text-center">
           <div className="text-3xl mb-2">📊</div>
           <p className="text-gray-400 text-sm">Aucune donnée — les stats apparaîtront après les premières visites</p>
@@ -171,13 +184,14 @@ export default function TopProductsLive({ initialData, market: marketProp = 'fr'
                         <span className="text-orange-500 text-xs flex-shrink-0">🔥</span>
                       )}
                     </div>
-                    <Link
-                      href={`/${product.slug}`}
+                    <a
+                      href={publicUrl(market, `/${product.slug}`)}
                       target="_blank"
+                      rel="noopener noreferrer"
                       className="text-xs text-gray-400 hover:text-primary-600 truncate block"
                     >
                       /{product.slug}
-                    </Link>
+                    </a>
                   </div>
 
                   {/* Bar + count */}

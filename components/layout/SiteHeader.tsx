@@ -83,7 +83,7 @@ export default function SiteHeader({ categories, market }: Props) {
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-site-border">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-[4rem] py-1.5 flex items-center justify-between gap-4">
         <Link
           href="/"
           aria-label={t.nav.homeAria}
@@ -97,12 +97,13 @@ export default function SiteHeader({ categories, market }: Props) {
 
         {/* Nav — design validé (Design.html) : pas d'icônes sur les liens,
             pas de chevron sur Top Ventes. */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav aria-label={t.nav.menuAria} className="hidden lg:flex flex-1 min-w-0 flex-wrap items-center justify-center gap-x-6 xl:gap-x-8 gap-y-1">
           <div className="relative shrink-0" ref={topVentesRef}>
             <button
               type="button"
               onClick={() => setTopVentesOpen((v) => !v)}
               aria-expanded={topVentesOpen}
+              aria-haspopup="true"
               className="text-[15px] font-semibold text-site-primary hover:text-site-cta transition-colors whitespace-nowrap"
             >
               {t.nav.topVentes}
@@ -158,7 +159,7 @@ export default function SiteHeader({ categories, market }: Props) {
           </Link>
         </nav>
 
-        <div className="hidden md:flex items-center gap-5 shrink-0 relative">
+        <div className="hidden lg:flex items-center gap-5 shrink-0 relative">
           {searchOpen ? (
             <form onSubmit={submitSearch} className="flex items-center">
               <input
@@ -167,7 +168,10 @@ export default function SiteHeader({ categories, market }: Props) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onBlur={() => !searchQuery && setSearchOpen(false)}
+                onKeyDown={(e) => e.key === 'Escape' && setSearchOpen(false)}
                 placeholder={t.nav.searchPlaceholder}
+                aria-label={t.nav.searchAria}
+                enterKeyHint="search"
                 className="w-52 border border-site-border rounded-lg px-3 py-2 text-sm text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary/40"
               />
             </form>
@@ -178,7 +182,7 @@ export default function SiteHeader({ categories, market }: Props) {
               className="text-site-text hover:text-site-primary transition-colors"
               aria-label={t.nav.searchAria}
             >
-              <Search className="w-5 h-5" />
+              <Search className="w-5 h-5" aria-hidden="true" />
             </button>
           )}
           {/* Panier (30/09) : visuel conforme à la maquette, pas encore
@@ -192,8 +196,8 @@ export default function SiteHeader({ categories, market }: Props) {
             className="relative text-site-text hover:text-site-primary transition-colors"
             title={t.nav.cartTitle}
           >
-            <ShoppingCart className="w-5 h-5" />
-            <span className="absolute -top-1.5 -right-2 bg-site-cta text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+            <ShoppingCart className="w-5 h-5" aria-hidden="true" />
+            <span aria-hidden="true" className="absolute -top-1.5 -right-2 bg-site-cta text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
               0
             </span>
           </button>
@@ -202,15 +206,17 @@ export default function SiteHeader({ categories, market }: Props) {
         <button
           type="button"
           onClick={() => setMobileOpen((v) => !v)}
-          className="md:hidden p-2 -mr-2 text-site-text"
+          className="lg:hidden p-2 -mr-2 text-site-text"
           aria-label={t.nav.menuAria}
+          aria-expanded={mobileOpen}
+          aria-controls="mobile-menu"
         >
-          {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          {mobileOpen ? <X className="w-6 h-6" aria-hidden="true" /> : <Menu className="w-6 h-6" aria-hidden="true" />}
         </button>
       </div>
 
       {mobileOpen && (
-        <div className="md:hidden border-t border-site-border bg-white max-h-[75vh] overflow-y-auto">
+        <div id="mobile-menu" className="lg:hidden border-t border-site-border bg-white max-h-[75vh] overflow-y-auto">
           <div className="px-4 py-4 flex flex-col gap-1">
             <form
               onSubmit={(e) => {
@@ -219,13 +225,15 @@ export default function SiteHeader({ categories, market }: Props) {
               }}
               className="relative mb-2"
             >
-              <Search className="w-4 h-4 text-site-text-secondary absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-site-text-secondary absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
               <input
-                type="text"
+                type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t.nav.searchPlaceholder}
-                className="w-full border border-site-border rounded-lg pl-9 pr-3 py-2.5 text-sm text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary/40"
+                aria-label={t.nav.searchAria}
+                enterKeyHint="search"
+                className="w-full border border-site-border rounded-lg pl-9 pr-3 py-2.5 text-base text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary/40"
               />
             </form>
             <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">{t.nav.topVentes}</p>
@@ -274,7 +282,7 @@ export default function SiteHeader({ categories, market }: Props) {
 
             <div className="mt-2 pt-2 border-t border-site-border flex items-center justify-between px-2 py-2.5 text-sm text-site-text-secondary">
               <span className="flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4" />
+                <ShoppingCart className="w-4 h-4" aria-hidden="true" />
                 {t.nav.cartLabel}
               </span>
               <span>{t.nav.itemCount(0)}</span>

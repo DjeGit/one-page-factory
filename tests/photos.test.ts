@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 // @ts-ignore — module Node pur (.mjs) sans déclaration de types
-import { normalizeImageUrl, dedupe, toSquareJpeg, pickBest, parseClassification, processProduct, visionProvider, classifyImages, parseBox, cropToCleanBox } from '../scripts/photos/pipeline.mjs';
+import { normalizeImageUrl, dedupe, toSquareJpeg, pickBest, parseClassification, processProduct, visionProvider, classifyImages, parseBox, cropToCleanBox, isPublicUrl, MIN_PHOTOS as PHOTOS_MIN } from '../scripts/photos/pipeline.mjs';
+// @ts-ignore
+import { MIN_PHOTOS as GATES_MIN } from '../scripts/pipeline/gates.mjs';
 
 const solid = (w: number, h: number, rgb: [number, number, number]) =>
   sharp({ create: { width: w, height: h, channels: 3, background: { r: rgb[0], g: rgb[1], b: rgb[2] } } }).jpeg().toBuffer();
@@ -226,5 +228,21 @@ describe('photos pipeline', () => {
     } finally {
       globalThis.fetch = origFetch;
     }
+  });
+});
+
+describe('photos pipeline : sécurité et erreurs', () => {
+  it('le minimum de photos est le même pour le tri et pour la mise en ligne', () => {
+    expect(PHOTOS_MIN).toBe(GATES_MIN);
+  });
+  it('isPublicUrl : pas de réseau interne, pas d’identifiants, pas de protocole exotique', () => {
+    for (const u of ['https://ae01.alicdn.com/kf/a.jpg', 'http://ae-pic-a1.aliexpress-media.com/kf/b.png']) expect(isPublicUrl(u)).toBe(true);
+    for (const u of ['http://localhost/a.jpg', 'http://127.0.0.1/a.jpg', 'http://10.0.0.5/a.jpg', 'http://192.168.1.2/a.jpg', 'http://172.16.0.1/a', 'http://169.254.169.254/latest/meta-data', 'http://[::1]/a', 'http://serveur-interne/a.jpg', 'http://x.internal/a', 'https://user:pw@ae01.alicdn.com/a.jpg', 'file:///etc/passwd', 'ftp://exemple.com/a.jpg', 'pas une url', 'http://2130706433/a.jpg']) expect(isPublicUrl(u)).toBe(false);
+    expect(normalizeImageUrl('http://169.254.169.254/latest/meta-data/x.jpg')).toBeNull();
+    expect(normalizeImageUrl('//ae01.alicdn.com/kf/Sabc.jpg')).toBe('https://ae01.alicdn.com/kf/Sabc.jpg');
+  });
+  it('parseClassification : une réponse cassée donne une erreur « tri illisible » (passagère, le worker réessaie)', () => {
+    expect(() => parseClassification('pas de json', 2)).toThrow(/tri photos illisible/);
+    expect(() => parseClassification('[{"index":0, ', 2)).toThrow(/tri photos illisible/);
   });
 });

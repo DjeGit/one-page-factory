@@ -1,19 +1,19 @@
-import Link from 'next/link';
-import Image from 'next/image';
 import { headers } from 'next/headers';
 import { notFound, permanentRedirect } from 'next/navigation';
-import { getCategoryBySlug, getActiveProductsByCategory, getActiveCategories } from '@/lib/supabase';
-import { getCloudinaryUrl } from '@/lib/cloudinary';
-import { getMarketFromHost } from '@/lib/market-from-host';
 import type { Metadata } from 'next';
+import { getCategoryBySlug, getActiveProductsByCategory, getActiveCategories } from '@/lib/supabase';
+import { getNavCategories } from '@/lib/site-products';
 import SiteHeader from '@/components/layout/SiteHeader';
 import AffiliateDisclosureBanner from '@/components/landing/AffiliateDisclosureBanner';
 import SiteFooter from '@/components/layout/SiteFooter';
-import { getProductSource, TOP_VENTES_SOURCES } from '@/lib/top-ventes';
+import ProductCard from '@/components/site/ProductCard';
 import { SITE_COPY } from '@/lib/site-copy';
 import { baseCategorySlug, categoryAlternates, categoryPath, localizedCategorySlug } from '@/lib/category-slugs';
-import { getCardPrice } from '@/lib/pricing';
-import FreeShippingBadge from '@/components/product/FreeShippingBadge';
+import { getRequestMarket, marketUrl } from '@/lib/site-url';
+import { serializeJsonLd } from '@/lib/json-ld';
+import { requestCache } from '@/lib/site-request-cache';
+import type { Market } from '@/lib/market';
+import type { Category } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,24 +21,47 @@ interface Props {
   params: { slug: string };
 }
 
+const MARKET_LIST: Market[] = ['fr', 'es', 'uk'];
+
 function categoryName(category: { name_fr: string; name_es: string; name_uk: string }, market: string): string {
   if (market === 'es') return category.name_es;
   if (market === 'uk') return category.name_uk;
   return category.name_fr;
 }
 
+// generateMetadata et la page lisaient chacune la catégorie ET ses produits
+// (4 requêtes par visite) : mémoïsé le temps d'une requête.
+const loadCategory = requestCache(async (urlSlug: string): Promise<Category | null> => {
+  // Slug de base d'abord (gère les slugs traduits et les anciens slugs
+  // « gaming… »), puis le slug tel quel au cas où la base contiendrait encore
+  // une catégorie sous un ancien nom.
+  const base = baseCategorySlug(urlSlug);
+  const found = await getCategoryBySlug(base);
+  if (found || base === urlSlug) return found;
+  return getCategoryBySlug(urlSlug);
+});
+const loadProducts = requestCache((categoryId: string, market: Market) => getActiveProductsByCategory(categoryId, market));
+
+/** Marchés où la catégorie a au moins un produit en ligne (lectures en cache 60 s). */
+async function marketsWithProducts(categoryId: string): Promise<Market[]> {
+  try {
+    const lists = await Promise.all(MARKET_LIST.map((m) => getActiveCategories(m)));
+    return MARKET_LIST.filter((_, i) => lists[i].some((c) => c.id === categoryId));
+  } catch {
+    return []; // base indisponible : on ne déclare que la page courante (hreflang auto-référent)
+  }
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const category = await getCategoryBySlug(baseCategorySlug(params.slug));
+  const category = await loadCategory(params.slug);
   if (!category) return {};
-  const h = headers();
-  const market = getMarketFromHost(h.get('host'));
+  const market = getRequestMarket(headers());
   const name = categoryName(category, market);
-  // Audit M1 : une catégorie sans produit sur ce marché reste accessible mais
-  // n'est pas indexée (page vide = contenu mince) ; elle le redeviendra
-  // d'elle-même dès le premier produit.
-  const products = await getActiveProductsByCategory(category.id, market);
   const description = SITE_COPY[market].category.metaDescription(name);
-  const alternates = categoryAlternates(category.slug, market);
+  // Sans produit sur ce marché la page répond 404 (voir CategoryPage) : les
+  // métadonnées ne servent que pour une catégorie réellement affichée.
+  const available = await marketsWithProducts(category.id);
+  const alternates = categoryAlternates(category.slug, market, available);
   return {
     title: name,
     description,
@@ -50,112 +73,70 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
       url: alternates.canonical,
     },
-    robots: products.length === 0 ? { index: false, follow: true } : undefined,
   };
 }
 
 export default async function CategoryPage({ params }: Props) {
-  const category = await getCategoryBySlug(baseCategorySlug(params.slug));
+  const category = await loadCategory(params.slug);
   if (!category) notFound();
 
-  const host = headers().get('host');
-  const market = getMarketFromHost(host);
+  const market = getRequestMarket(headers());
+  const products = await loadProducts(category.id, market);
 
-  // Slug traduit par marché : l'ancienne URL (slug de base ou slug d'un autre
-  // marché) redirige définitivement vers l'adresse du marché courant.
+  // Catégorie sans produit en ligne sur CE marché => 404. Elle n'est ni dans le
+  // menu, ni dans le sitemap, ni dans les hreflang : afficher une page vide
+  // « bientôt disponible » serait du contenu mince (soft 404 aux yeux de
+  // Google). Elle réapparaît d'elle-même dès le premier produit en ligne.
+  if (products.length === 0) notFound();
+
+  // Slug traduit par marché : l'ancienne URL (slug de base, slug d'un autre
+  // marché ou ancien slug « gaming… ») redirige définitivement vers l'adresse
+  // du marché courant.
   if (params.slug !== localizedCategorySlug(category.slug, market)) {
     permanentRedirect(categoryPath(category.slug, market));
   }
-  const [products, allCategories] = await Promise.all([
-    getActiveProductsByCategory(category.id, market),
-    getActiveCategories(market),
-  ]);
 
+  const allCategories = await getNavCategories(market);
   const name = categoryName(category, market);
   const t = SITE_COPY[market];
 
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'CollectionPage',
+        '@id': `${marketUrl(market, categoryPath(category.slug, market))}#page`,
+        name,
+        url: marketUrl(market, categoryPath(category.slug, market)),
+        inLanguage: t.product.locale.slice(0, 2),
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Tendpick', item: marketUrl(market, '/') },
+          { '@type': 'ListItem', position: 2, name, item: marketUrl(market, categoryPath(category.slug, market)) },
+        ],
+      },
+    ],
+  };
+
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <SiteHeader categories={allCategories} market={market} />
       <AffiliateDisclosureBanner market={market} />
 
-      {/* La rangée de pastilles catégories (avec icônes) sous le header a
-          été retirée (02/10, demande Jerome) : les catégories sont déjà
-          accessibles depuis le menu, doublon inutile. */}
-
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="mb-10">
-          {/* Icône de catégorie retirée du titre (03/10, demande Jerome :
-              "enlève tous les icônes à côté des titres"). */}
           <h1 className="text-3xl sm:text-4xl font-extrabold mb-3 text-site-primary">{name}</h1>
-          <p className="text-site-text-secondary">
-            {products.length > 0 ? t.category.productCount(products.length) : t.category.newSoon}
-          </p>
+          <p className="text-site-text-secondary">{t.category.productCount(products.length)}</p>
         </div>
 
-        {products.length === 0 ? (
-          <div className="text-center py-24 text-site-text-secondary">
-            <div className="text-5xl mb-4">{category.icon || '📦'}</div>
-            <p className="text-lg">{t.category.preparing}</p>
-            <p className="text-sm mt-2">{t.category.comeBackDays}</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {products.map((p) => {
-              const img = p.image_url
-                ? getCloudinaryUrl(p.image_url, { width: 400, height: 400, crop: 'fill', format: 'auto', quality: 'auto' })
-                : null;
-              const sourceMeta = TOP_VENTES_SOURCES.find((s) => s.key === getProductSource(p.affiliate_url));
-              return (
-                <Link
-                  key={p.id}
-                  href={`/${p.slug}`}
-                  className="bg-white border border-site-border rounded-xl overflow-hidden hover:border-site-secondary hover:shadow-md transition-all hover:-translate-y-0.5 group flex flex-col"
-                >
-                  <div className="aspect-square relative bg-site-bg flex-shrink-0">
-                    {img ? (
-                      <Image
-                        src={img}
-                        alt={p.name}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        unoptimized={img.includes('/fetch/')}
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-4xl text-site-border">📦</div>
-                    )}
-                    {sourceMeta && (
-                      <span className="absolute top-2 left-2 bg-white/95 border border-site-border rounded-full px-2 py-0.5 text-xs font-medium text-site-text-secondary flex items-center gap-1">
-                        <span>{sourceMeta.icon}</span>
-                        {sourceMeta.label}
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-3 flex flex-col gap-1 flex-1">
-                    <p className="text-sm font-medium text-site-text line-clamp-2 leading-snug flex-1">
-                      {p.hero_title || p.name}
-                    </p>
-                    {p.free_shipping && <FreeShippingBadge size="small" label={t.common.freeShipping} />}
-                    <div className="flex items-center justify-between mt-1">
-                      {(() => {
-                        const price = getCardPrice(p, t.product.locale, market);
-                        return price ? (
-                          <span className="text-site-cta font-bold text-sm">{price}</span>
-                        ) : (
-                          <span className="text-site-text-secondary text-xs">{t.common.priceAtMerchant}</span>
-                        );
-                      })()}
-                      <span className="text-xs text-site-text-secondary group-hover:text-site-secondary transition-colors">
-                        {t.common.seeArrow}
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {products.map((p) => (
+            <ProductCard key={p.id} product={p} market={market} />
+          ))}
+        </div>
       </main>
 
       <SiteFooter categories={allCategories} market={market} />

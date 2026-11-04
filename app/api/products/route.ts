@@ -3,11 +3,11 @@ import { getAllProducts, createProduct, generateSlug } from '@/lib/supabase';
 import { getActiveMarket } from '@/lib/get-active-market';
 import { isValidMarket } from '@/lib/market';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { badRequest, readJsonObject, serverError, unauthorized } from '../_lib/http';
+import { validateProductInput } from '../_lib/product-input';
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
   try {
     const marketParam = req.nextUrl.searchParams.get('market');
     const market = isValidMarket(marketParam) ? marketParam : getActiveMarket();
@@ -15,38 +15,38 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(products);
   } catch (error) {
     console.error('GET /api/products error:', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+    return serverError();
   }
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
   try {
-    const body = await req.json();
+    const parsed = await readJsonObject(req);
+    if ('response' in parsed) return parsed.response;
 
-    if (!body.name || !body.affiliate_url) {
-      return NextResponse.json(
-        { error: 'Le nom et l\'URL d\'affiliation sont requis' },
-        { status: 400 }
-      );
-    }
+    // Valeurs vérifiées avant la base : marché fr/es/uk, lien http(s), livraison gratuite booléenne,
+    // vidéo YouTube, identifiant AliExpress en chiffres… (voir _lib/product-input.ts)
+    const checked = validateProductInput(parsed.body, 'create');
+    if (!checked.ok) return badRequest(checked.error);
+    const data = checked.data;
 
     // Generate slug if not provided
-    if (!body.slug) {
-      body.slug = generateSlug(body.name);
+    if (!data.slug) {
+      data.slug = generateSlug(data.name as string);
+      if (!data.slug) return badRequest('Le nom du produit ne permet pas de fabriquer une adresse (slug) : ajoutez des lettres ou des chiffres');
     }
 
-    const product = await createProduct({ ...body, market: body.market || getActiveMarket() });
+    const market = typeof data.market === 'string' && isValidMarket(data.market) ? data.market : getActiveMarket();
+    const product = await createProduct({ ...data, market });
 
     if (!product) {
-      return NextResponse.json({ error: 'Erreur lors de la création du produit' }, { status: 500 });
+      return serverError('Erreur lors de la création du produit');
     }
 
     return NextResponse.json(product, { status: 201 });
   } catch (error) {
     console.error('POST /api/products error:', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+    return serverError();
   }
 }

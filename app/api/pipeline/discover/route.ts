@@ -12,48 +12,40 @@
  * de marché, cf. app/api/market/refresh).
  *
  * POST/GET body|query : { market?: 'fr'|'es'|'uk', threshold?: number (0-100, default 60), dry_run?: boolean, max_import?: number }
- * Auth: Bearer PIPELINE_SECRET (ou ADMIN_SECRET)
+ * Auth: Bearer PIPELINE_SECRET (ou ADMIN_SECRET) ou cookie admin
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, generateSlug } from '@/lib/supabase';
-import { DEFAULT_MARKET, isValidMarket, type Market } from '@/lib/market';
-import amazonScrapingFallback from '@/lib/integrations/data-sources/amazon-scraping-fallback';
-import { scoreSignal, trendScoreFromScore } from '@/lib/market/scoring';
-import type { RawProductSignal } from '@/lib/integrations/types';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
-
-function marketFrom(value: unknown): Market {
-  return typeof value === 'string' && isValidMarket(value) ? value : DEFAULT_MARKET;
-}
-
-async function discoverAndScore(market: Market) {
-  const signals = await amazonScrapingFallback.fetchTrendingProducts(market);
-  return signals
-    .map((signal) => ({ signal, ...scoreSignal(signal) }))
-    .sort((a, b) => b.score - a.score);
-}
+import { badRequest, readOptionalJsonObject, unauthorized } from '../../_lib/http';
+import { discoverAndScore, marketFrom, parseDiscoverParams, runDiscover } from '../../_lib/pipeline-discover';
+import { isValidMarket } from '@/lib/market';
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
 
-  const body = await req.json().catch(() => ({}));
-  const market = marketFrom(body.market);
-  const threshold: number = body.threshold ?? 60;
-  const dryRun: boolean = body.dry_run ?? false;
-  const maxImport: number = body.max_import ?? 5;
+  const parsed = await readOptionalJsonObject(req);
+  if ('response' in parsed) return parsed.response;
+  const p = parseDiscoverParams(parsed.body);
+  if ('error' in p) return badRequest(p.error);
 
-  const scored = await discoverAndScore(market);
-  const candidates = scored.filter((p) => p.score >= threshold);
+  const r = await runDiscover(p.params);
+  return NextResponse.json(r.body, { status: r.status });
+}
 
-  if (dryRun) {
+// GET = dry run preview
+export async function GET(req: NextRequest) {
+  if (!isAuthorizedRequest(req)) return unauthorized();
+
+  const { searchParams } = new URL(req.url);
+  const rawMarket = searchParams.get('market');
+  if (rawMarket && !isValidMarket(rawMarket)) return badRequest('Marché invalide (fr, es ou uk)');
+  const market = marketFrom(rawMarket);
+
+  try {
+    const scored = await discoverAndScore(market);
     return NextResponse.json({
-      dry_run: true,
       market,
       total_scraped: scored.length,
-      candidates: candidates.length,
-      threshold,
       top20: scored.slice(0, 20).map(({ signal, score }) => ({
         name: signal.name,
         score,
@@ -61,94 +53,11 @@ export async function POST(req: NextRequest) {
         price: signal.price,
         rating: signal.rating,
         reviews: signal.reviewCount,
+        url: signal.url,
       })),
     });
+  } catch (err) {
+    console.error('[api] pipeline/discover (aperçu) :', err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "La source de produits (Amazon) n'a pas répondu. Réessayez plus tard." }, { status: 502 });
   }
-
-  const sb = getSupabaseAdmin();
-  const toImport = candidates.slice(0, maxImport);
-  const imported = [];
-  const skipped = [];
-
-  // Categories (23/09) — tout import automatique Amazon va par defaut
-  // dans "Best of Amazon" ; la curation fine (deplacer un produit vers
-  // Tech/Mode/etc.) se fait ensuite a la main dans l'admin.
-  const { data: defaultCategory } = await sb
-    .from('categories')
-    .select('id')
-    .eq('slug', 'best-of-amazon')
-    .maybeSingle();
-
-  for (const { signal, score } of toImport) {
-    const slug = generateSlug(signal.name);
-    const { data: existing } = await sb.from('products').select('id').eq('slug', slug).maybeSingle();
-
-    if (existing) {
-      skipped.push({ name: signal.name, reason: 'already exists' });
-      continue;
-    }
-
-    const { data: product, error } = await sb
-      .from('products')
-      .insert({
-        name: signal.name,
-        slug,
-        affiliate_url: signal.url,
-        price: signal.price,
-        image_url: signal.image || null,
-        description: `${signal.category || ''} — ${signal.rating ? `Note : ${signal.rating}/5` : ''} ${
-          signal.reviewCount ? `(${signal.reviewCount} avis)` : ''
-        }`.trim(),
-        market,
-        product_source: 'auto_discovered',
-        category_id: defaultCategory?.id ?? null,
-        active: false,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      skipped.push({ name: signal.name, reason: error.message });
-    } else {
-      imported.push({ id: product.id, name: signal.name, slug, score });
-    }
-  }
-
-  return NextResponse.json({
-    success: true,
-    market,
-    total_scraped: scored.length,
-    candidates: candidates.length,
-    imported: imported.length,
-    skipped: skipped.length,
-    imported_products: imported,
-    skipped_products: skipped,
-    threshold,
-  });
-}
-
-// GET = dry run preview
-export async function GET(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { searchParams } = new URL(req.url);
-  const market = marketFrom(searchParams.get('market'));
-
-  const scored = await discoverAndScore(market);
-
-  return NextResponse.json({
-    market,
-    total_scraped: scored.length,
-    top20: scored.slice(0, 20).map(({ signal, score }: { signal: RawProductSignal; score: number }) => ({
-      name: signal.name,
-      score,
-      category: signal.category,
-      price: signal.price,
-      rating: signal.rating,
-      reviews: signal.reviewCount,
-      url: signal.url,
-    })),
-  });
 }

@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAllBlogPostsAdmin, createBlogPost } from '@/lib/blog';
-import { slugifyBlogTitle } from '@/lib/slugify';
+import { clearTtlCache } from '@/lib/ttl-cache';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
 import { isValidMarket } from '@/lib/market';
-import type { BlogPostFormData } from '@/types';
+import { badRequest, dbErrorResponse, readJsonObject, unauthorized } from '../_lib/http';
+import { parseBlogForm } from '../_lib/blog-input';
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
   try {
     const marketParam = req.nextUrl.searchParams.get('market');
     const { posts, error: listError } = await getAllBlogPostsAdmin(isValidMarket(marketParam) ? marketParam : undefined);
-    if (listError) return NextResponse.json({ error: listError }, { status: 500 });
+    if (listError) return dbErrorResponse('GET /api/blog', listError);
     return NextResponse.json(posts);
   } catch (error) {
     console.error('GET /api/blog error:', error);
@@ -21,38 +20,17 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
   try {
-    const body = await req.json();
+    const parsed = await readJsonObject(req);
+    if ('response' in parsed) return parsed.response;
+    const result = parseBlogForm(parsed.body);
+    if ('error' in result) return badRequest(result.error);
 
-    if (!body.title || !body.content) {
-      return NextResponse.json({ error: 'Le titre et le contenu sont requis' }, { status: 400 });
-    }
+    const { post, error } = await createBlogPost(result.form);
+    if (!post) return dbErrorResponse('POST /api/blog', error || 'création impossible', 'Erreur lors de la création');
 
-    const form: BlogPostFormData = {
-      title: body.title,
-      slug: body.slug || slugifyBlogTitle(body.title),
-      market: isValidMarket(body.market) ? body.market : 'fr',
-      excerpt: body.excerpt || '',
-      content: body.content,
-      cover_image_url: body.cover_image_url || '',
-      status: body.status === 'published' ? 'published' : 'draft',
-      tags: Array.isArray(body.tags) ? body.tags : [],
-      category_id: body.category_id || null,
-      linked_product_ids: Array.isArray(body.linked_product_ids) ? body.linked_product_ids : [],
-      author_name: body.author_name || '',
-      meta_title: body.meta_title || '',
-      meta_description: body.meta_description || '',
-      generated_by_ai: !!body.generated_by_ai,
-    };
-
-    const { post, error } = await createBlogPost(form);
-    if (!post) {
-      return NextResponse.json({ error: error || 'Erreur lors de la création' }, { status: 500 });
-    }
-
+    clearTtlCache();
     return NextResponse.json(post, { status: 201 });
   } catch (error) {
     console.error('POST /api/blog error:', error);

@@ -59,7 +59,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       fetchAll((from, to) =>
         sb.from('blog_posts').select('slug, updated_at, category_id').eq('status', 'published').eq('market', market).range(from, to)
       ),
-      fetchAll((from, to) => sb.from('categories').select('id, slug, is_active, active_markets').range(from, to)),
+      fetchAll((from, to) => sb.from('categories').select('id, slug').range(from, to)),
     ]);
     const { data: gc } = await sb.from('blog_categories').select('id').eq('slug', GUIDE_CATEGORY_SLUG).maybeSingle();
     guideCategoryId = (gc?.id as string | undefined) ?? null;
@@ -90,9 +90,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Catégories : uniquement celles qui ont au moins un produit sur ce marché.
   const categoryUrls: MetadataRoute.Sitemap = categories
-    .filter((c) =>
-      Array.isArray(c.active_markets) ? (c.active_markets as string[]).includes(market) : Boolean(c.is_active)
-    )
     .map((c) => {
       const inCategory = products.filter((p) => p.category_id === c.id);
       if (inCategory.length === 0) return null;

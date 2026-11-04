@@ -1,13 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 import type { Category } from '@/types';
 import { MARKETS, type Market } from '@/lib/market';
-import { useMarket } from '@/lib/market-context';
+import { slugifyBlogTitle } from '@/lib/slugify';
 
 interface Props {
   initialCategories: Category[];
+  /** Produits en ligne par catégorie et par marché (la visibilité sur les sites en découle). */
+  counts: Record<string, Record<Market, number>>;
 }
 
 interface CategoryDraft {
@@ -28,10 +31,11 @@ const emptyDraft: CategoryDraft = {
   sort_order: '0',
 };
 
-export default function CategoriesManager({ initialCategories }: Props) {
+export default function CategoriesManager({ initialCategories, counts }: Props) {
   const router = useRouter();
-  const { market: activeMarket } = useMarket();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
+  // Après router.refresh(), la liste venant du serveur remplace la copie locale.
+  useEffect(() => setCategories(initialCategories), [initialCategories]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<CategoryDraft>(emptyDraft);
   const [creating, setCreating] = useState(false);
@@ -75,10 +79,7 @@ export default function CategoriesManager({ initialCategories }: Props) {
           sort_order: parseInt(editDraft.sort_order, 10) || 0,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la sauvegarde');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la sauvegarde'));
       const updated = await res.json();
       setCategories((prev) =>
         prev
@@ -88,66 +89,34 @@ export default function CategoriesManager({ initialCategories }: Props) {
       setEditingId(null);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (cat: Category) => {
-    if (!confirm(`Supprimer la catégorie "${cat.name_fr}" ? Les produits qui l'utilisent perdront leur catégorie.`)) {
+    const online = MARKETS.reduce((sum, m) => sum + (counts[cat.id]?.[m.code] ?? 0), 0);
+    const warning = online > 0
+      ? `\n\nAttention : ${online} produit(s) en ligne l'utilisent. La catégorie disparaîtra des sites et ces produits seront « sans catégorie ».`
+      : '';
+    if (!confirm(`Supprimer la catégorie "${cat.name_fr}" ? Les produits qui l'utilisent perdront leur catégorie.${warning}`)) {
       return;
     }
     setSaving(true);
     setError(null);
     try {
       const res = await fetch(`/api/categories/${cat.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la suppression');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la suppression'));
       setCategories((prev) => prev.filter((c) => c.id !== cat.id));
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
-  // Visibilité PAR MARCHÉ (18/10) : le bouton agit sur le marché actif du
-  // sélecteur admin uniquement ; avant la migration (active_markets absente),
-  // on retombe sur is_active global.
-  const isActiveIn = (cat: Category, m: Market): boolean =>
-    Array.isArray(cat.active_markets) ? cat.active_markets.includes(m) : cat.is_active;
-
-  const toggleActive = async (cat: Category) => {
-    setSaving(true);
-    setError(null);
-    try {
-      const perMarket = Array.isArray(cat.active_markets);
-      const res = await fetch(`/api/categories/${cat.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          perMarket
-            ? { market: activeMarket, market_active: !isActiveIn(cat, activeMarket) }
-            : { is_active: !cat.is_active }
-        ),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la mise a jour');
-      }
-      const updated = await res.json();
-      setCategories((prev) => prev.map((c) => (c.id === cat.id ? updated : c)));
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleCreate = async () => {
     setSaving(true);
@@ -165,17 +134,14 @@ export default function CategoriesManager({ initialCategories }: Props) {
           sort_order: parseInt(newDraft.sort_order, 10) || 0,
         }),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la création');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la création'));
       const created = await res.json();
       setCategories((prev) => [...prev, created].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
       setCreating(false);
       setNewDraft(emptyDraft);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -189,6 +155,7 @@ export default function CategoriesManager({ initialCategories }: Props) {
         </div>
       )}
 
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -198,7 +165,7 @@ export default function CategoriesManager({ initialCategories }: Props) {
             <th className="px-4 py-3">Nom (ES)</th>
             <th className="px-4 py-3">Nom (UK)</th>
             <th className="px-4 py-3">Ordre</th>
-            <th className="px-4 py-3">Visibilité (marché actif)</th>
+            <th className="px-4 py-3">Visible sur (produits en ligne)</th>
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
@@ -210,49 +177,37 @@ export default function CategoriesManager({ initialCategories }: Props) {
                 {isEditing ? (
                   <>
                     <td className="px-4 py-2">
-                      <input className={inputClass} value={editDraft.icon} onChange={(e) => setEditDraft((d) => ({ ...d, icon: e.target.value }))} placeholder="📦" />
+                      <input className={inputClass} aria-label="Icône (emoji)" value={editDraft.icon} onChange={(e) => setEditDraft((d) => ({ ...d, icon: e.target.value }))} placeholder="📦" />
                     </td>
                     <td className="px-4 py-2">
-                      <input className={inputClass} value={editDraft.slug} onChange={(e) => setEditDraft((d) => ({ ...d, slug: e.target.value }))} />
+                      <input className={inputClass} aria-label="Adresse (slug) : la modifier change l'adresse publique de la catégorie" value={editDraft.slug} onChange={(e) => setEditDraft((d) => ({ ...d, slug: e.target.value }))} />
                     </td>
                     <td className="px-4 py-2">
-                      <input className={inputClass} value={editDraft.name_fr} onChange={(e) => setEditDraft((d) => ({ ...d, name_fr: e.target.value }))} />
+                      <input className={inputClass} aria-label="Nom en français" value={editDraft.name_fr} onChange={(e) => setEditDraft((d) => ({ ...d, name_fr: e.target.value }))} />
                     </td>
                     <td className="px-4 py-2">
-                      <input className={inputClass} value={editDraft.name_es} onChange={(e) => setEditDraft((d) => ({ ...d, name_es: e.target.value }))} />
+                      <input className={inputClass} aria-label="Nombre en español" value={editDraft.name_es} onChange={(e) => setEditDraft((d) => ({ ...d, name_es: e.target.value }))} />
                     </td>
                     <td className="px-4 py-2">
-                      <input className={inputClass} value={editDraft.name_uk} onChange={(e) => setEditDraft((d) => ({ ...d, name_uk: e.target.value }))} />
+                      <input className={inputClass} aria-label="Name in English" value={editDraft.name_uk} onChange={(e) => setEditDraft((d) => ({ ...d, name_uk: e.target.value }))} />
                     </td>
                     <td className="px-4 py-2">
-                      <input type="number" className={inputClass} value={editDraft.sort_order} onChange={(e) => setEditDraft((d) => ({ ...d, sort_order: e.target.value }))} />
+                      <input type="number" className={inputClass} aria-label="Ordre d'affichage" value={editDraft.sort_order} onChange={(e) => setEditDraft((d) => ({ ...d, sort_order: e.target.value }))} />
                     </td>
                     <td className="px-4 py-2">
-                      <div className="flex flex-col gap-1.5">
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => toggleActive(cat)}
-                          title={`Activer / masquer sur le marché ${MARKETS.find((m) => m.code === activeMarket)?.label}`}
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
-                            isActiveIn(cat, activeMarket)
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          }`}
-                        >
-                          {MARKETS.find((m) => m.code === activeMarket)?.flag} {isActiveIn(cat, activeMarket) ? 'Actif' : 'Masqué'}
-                        </button>
-                        <div className="flex gap-1 text-[10px] font-semibold uppercase tracking-wide">
-                          {MARKETS.map((m) => (
+                      <div className="flex gap-1.5 text-xs font-semibold" title="Produits en ligne par marché : la catégorie s'affiche sur un site dès qu'elle en contient au moins un">
+                        {MARKETS.map((m) => {
+                          const n = counts[cat.id]?.[m.code] ?? 0;
+                          return (
                             <span
                               key={m.code}
-                              className={isActiveIn(cat, m.code) ? 'text-green-700' : 'text-gray-300'}
-                              title={`${m.label} : ${isActiveIn(cat, m.code) ? 'visible' : 'masquée'}`}
+                              className={`px-2 py-0.5 rounded-full ${n > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}
+                              title={`${m.label} : ${n > 0 ? `visible (${n} produit${n > 1 ? 's' : ''} en ligne)` : 'masquée (aucun produit en ligne)'}`}
                             >
-                              {m.code}
+                              {m.flag} {n}
                             </span>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     </td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">
@@ -273,31 +228,19 @@ export default function CategoriesManager({ initialCategories }: Props) {
                     <td className="px-4 py-3 text-gray-600">{cat.name_uk}</td>
                     <td className="px-4 py-3 text-gray-500">{cat.sort_order}</td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1.5">
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => toggleActive(cat)}
-                          title={`Activer / masquer sur le marché ${MARKETS.find((m) => m.code === activeMarket)?.label}`}
-                          className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${
-                            isActiveIn(cat, activeMarket)
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                          }`}
-                        >
-                          {MARKETS.find((m) => m.code === activeMarket)?.flag} {isActiveIn(cat, activeMarket) ? 'Actif' : 'Masqué'}
-                        </button>
-                        <div className="flex gap-1 text-[10px] font-semibold uppercase tracking-wide">
-                          {MARKETS.map((m) => (
+                      <div className="flex gap-1.5 text-xs font-semibold" title="Produits en ligne par marché : la catégorie s'affiche sur un site dès qu'elle en contient au moins un">
+                        {MARKETS.map((m) => {
+                          const n = counts[cat.id]?.[m.code] ?? 0;
+                          return (
                             <span
                               key={m.code}
-                              className={isActiveIn(cat, m.code) ? 'text-green-700' : 'text-gray-300'}
-                              title={`${m.label} : ${isActiveIn(cat, m.code) ? 'visible' : 'masquée'}`}
+                              className={`px-2 py-0.5 rounded-full ${n > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}
+                              title={`${m.label} : ${n > 0 ? `visible (${n} produit${n > 1 ? 's' : ''} en ligne)` : 'masquée (aucun produit en ligne)'}`}
                             >
-                              {m.code}
+                              {m.flag} {n}
                             </span>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -317,24 +260,34 @@ export default function CategoriesManager({ initialCategories }: Props) {
           {creating && (
             <tr className="bg-green-50/30">
               <td className="px-4 py-2">
-                <input className={inputClass} value={newDraft.icon} onChange={(e) => setNewDraft((d) => ({ ...d, icon: e.target.value }))} placeholder="🎯" />
+                <input className={inputClass} aria-label="Icône (emoji)" value={newDraft.icon} onChange={(e) => setNewDraft((d) => ({ ...d, icon: e.target.value }))} placeholder="🎯" />
               </td>
               <td className="px-4 py-2">
-                <input className={inputClass} value={newDraft.slug} onChange={(e) => setNewDraft((d) => ({ ...d, slug: e.target.value }))} placeholder="ma-categorie" />
+                <input className={inputClass} aria-label="Adresse (slug)" value={newDraft.slug} onChange={(e) => setNewDraft((d) => ({ ...d, slug: slugifyBlogTitle(e.target.value) }))} placeholder="ma-categorie" />
               </td>
               <td className="px-4 py-2">
-                <input className={inputClass} value={newDraft.name_fr} onChange={(e) => setNewDraft((d) => ({ ...d, name_fr: e.target.value }))} placeholder="Nom en français" />
+                <input
+                  className={inputClass}
+                  aria-label="Nom en français"
+                  value={newDraft.name_fr}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    // L'adresse (slug) se remplit toute seule tant qu'on ne l'a pas modifiée à la main.
+                    setNewDraft((d) => ({ ...d, name_fr: name, slug: d.slug === slugifyBlogTitle(d.name_fr) ? slugifyBlogTitle(name) : d.slug }));
+                  }}
+                  placeholder="Nom en français"
+                />
               </td>
               <td className="px-4 py-2">
-                <input className={inputClass} value={newDraft.name_es} onChange={(e) => setNewDraft((d) => ({ ...d, name_es: e.target.value }))} placeholder="Nombre en español" />
+                <input className={inputClass} aria-label="Nombre en español" value={newDraft.name_es} onChange={(e) => setNewDraft((d) => ({ ...d, name_es: e.target.value }))} placeholder="Nombre en español" />
               </td>
               <td className="px-4 py-2">
-                <input className={inputClass} value={newDraft.name_uk} onChange={(e) => setNewDraft((d) => ({ ...d, name_uk: e.target.value }))} placeholder="Name in English" />
+                <input className={inputClass} aria-label="Name in English" value={newDraft.name_uk} onChange={(e) => setNewDraft((d) => ({ ...d, name_uk: e.target.value }))} placeholder="Name in English" />
               </td>
               <td className="px-4 py-2">
-                <input type="number" className={inputClass} value={newDraft.sort_order} onChange={(e) => setNewDraft((d) => ({ ...d, sort_order: e.target.value }))} />
+                <input type="number" className={inputClass} aria-label="Ordre d'affichage" value={newDraft.sort_order} onChange={(e) => setNewDraft((d) => ({ ...d, sort_order: e.target.value }))} />
               </td>
-              <td className="px-4 py-2 text-xs text-gray-400">Actif</td>
+              <td className="px-4 py-2 text-xs text-gray-400">Automatique</td>
               <td className="px-4 py-2 text-right whitespace-nowrap">
                 <button
                   disabled={saving || !newDraft.slug || !newDraft.name_fr || !newDraft.name_es || !newDraft.name_uk}
@@ -358,6 +311,13 @@ export default function CategoriesManager({ initialCategories }: Props) {
           )}
         </tbody>
       </table>
+      </div>
+
+      {creating && (!newDraft.slug || !newDraft.name_fr || !newDraft.name_es || !newDraft.name_uk) && (
+        <p className="px-4 pb-3 text-xs text-gray-500">
+          Pour créer la catégorie, renseignez son nom dans les 3 langues (français, espagnol, anglais) ; l&apos;adresse se remplit toute seule.
+        </p>
+      )}
 
       {!creating && (
         <div className="p-4 border-t border-gray-200">

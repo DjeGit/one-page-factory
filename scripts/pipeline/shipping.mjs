@@ -10,9 +10,9 @@
 //        (--candidates-only : ne touche pas aux fiches existantes)
 
 import { fileURLToPath } from 'node:url';
-import { itemIdFor } from './offers.mjs';
+import { MARKETS, isUkUnavailable, itemIdFor } from './offers.mjs';
 
-export const MARKETS = ['fr', 'es', 'uk'];
+export { MARKETS };
 
 export const shippingUrl = (id) => `https://www.aliexpress.com/item/${id}.html`;
 
@@ -35,8 +35,6 @@ export function parseEntry(arg) {
 
 export const label = (b) => (b ? 'Oui' : 'Non');
 
-const unavailableUk = (c) => !c.url_uk && c.price_uk == null;
-
 /** Produits d'une semaine (la dernière par défaut) avec, pour chaque pays, la page à ouvrir et la valeur déjà connue. */
 export async function listShipping(sb, { week, missingOnly = false } = {}) {
   let w = week;
@@ -50,7 +48,7 @@ export async function listShipping(sb, { week, missingOnly = false } = {}) {
   if (error) throw error;
   const rows = [];
   for (const c of data || []) {
-    const markets = MARKETS.filter((m) => !(m === 'uk' && unavailableUk(c))).map((m) => ({
+    const markets = MARKETS.filter((m) => !(m === 'uk' && isUkUnavailable(c))).map((m) => ({
       market: m, itemId: itemIdFor(c, m), url: shippingUrl(itemIdFor(c, m)), current: has(c[`free_shipping_${m}`]) ? String(c[`free_shipping_${m}`]) : null,
     }));
     if (missingOnly && markets.every((x) => x.current)) continue;
@@ -61,7 +59,7 @@ export async function listShipping(sb, { week, missingOnly = false } = {}) {
 
 export function formatList({ week, rows }) {
   if (!rows.length) return week ? `Semaine ${week} : rien à relever.` : 'Aucune semaine trouvée dans Tendance de la semaine.';
-  const out = [`Semaine ${week} — ${rows.length} produit(s) à relever (livraison gratuite ? 1 = oui, 0 = non)\n`];
+  const out = [`Semaine ${week} — ${rows.length} produit(s) à relever (livraison gratuite ? 1 = oui, 0 = non)`, 'Sur chaque page, choisis d’abord le pays de livraison (FR, ES ou Royaume-Uni) : la livraison affichée dépend du pays.\n'];
   for (const r of rows) {
     out.push(`${r.aliexpressId} — ${r.name}${r.decision ? ` [décision : ${r.decision}]` : ''}`);
     for (const m of r.markets) out.push(`   ${m.market.toUpperCase()} : ${m.url}   (actuel : ${m.current ?? 'non relevé'})`);
@@ -84,7 +82,7 @@ export async function applyShipping(sb, entries, { updateProducts = true, log = 
       report.push({ id: e.id, found: false, candidates: 0, products: 0 });
       continue;
     }
-    const patch = {};
+    const patch = { updated_at: new Date().toISOString() };
     for (const [m, v] of Object.entries(e.values)) patch[`free_shipping_${m}`] = label(v);
     for (const c of rows) {
       const { error: upErr } = await sb.from('trend_candidates').update(patch).eq('id', c.id);
@@ -92,8 +90,10 @@ export async function applyShipping(sb, entries, { updateProducts = true, log = 
     }
     let products = 0;
     if (updateProducts) {
+      // La semaine la plus récente fait foi pour l'annonce (le UK a parfois sa propre annonce d'une semaine à l'autre).
+      const latest = [...rows].sort((a, b) => String(b.week).localeCompare(String(a.week)))[0];
       for (const [m, v] of Object.entries(e.values)) {
-        const itemId = itemIdFor(rows[0], m);
+        const itemId = itemIdFor(latest, m);
         const { data: hit, error: pErr } = await sb.from('products').update({ free_shipping: v }).eq('aliexpress_id', itemId).eq('market', m).select('id');
         if (pErr) throw pErr;
         products += hit?.length || 0;
@@ -118,12 +118,14 @@ async function main() {
   const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   if (cmd === 'list') {
     const i = rest.indexOf('--week');
+    if (i >= 0 && !/^\d{4}-\d{2}-\d{2}$/.test(rest[i + 1] || '')) throw new Error('--week attend une date AAAA-MM-JJ (le lundi de la semaine, ex. 2026-11-02)');
     console.log(formatList(await listShipping(sb, { week: i >= 0 ? rest[i + 1] : undefined, missingOnly: rest.includes('--missing') })));
     return;
   }
   const entries = rest.filter((a) => !a.startsWith('--')).map(parseEntry);
   if (!entries.length) throw new Error('Rien à enregistrer (exemple : 1005007345056908=fr:1,es:1,uk:0)');
-  await applyShipping(sb, entries, { updateProducts: !rest.includes('--candidates-only'), log: (m) => console.log(m) });
+  const report = await applyShipping(sb, entries, { updateProducts: !rest.includes('--candidates-only'), log: (m) => console.log(m) });
+  if (report.some((r) => !r.found)) process.exitCode = 1;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

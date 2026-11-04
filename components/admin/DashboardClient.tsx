@@ -1,33 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-
-interface WeeklyReport {
-  resume?: string;
-  top_produits?: string[];
-  a_archiver?: string[];
-  recommandations?: string[];
-  insight_cle?: string;
-}
+import { useMarket } from '@/lib/market-context';
+import { isEmptyReport, normalizeWeeklyReport, type WeeklyReport } from '@/components/admin/weekly-report';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 export default function DashboardClient() {
+  const { market } = useMarket();
   const [reportLoading, setReportLoading] = useState(false);
   const [report, setReport] = useState<WeeklyReport | null>(null);
   const [reportModal, setReportModal] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  // Échap ferme le rapport.
+  useEffect(() => {
+    if (!reportModal) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setReportModal(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [reportModal]);
+
   const handleWeeklyReport = async () => {
     setReportLoading(true);
     setReportError(null);
     try {
-      const res = await fetch('/api/weekly-report', { method: 'POST' });
-      if (!res.ok) throw new Error('Erreur lors de la génération du rapport');
-      const data = await res.json();
-      setReport(data);
+      const res = await fetch('/api/weekly-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market }), // le rapport porte sur le marché affiché
+      });
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la génération du rapport'));
+      const normalized = normalizeWeeklyReport(await res.json());
+      if (isEmptyReport(normalized)) throw new Error("Le rapport est vide : l'IA n'a rien renvoyé d'exploitable, réessayez.");
+      setReport(normalized);
       setReportModal(true);
     } catch (err) {
-      setReportError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setReportError(networkErrorMessage(err, 'Erreur inconnue'));
     } finally {
       setReportLoading(false);
     }
@@ -65,7 +74,7 @@ export default function DashboardClient() {
             )}
           </button>
           {reportError && (
-            <p className="text-xs text-red-600">{reportError}</p>
+            <p role="alert" className="text-xs text-red-600 max-w-xs text-right">{reportError}</p>
           )}
         </div>
       </div>
@@ -132,12 +141,13 @@ export default function DashboardClient() {
 
       {/* Weekly Report Modal */}
       {reportModal && report && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" role="dialog" aria-modal="true" aria-label="Rapport hebdomadaire" onClick={() => setReportModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="px-6 py-5 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
               <h2 className="text-xl font-black text-gray-900">Rapport hebdomadaire</h2>
               <button
                 onClick={() => setReportModal(false)}
+                aria-label="Fermer le rapport"
                 className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors text-gray-500"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

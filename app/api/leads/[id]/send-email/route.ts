@@ -16,6 +16,11 @@ import { NextResponse, NextRequest } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
 import { sendTransactionalEmail } from '@/lib/brevo/client';
+import { badRequest, dbErrorResponse, invalidId, isUuid, notFound, readJsonObject, unauthorized } from '../../../_lib/http';
+
+const MAX_SUBJECT = 200;
+const MAX_MESSAGE = 20000;
+const HISTORY_LIMIT = 200;
 
 const SENDER_EMAIL = 'contact@tendpick.com';
 const SENDER_NAME = 'Tendpick';
@@ -54,42 +59,46 @@ function textToHtml(subject: string, message: string): string {
 }
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
   const sb = getSupabaseAdmin();
   const { data, error } = await sb
     .from('contact_emails')
     .select('*')
     .eq('contact_id', params.id)
-    .order('created_at', { ascending: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    .order('created_at', { ascending: false })
+    .limit(HISTORY_LIMIT);
+  if (error) return dbErrorResponse('GET /api/leads/[id]/send-email', error);
   return NextResponse.json(data ?? []);
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
+  if (!isUuid(params.id)) return invalidId();
 
-  const body = await req.json().catch(() => ({}));
-  const subject = typeof body.subject === 'string' ? body.subject.trim() : '';
+  const parsed = await readJsonObject(req);
+  if ('response' in parsed) return parsed.response;
+  const body = parsed.body;
+  // Un objet sur UNE ligne : un retour à la ligne dans l'objet est une porte d'entrée classique
+  // à l'injection d'en-têtes dans un e-mail.
+  const subject = typeof body.subject === 'string' ? body.subject.replace(/[\r\n]+/g, ' ').trim() : '';
   const message = typeof body.message === 'string' ? body.message.trim() : '';
-  if (!subject) return NextResponse.json({ error: "L'objet est requis." }, { status: 400 });
-  if (!message) return NextResponse.json({ error: 'Le message est requis.' }, { status: 400 });
+  if (!subject) return badRequest("L'objet est requis.");
+  if (!message) return badRequest('Le message est requis.');
+  if (subject.length > MAX_SUBJECT) return badRequest(`L'objet est trop long (${MAX_SUBJECT} caractères maximum).`);
+  if (message.length > MAX_MESSAGE) return badRequest(`Le message est trop long (${MAX_MESSAGE} caractères maximum).`);
 
   const sb = getSupabaseAdmin();
   const { data: contact, error: contactError } = await sb
     .from('email_leads')
     .select('id, email')
     .eq('id', params.id)
-    .single();
+    .maybeSingle();
 
-  if (contactError || !contact) {
-    return NextResponse.json({ error: 'Contact introuvable.' }, { status: 404 });
-  }
+  if (contactError) return dbErrorResponse('POST /api/leads/[id]/send-email (contact)', contactError);
+  if (!contact) return notFound('Contact introuvable.');
   if (!contact.email) {
-    return NextResponse.json({ error: 'Ce contact n\'a pas d\'adresse email renseignée.' }, { status: 400 });
+    return badRequest('Ce contact n\'a pas d\'adresse email renseignée.');
   }
 
   const htmlContent = textToHtml(subject, message);
@@ -124,12 +133,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .single();
 
   if (status === 'failed') {
+    console.error('[api] POST /api/leads/[id]/send-email : envoi Brevo en échec :', errorMessage);
+    // Route réservée à l'admin : le motif du refus Brevo (ex. « expéditeur non valide ») est ce qui lui permet
+    // de corriger ; il est simplement tronqué. Les détails bruts restent dans les logs serveur.
     return NextResponse.json(
-      { error: errorMessage || "L'envoi a échoué.", data: logEntry },
+      { error: (errorMessage || "L'envoi a échoué.").slice(0, 300), data: logEntry },
       { status: 502 }
     );
   }
   if (logError) {
+    console.error('[api] POST /api/leads/[id]/send-email : journalisation impossible :', logError.message);
     // L'email est parti mais la journalisation a échoué — ne pas faire
     // croire à l'admin que l'envoi lui-même a échoué.
     return NextResponse.json({ success: true, data: null });

@@ -7,8 +7,27 @@ interface Totals {
   draft: number;
 }
 
-function Stats({ live, draft, total }: Totals) {
-  if (total === 0) return <p className="text-sm text-gray-400">Aucun produit</p>;
+/** Une catégorie n'apparaît sur le site que si elle contient au moins un produit EN LIGNE sur ce marché. */
+function HiddenBadge() {
+  return (
+    <span
+      className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500"
+      title="Cette catégorie n'est pas visible sur le site de ce marché tant qu'elle ne contient aucun produit en ligne"
+    >
+      masquée du site
+    </span>
+  );
+}
+
+function Stats({ live, draft, total, showHidden = true }: Totals & { showHidden?: boolean }) {
+  if (total === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-sm text-gray-400">Aucun produit</span>
+        {showHidden && <HiddenBadge />}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="text-sm font-semibold text-gray-700">
@@ -20,6 +39,7 @@ function Stats({ live, draft, total }: Totals) {
           {draft} brouillon{draft > 1 ? 's' : ''}
         </span>
       )}
+      {showHidden && live === 0 && <HiddenBadge />}
     </div>
   );
 }

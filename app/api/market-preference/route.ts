@@ -6,10 +6,10 @@ import { ACTIVE_MARKET_COOKIE } from '@/lib/get-active-market';
 // code ne fait que LIRE via getActiveMarket() — un seul point d'écriture,
 // un seul point de lecture (cf. lib/get-active-market.ts).
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  const market = body.market;
+  const body = await req.json().catch(() => null);
+  const market = body && typeof body === 'object' ? (body as Record<string, unknown>).market : undefined;
 
-  if (!isValidMarket(market)) {
+  if (typeof market !== 'string' || !isValidMarket(market)) {
     return NextResponse.json({ error: 'Marché invalide' }, { status: 400 });
   }
 

@@ -21,12 +21,36 @@ const UA =
 
 // ─── URLs ───────────────────────────────────────────────────────────────────
 
+/**
+ * Adresse publique d'Internet seulement : jamais d'identifiants dans l'adresse, ni localhost, ni réseau privé / métadonnées cloud
+ * (les adresses d'images viennent d'une base modifiable et de pages web : on ne laisse pas le serveur aller les lire).
+ */
+export function isPublicUrl(url) {
+  let u;
+  try {
+    u = new URL(String(url));
+  } catch {
+    return false;
+  }
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) return false;
+  const h = u.hostname.toLowerCase();
+  if (!h || h === 'localhost' || /\.(local|localhost|internal|lan|home|corp)$/.test(h) || !h.includes('.') && !h.includes(':')) return false;
+  if (h.includes(':')) return false; // adresse IPv6 directe
+  const m = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 10 || a === 127 || a === 0 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)) return false;
+  }
+  return true;
+}
+
 /** Retire les suffixes de miniature AliExpress : `.jpg_640x640q80.jpg_.webp` → `.jpg` (image d'origine). */
 export function normalizeImageUrl(url) {
   if (!url || typeof url !== 'string') return null;
   let u = url.trim().replace(/\\\//g, '/');
   if (u.startsWith('//')) u = `https:${u}`;
   if (!/^https?:\/\//i.test(u)) return null;
+  if (!isPublicUrl(u)) return null;
   u = u.split('?')[0];
   const m = u.match(/^(.*?\.(?:jpe?g|png|webp))(?:_[^/]*)?$/i);
   return m ? m[1] : u;
@@ -47,7 +71,7 @@ export async function fetchItemPage(aliexpressId) {
   let description = [];
   try {
     const d = html.match(/"descriptionUrl"\s*:\s*"([^"]+)"/);
-    if (d) {
+    if (d && isPublicUrl(d[1].replace(/\\\//g, '/'))) {
       const dres = await fetch(d[1].replace(/\\\//g, '/'), { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(20000) });
       if (dres.ok) {
         const dhtml = await dres.text();
@@ -112,7 +136,7 @@ export async function dedupe(items) {
   const hashes = [];
   for (const it of items) {
     const h = await dHash(it.buf);
-    if (hashes.some((o) => hamming(o, h) <= 5)) continue;
+    if (hashes.some((o) => hamming(o, h) <= DUP_DISTANCE)) continue;
     hashes.push(h);
     kept.push(it);
   }
@@ -207,8 +231,14 @@ export async function cropToCleanBox(buf, box) {
 
 export function parseClassification(text, count) {
   const m = text.match(/\[[\s\S]*\]/);
-  if (!m) throw new Error(`réponse sans tableau JSON : ${text.slice(0, 200)}`);
-  const arr = JSON.parse(m[0]);
+  if (!m) throw new Error(`tri photos illisible : réponse sans tableau JSON (${text.slice(0, 200)})`);
+  let arr;
+  try {
+    arr = JSON.parse(m[0]);
+  } catch (e) {
+    throw new Error(`tri photos illisible : JSON invalide (${e.message})`);
+  }
+  if (!Array.isArray(arr)) throw new Error('tri photos illisible : la réponse n\'est pas un tableau');
   const idx = arr.map((o) => Number(o?.index));
   // Les modèles numérotent parfois à partir de 1, ou omettent l'index : on se rabat sur l'ordre du tableau.
   const zeroBased = idx.length > 0 && idx.every((n, i) => n === i);
@@ -250,7 +280,7 @@ async function classifyWithClaude(buffers, { apiKey, model } = {}) {
     }),
     signal: AbortSignal.timeout(120000),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Anthropic ${res.status} : ${data?.error?.message || 'erreur'}`);
   return parseClassification(data.content?.map((c) => c.text || '').join('') || '', buffers.length);
 }
@@ -375,7 +405,7 @@ export async function uploadToCloudinary(buffer, publicId, { cloudName, apiKey, 
   form.append('public_id', publicId);
   form.append('overwrite', 'true');
   const res = await fetch(`https://api.cloudinary.com/v1_1/${cn}/image/upload`, { method: 'POST', body: form, signal: AbortSignal.timeout(60000) });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Cloudinary : ${data?.error?.message || res.status}`);
   return { public_id: data.public_id, url: data.secure_url };
 }

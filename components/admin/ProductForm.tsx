@@ -6,12 +6,20 @@ import GenerateButton from './GenerateButton';
 import type { Product, GeneratedContent, Category } from '@/types';
 import { TEMPLATES } from '@/lib/templates';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
+import { getYouTubeId } from '@/lib/video';
+import type { Market } from '@/lib/market';
+import { categoryName, publicUrl, summarizeSync, type SyncReport } from '@/lib/admin-products-view';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 interface ProductFormProps {
   product?: Product;
   mode: 'create' | 'edit';
   initialTemplateId?: string;
   categories?: Category[];
+  /** Pré-remplissage à la création (ex. depuis l'Étude de marché). */
+  prefill?: { name?: string; description?: string; price?: string };
+  /** Marché du produit : celui du produit en modification, le marché actif de l'admin en création. */
+  market?: Market;
 }
 
 function isValidJson(str: string): boolean {
@@ -19,17 +27,31 @@ function isValidJson(str: string): boolean {
   try { JSON.parse(str); return true; } catch { return false; }
 }
 
-export default function ProductForm({ product, mode, initialTemplateId, categories = [] }: ProductFormProps) {
+/** Un champ JSON vide est traité comme une liste vide (avant : accepté à l'écran puis refusé à l'enregistrement). */
+function parseJsonList(str: string): unknown {
+  return str.trim() ? JSON.parse(str) : [];
+}
+
+const JSON_FIELD_LABELS: Record<string, string> = {
+  pain_points: 'Points de douleur',
+  benefits: 'Bénéfices',
+  faq: 'FAQ',
+  testimonials: 'Témoignages',
+};
+
+export default function ProductForm({ product, mode, initialTemplateId, categories = [], prefill, market: marketProp }: ProductFormProps) {
   const router = useRouter();
+  const market: Market = product?.market ?? marketProp ?? 'fr';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<{ text: string; blocked: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<'basic' | 'ai' | 'seo' | 'marketing' | 'design'>('basic');
 
   const [form, setForm] = useState({
-    name: product?.name || '',
-    description: product?.description || '',
-    price: product?.price?.toString() || '',
+    name: product?.name || prefill?.name || '',
+    description: product?.description || prefill?.description || '',
+    price: product?.price?.toString() || prefill?.price || '',
     original_price: product?.original_price?.toString() || '',
     cost_price: product?.cost_price?.toString() || '',
     ad_spend_allocated: product?.ad_spend_allocated?.toString() || '',
@@ -63,10 +85,6 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
     email_capture_discount: product?.email_capture_discount?.toString() || '10',
     exit_intent_enabled: product?.exit_intent_enabled ?? true,
   });
-
-  const handleToggle = (field: string) => {
-    setForm((prev) => ({ ...prev, [field]: !prev[field as keyof typeof prev] }));
-  };
 
   // Galerie d'images (06/10, demande Jerome : "3 photos ou plus" par
   // produit). Liste ordonnée : la 1re image est la couverture (copiée dans
@@ -106,10 +124,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
         const body = new FormData();
         body.append('file', file);
         const res = await fetch('/api/upload', { method: 'POST', body });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Erreur lors de l'upload");
-        }
+        if (!res.ok) throw new Error(await readApiError(res, "Erreur lors de l'envoi de l'image"));
         const data = await res.json();
         added.push(data.public_id || data.url);
       }
@@ -117,7 +132,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
         setUploadError(`Seules les ${selected.length} premières images ont été ajoutées (maximum ${MAX_IMAGES}).`);
       }
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setUploadError(networkErrorMessage(err));
     } finally {
       // Les images déjà envoyées avec succès sont conservées même si une
       // suivante échoue — évite de perdre un upload déjà payé en bande passante.
@@ -154,10 +169,14 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
   };
 
   const handleChange = (field: string, value: string | boolean) => {
+    // Après un enregistrement qui est resté sur la page (marché pas prêt), toute nouvelle modification redonne accès au bouton.
+    if (success && syncNotice?.blocked) setSuccess(false);
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleGenerated = (content: GeneratedContent) => {
+    const hasContent = !!(form.hero_title.trim() || form.tiktok_script.trim() || form.benefits.trim().length > 2 || form.faq.trim().length > 2);
+    if (hasContent && !confirm('Le contenu généré va remplacer le titre, les textes, la FAQ, le script et le SEO actuels de cette fiche (pas encore enregistrés). Continuer ?')) return;
     setForm((prev) => ({
       ...prev,
       hero_title: content.hero_title,
@@ -166,7 +185,8 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
       benefits: JSON.stringify(content.benefits, null, 2),
       faq: JSON.stringify(content.faq, null, 2),
       tiktok_script: content.tiktok_script,
-      testimonials: JSON.stringify(content.testimonials, null, 2),
+      // Les « témoignages » générés par l'IA sont fictifs : ils ne sont plus repris (décision du 18/10),
+      // les témoignages déjà saisis sont conservés tels quels.
       meta_title: content.meta_title,
       meta_description: content.meta_description,
     }));
@@ -179,25 +199,42 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
     setError(null);
 
     try {
-      // Parse JSON fields
-      let painPoints, benefits, faq, testimonials;
-      try {
-        painPoints = JSON.parse(form.pain_points);
-        benefits = JSON.parse(form.benefits);
-        faq = JSON.parse(form.faq);
-        testimonials = JSON.parse(form.testimonials);
-      } catch {
-        throw new Error('Format JSON invalide dans les champs IA. Vérifiez la syntaxe.');
+      // Champs JSON : on indique lequel est faux et on emmène directement sur l'onglet concerné.
+      const parsed: Record<string, unknown> = {};
+      for (const field of ['pain_points', 'benefits', 'faq', 'testimonials'] as const) {
+        try {
+          parsed[field] = parseJsonList(form[field]);
+        } catch {
+          setActiveTab('ai');
+          throw new Error(`Le champ « ${JSON_FIELD_LABELS[field]} » (onglet Contenu IA) n'est pas un JSON valide. Corrigez-le ou videz-le.`);
+        }
+      }
+      const painPoints = parsed.pain_points;
+      const benefits = parsed.benefits;
+      const faq = parsed.faq;
+      const testimonials = parsed.testimonials;
+
+      if (form.video_url.trim() && !getYouTubeId(form.video_url)) {
+        setActiveTab('basic');
+        throw new Error('La vidéo doit être un lien YouTube (youtube.com/watch?v=…, youtu.be/…, /shorts/…).');
+      }
+      const num = (v: string) => (v.trim() ? Number(v.replace(',', '.')) : null);
+      for (const [label, v] of [['Prix', form.price], ['Prix original', form.original_price], ['Coût d\'achat', form.cost_price], ['Budget pub', form.ad_spend_allocated], ['Commission', form.commission_rate]] as const) {
+        const n = num(v);
+        if (n !== null && (!Number.isFinite(n) || n < 0)) {
+          setActiveTab('basic');
+          throw new Error(`« ${label} » doit être un nombre positif.`);
+        }
       }
 
       const payload = {
         name: form.name,
         description: form.description || null,
-        price: form.price ? parseFloat(form.price) : null,
-        original_price: form.original_price ? parseFloat(form.original_price) : null,
-        cost_price: form.cost_price ? parseFloat(form.cost_price) : null,
-        ad_spend_allocated: form.ad_spend_allocated ? parseFloat(form.ad_spend_allocated) : null,
-        commission_rate: form.commission_rate ? parseFloat(form.commission_rate) / 100 : null,
+        price: num(form.price),
+        original_price: num(form.original_price),
+        cost_price: num(form.cost_price),
+        ad_spend_allocated: num(form.ad_spend_allocated),
+        commission_rate: num(form.commission_rate) !== null ? (num(form.commission_rate) as number) / 100 : null,
         affiliate_url: form.affiliate_url,
         video_url: form.video_url.trim() || null,
         price_currency: form.price_currency || null,
@@ -238,18 +275,24 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la sauvegarde');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la sauvegarde'));
 
+      // En modification, passer en ligne / en brouillon se répercute sur les autres marchés du produit :
+      // ceux qui ne sont pas prêts (lien encore neutre, pas de photo) restent en brouillon, et Jerome doit le savoir.
+      const saved = await res.json().catch(() => null);
+      const summary = summarizeSync(saved?.sync as SyncReport | undefined, form.active);
       setSuccess(true);
-      setTimeout(() => {
-        router.push('/admin/products');
+      if (summary.text) setSyncNotice(summary);
+      if (!summary.blocked) {
+        setTimeout(() => {
+          router.push('/admin/products');
+          router.refresh();
+        }, summary.text ? 2500 : 800);
+      } else {
         router.refresh();
-      }, 800);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -281,11 +324,13 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Tab navigation */}
-      <div className="flex gap-2 border-b border-gray-200 pb-0">
+      <div className="flex gap-2 border-b border-gray-200 pb-0 overflow-x-auto" role="tablist" aria-label="Sections de la fiche produit">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2.5 text-sm font-medium rounded-t-xl transition-all -mb-px ${
               activeTab === tab.id
@@ -303,10 +348,10 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
         <div className="space-y-5">
           <div className="grid sm:grid-cols-2 gap-5">
             <div>
-              <label className={labelClass}>Nom du produit *</label>
+              <label className={labelClass} htmlFor="pf-name">Nom du produit *</label>
               <input
                 type="text"
-                value={form.name}
+                id="pf-name" value={form.name}
                 onChange={(e) => handleChange('name', e.target.value)}
                 className={inputClass}
                 placeholder="Ex: Ceinture massante SmartFit Pro"
@@ -314,10 +359,10 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
               />
             </div>
             <div>
-              <label className={labelClass}>Slug URL</label>
+              <label className={labelClass} htmlFor="pf-slug">Slug URL</label>
               <input
                 type="text"
-                value={form.slug}
+                id="pf-slug" value={form.slug}
                 onChange={(e) => handleChange('slug', e.target.value)}
                 className={inputClass}
                 placeholder="Auto-généré depuis le nom"
@@ -327,8 +372,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           </div>
 
           <div>
-            <label className={labelClass}>Catégorie</label>
+            <label className={labelClass} htmlFor="pf-category">Catégorie</label>
             <select
+              id="pf-category"
               value={form.category_id}
               onChange={(e) => handleChange('category_id', e.target.value)}
               className={inputClass}
@@ -336,16 +382,16 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
               <option value="">— Aucune catégorie —</option>
               {categories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
-                  {cat.icon ? `${cat.icon} ` : ''}{cat.name_fr}
+                  {cat.icon ? `${cat.icon} ` : ''}{categoryName(cat, market)}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className={labelClass}>Description</label>
+            <label className={labelClass} htmlFor="pf-description">Description</label>
             <textarea
-              value={form.description}
+              id="pf-description" value={form.description}
               onChange={(e) => handleChange('description', e.target.value)}
               className={textareaClass}
               placeholder="Description complète du produit..."
@@ -354,24 +400,24 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
           <div className="grid sm:grid-cols-2 gap-5">
             <div>
-              <label className={labelClass}>Prix (€)</label>
+              <label className={labelClass} htmlFor="pf-price">Prix (€)</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={form.price}
+                id="pf-price" value={form.price}
                 onChange={(e) => handleChange('price', e.target.value)}
                 className={inputClass}
                 placeholder="29.99"
               />
             </div>
             <div>
-              <label className={labelClass}>Prix original (€)</label>
+              <label className={labelClass} htmlFor="pf-original_price">Prix original (€)</label>
               <input
                 type="number"
                 step="0.01"
                 min="0"
-                value={form.original_price}
+                id="pf-original_price" value={form.original_price}
                 onChange={(e) => handleChange('original_price', e.target.value)}
                 className={inputClass}
                 placeholder="59.99"
@@ -381,9 +427,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
           <div className="grid sm:grid-cols-3 gap-5">
             <div>
-              <label className={labelClass}>Devise du prix</label>
+              <label className={labelClass} htmlFor="pf-price_currency">Devise du prix</label>
               <select
-                value={form.price_currency}
+                id="pf-price_currency" value={form.price_currency}
                 onChange={(e) => handleChange('price_currency', e.target.value)}
                 className={inputClass}
               >
@@ -393,10 +439,10 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
               </select>
             </div>
             <div>
-              <label className={labelClass}>Date du relevé du prix</label>
+              <label className={labelClass} htmlFor="pf-price_checked_at">Date du relevé du prix</label>
               <input
                 type="date"
-                value={form.price_checked_at}
+                id="pf-price_checked_at" value={form.price_checked_at}
                 onChange={(e) => handleChange('price_checked_at', e.target.value)}
                 className={inputClass}
               />
@@ -408,20 +454,31 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
                 checked={!!form.free_shipping}
                 onChange={(e) => handleChange('free_shipping', e.target.checked)}
               />
-              Livraison gratuite
+              <span>
+                Livraison gratuite
+                <span className="block text-xs font-normal text-gray-400">Pour le marché {market.toUpperCase()} uniquement</span>
+              </span>
             </label>
           </div>
 
           <div>
-            <label className={labelClass}>Vidéo (lien YouTube)</label>
+            <label className={labelClass} htmlFor="pf-video_url">Vidéo (lien YouTube)</label>
             <input
               type="url"
-              value={form.video_url}
+              id="pf-video_url" value={form.video_url}
               onChange={(e) => handleChange('video_url', e.target.value)}
               className={inputClass}
               placeholder="https://www.youtube.com/watch?v=..."
             />
-            <p className="text-xs text-gray-400 mt-1">Vidéo du fabricant ou d&apos;un test. Affichée en miniature sur la fiche ; seul YouTube est accepté.</p>
+            {form.video_url.trim() ? (
+              getYouTubeId(form.video_url) ? (
+                <p className="text-xs text-green-700 mt-1">Vidéo YouTube reconnue ✓</p>
+              ) : (
+                <p className="text-xs text-red-600 mt-1">Ce lien n&apos;est pas une vidéo YouTube : il ne sera pas accepté à l&apos;enregistrement.</p>
+              )
+            ) : (
+              <p className="text-xs text-gray-400 mt-1">Vidéo du fabricant ou d&apos;un test. Affichée en miniature sur la fiche ; seul YouTube est accepté.</p>
+            )}
           </div>
 
           {/* Coût vs Gain (Sprint 5) */}
@@ -431,12 +488,12 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
             </p>
             <div className="grid sm:grid-cols-3 gap-5">
               <div>
-                <label className={labelClass}>Coût d&apos;achat</label>
+                <label className={labelClass} htmlFor="pf-cost_price">Coût d&apos;achat</label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={form.cost_price}
+                  id="pf-cost_price" value={form.cost_price}
                   onChange={(e) => handleChange('cost_price', e.target.value)}
                   className={inputClass}
                   placeholder="0.00"
@@ -444,12 +501,12 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
                 <p className="text-xs text-gray-400 mt-1">Prix de revient par vente (surtout pour un produit vendu en propre)</p>
               </div>
               <div>
-                <label className={labelClass}>Budget pub alloué</label>
+                <label className={labelClass} htmlFor="pf-ad_spend_allocated">Budget pub alloué</label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={form.ad_spend_allocated}
+                  id="pf-ad_spend_allocated" value={form.ad_spend_allocated}
                   onChange={(e) => handleChange('ad_spend_allocated', e.target.value)}
                   className={inputClass}
                   placeholder="0.00"
@@ -457,13 +514,13 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
                 <p className="text-xs text-gray-400 mt-1">Dépense pub totale imputée à ce produit</p>
               </div>
               <div>
-                <label className={labelClass}>Commission (%)</label>
+                <label className={labelClass} htmlFor="pf-commission_rate">Commission (%)</label>
                 <input
                   type="number"
                   step="0.1"
                   min="0"
                   max="100"
-                  value={form.commission_rate}
+                  id="pf-commission_rate" value={form.commission_rate}
                   onChange={(e) => handleChange('commission_rate', e.target.value)}
                   className={inputClass}
                   placeholder="30"
@@ -474,10 +531,10 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           </div>
 
           <div>
-            <label className={labelClass}>URL d&apos;affiliation *</label>
+            <label className={labelClass} htmlFor="pf-affiliate_url">URL d&apos;affiliation *</label>
             <input
               type="url"
-              value={form.affiliate_url}
+              id="pf-affiliate_url" value={form.affiliate_url}
               onChange={(e) => handleChange('affiliate_url', e.target.value)}
               className={inputClass}
               placeholder="https://amazon.fr/dp/..."
@@ -589,6 +646,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           <div className="flex items-center gap-3">
             <button
               type="button"
+              role="switch"
+              aria-checked={form.active}
+              aria-label="Page active (publiée)"
               onClick={() => handleChange('active', !form.active)}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
                 form.active ? 'bg-green-500' : 'bg-gray-300'
@@ -600,9 +660,12 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
                 }`}
               />
             </button>
-            <label className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-medium text-gray-700">
               Page active {form.active ? '(publiée)' : '(cachée)'}
-            </label>
+              <span className="block text-xs font-normal text-gray-400">
+                Mettre en ligne ou en brouillon se répercute sur les autres marchés du même produit (si leur lien affilié et leur photo sont prêts).
+              </span>
+            </span>
           </div>
 
           {/* Generate button */}
@@ -613,8 +676,8 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
             <GenerateButton
               name={form.name}
               description={form.description}
-              price={form.price ? parseFloat(form.price) : null}
-              market={product?.market || 'fr'}
+              price={form.price && Number.isFinite(Number(form.price.replace(',', '.'))) ? Number(form.price.replace(',', '.')) : null}
+              market={market}
               onGenerated={handleGenerated}
               disabled={!form.name || !form.description}
             />
@@ -634,10 +697,10 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           </div>
 
           <div>
-            <label className={labelClass}>Titre Hero</label>
+            <label className={labelClass} htmlFor="pf-hero_title">Titre Hero</label>
             <input
               type="text"
-              value={form.hero_title}
+              id="pf-hero_title" value={form.hero_title}
               onChange={(e) => handleChange('hero_title', e.target.value)}
               className={inputClass}
               placeholder="Titre principal de la page..."
@@ -645,9 +708,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           </div>
 
           <div>
-            <label className={labelClass}>Sous-titre Hero</label>
+            <label className={labelClass} htmlFor="pf-hero_subtitle">Sous-titre Hero</label>
             <textarea
-              value={form.hero_subtitle}
+              id="pf-hero_subtitle" value={form.hero_subtitle}
               onChange={(e) => handleChange('hero_subtitle', e.target.value)}
               className={`${inputClass} resize-y min-h-[80px]`}
               placeholder="Description courte du produit..."
@@ -656,10 +719,11 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={labelClass.replace('mb-1.5', '')}>Points de douleur (JSON)</label>
+              <label className={labelClass.replace('mb-1.5', '')} htmlFor="pf-pain_points">Points de douleur (JSON)</label>
               {jsonErrors.pain_points && <span className="text-xs text-red-500 font-medium">{jsonErrors.pain_points}</span>}
             </div>
             <textarea
+              id="pf-pain_points"
               value={form.pain_points}
               onChange={(e) => handleChange('pain_points', e.target.value)}
               className={jsonInputClass('pain_points')}
@@ -669,10 +733,11 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={labelClass.replace('mb-1.5', '')}>Bénéfices (JSON)</label>
+              <label className={labelClass.replace('mb-1.5', '')} htmlFor="pf-benefits">Bénéfices (JSON)</label>
               {jsonErrors.benefits && <span className="text-xs text-red-500 font-medium">{jsonErrors.benefits}</span>}
             </div>
             <textarea
+              id="pf-benefits"
               value={form.benefits}
               onChange={(e) => handleChange('benefits', e.target.value)}
               className={jsonInputClass('benefits')}
@@ -682,10 +747,11 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={labelClass.replace('mb-1.5', '')}>FAQ (JSON)</label>
+              <label className={labelClass.replace('mb-1.5', '')} htmlFor="pf-faq">FAQ (JSON)</label>
               {jsonErrors.faq && <span className="text-xs text-red-500 font-medium">{jsonErrors.faq}</span>}
             </div>
             <textarea
+              id="pf-faq"
               value={form.faq}
               onChange={(e) => handleChange('faq', e.target.value)}
               className={jsonInputClass('faq')}
@@ -695,10 +761,11 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className={labelClass.replace('mb-1.5', '')}>Témoignages (JSON)</label>
+              <label className={labelClass.replace('mb-1.5', '')} htmlFor="pf-testimonials">Témoignages (JSON) <span className="font-normal text-gray-400">— non affichés sur le site</span></label>
               {jsonErrors.testimonials && <span className="text-xs text-red-500 font-medium">{jsonErrors.testimonials}</span>}
             </div>
             <textarea
+              id="pf-testimonials"
               value={form.testimonials}
               onChange={(e) => handleChange('testimonials', e.target.value)}
               className={jsonInputClass('testimonials')}
@@ -707,9 +774,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           </div>
 
           <div>
-            <label className={labelClass}>Script TikTok</label>
+            <label className={labelClass} htmlFor="pf-tiktok_script">Script TikTok</label>
             <textarea
-              value={form.tiktok_script}
+              id="pf-tiktok_script" value={form.tiktok_script}
               onChange={(e) => handleChange('tiktok_script', e.target.value)}
               className={textareaClass}
               placeholder="Script pour vidéo TikTok/Reels..."
@@ -721,8 +788,8 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
             <GenerateButton
               name={form.name}
               description={form.description}
-              price={form.price ? parseFloat(form.price) : null}
-              market={product?.market || 'fr'}
+              price={form.price && Number.isFinite(Number(form.price.replace(',', '.'))) ? Number(form.price.replace(',', '.')) : null}
+              market={market}
               onGenerated={handleGenerated}
               disabled={!form.name || !form.description}
             />
@@ -734,10 +801,10 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
       {activeTab === 'seo' && (
         <div className="space-y-5">
           <div>
-            <label className={labelClass}>Titre SEO (meta title)</label>
+            <label className={labelClass} htmlFor="pf-meta_title">Titre SEO (meta title)</label>
             <input
               type="text"
-              value={form.meta_title}
+              id="pf-meta_title" value={form.meta_title}
               onChange={(e) => handleChange('meta_title', e.target.value)}
               className={inputClass}
               placeholder="Titre pour les moteurs de recherche (max 60 car.)"
@@ -747,9 +814,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           </div>
 
           <div>
-            <label className={labelClass}>Description SEO (meta description)</label>
+            <label className={labelClass} htmlFor="pf-meta_description">Description SEO (meta description)</label>
             <textarea
-              value={form.meta_description}
+              id="pf-meta_description" value={form.meta_description}
               onChange={(e) => handleChange('meta_description', e.target.value)}
               className={`${inputClass} resize-y min-h-[100px]`}
               placeholder="Description pour Google (max 155 car.)"
@@ -766,7 +833,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
                 {form.meta_title || form.name || 'Titre de la page'}
               </div>
               <div className="text-green-700 text-sm">
-                {process.env.NEXT_PUBLIC_SITE_URL || 'https://votre-site.com'}/{form.slug || 'slug'}
+                {publicUrl(market, '/').replace(/\/$/, '')}/{form.slug || 'slug'}
               </div>
               <div className="text-gray-600 text-sm mt-1 line-clamp-2">
                 {form.meta_description || form.description || 'Description de la page...'}
@@ -784,30 +851,30 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
             <h3 className="text-base font-bold text-gray-900 mb-4">Pixels de suivi</h3>
             <div className="space-y-4">
               <div>
-                <label className={labelClass}>Meta Pixel ID</label>
+                <label className={labelClass} htmlFor="pf-pixel_meta">Meta Pixel ID</label>
                 <input
                   type="text"
-                  value={form.pixel_meta}
+                  id="pf-pixel_meta" value={form.pixel_meta}
                   onChange={(e) => handleChange('pixel_meta', e.target.value)}
                   className={inputClass}
                   placeholder="Ex: 123456789012345"
                 />
               </div>
               <div>
-                <label className={labelClass}>TikTok Pixel ID</label>
+                <label className={labelClass} htmlFor="pf-pixel_tiktok">TikTok Pixel ID</label>
                 <input
                   type="text"
-                  value={form.pixel_tiktok}
+                  id="pf-pixel_tiktok" value={form.pixel_tiktok}
                   onChange={(e) => handleChange('pixel_tiktok', e.target.value)}
                   className={inputClass}
                   placeholder="Ex: C9ABC123DEF456"
                 />
               </div>
               <div>
-                <label className={labelClass}>Google Tag Manager ID</label>
+                <label className={labelClass} htmlFor="pf-pixel_gtm">Google Tag Manager ID</label>
                 <input
                   type="text"
-                  value={form.pixel_gtm}
+                  id="pf-pixel_gtm" value={form.pixel_gtm}
                   onChange={(e) => handleChange('pixel_gtm', e.target.value)}
                   className={inputClass}
                   placeholder="Ex: GTM-XXXXXXX"
@@ -821,20 +888,20 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
             <h3 className="text-base font-bold text-gray-900 mb-4">Multi-affiliation</h3>
             <div className="space-y-4">
               <div>
-                <label className={labelClass}>URL Affiliée 2</label>
+                <label className={labelClass} htmlFor="pf-affiliate_url_2">URL Affiliée 2</label>
                 <input
                   type="url"
-                  value={form.affiliate_url_2}
+                  id="pf-affiliate_url_2" value={form.affiliate_url_2}
                   onChange={(e) => handleChange('affiliate_url_2', e.target.value)}
                   className={inputClass}
                   placeholder="Ex: lien Amazon"
                 />
               </div>
               <div>
-                <label className={labelClass}>URL Affiliée 3</label>
+                <label className={labelClass} htmlFor="pf-affiliate_url_3">URL Affiliée 3</label>
                 <input
                   type="url"
-                  value={form.affiliate_url_3}
+                  id="pf-affiliate_url_3" value={form.affiliate_url_3}
                   onChange={(e) => handleChange('affiliate_url_3', e.target.value)}
                   className={inputClass}
                   placeholder="Ex: lien Awin"
@@ -846,7 +913,45 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           {/* Engagement */}
           <div className="pt-6 border-t border-gray-200">
             <h3 className="text-base font-bold text-gray-900 mb-4">Engagement</h3>
-            <div className="space-y-5">
+            <div className="space-y-4">
+              <label className="flex items-start gap-3 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={form.exit_intent_enabled}
+                  onChange={(e) => handleChange('exit_intent_enabled', e.target.checked)}
+                />
+                <span>
+                  <span className="font-semibold">Fenêtre « avant de partir »</span>
+                  <span className="block text-xs text-gray-400">S&apos;affiche quand le visiteur s&apos;apprête à quitter la page.</span>
+                </span>
+              </label>
+              <label className="flex items-start gap-3 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={form.email_capture_enabled}
+                  onChange={(e) => handleChange('email_capture_enabled', e.target.checked)}
+                />
+                <span>
+                  <span className="font-semibold">Collecte d&apos;adresses e-mail</span>
+                  <span className="block text-xs text-gray-400">Propose une remise en échange de l&apos;adresse e-mail du visiteur.</span>
+                </span>
+              </label>
+              {form.email_capture_enabled && (
+                <div className="max-w-xs">
+                  <label className={labelClass} htmlFor="pf-email_capture_discount">Remise proposée (%)</label>
+                  <input
+                    id="pf-email_capture_discount"
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={form.email_capture_discount}
+                    onChange={(e) => handleChange('email_capture_discount', e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -901,7 +1006,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
           <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-red-700 text-sm">{error}</p>
+          <p role="alert" className="text-red-700 text-sm">{error}</p>
         </div>
       )}
 
@@ -911,6 +1016,23 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
           <p className="text-green-700 text-sm font-medium">Produit sauvegardé avec succès !</p>
+        </div>
+      )}
+
+      {syncNotice && (
+        <div
+          role="status"
+          className={`rounded-xl p-4 text-sm border ${syncNotice.blocked ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-blue-50 border-blue-200 text-blue-800'}`}
+        >
+          <p>{syncNotice.text}</p>
+          {syncNotice.blocked && (
+            <p className="mt-2">
+              Les marchés restés en brouillon seront mis en ligne dès que leur lien d&apos;affiliation et leur photo seront prêts.{' '}
+              <button type="button" onClick={() => { router.push('/admin/products'); router.refresh(); }} className="font-semibold underline">
+                Retour aux produits
+              </button>
+            </p>
+          )}
         </div>
       )}
 
@@ -943,7 +1065,7 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => router.push('/admin/products')}
           className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-all duration-200"
         >
           Annuler
@@ -951,8 +1073,9 @@ export default function ProductForm({ product, mode, initialTemplateId, categori
 
         {mode === 'edit' && product?.slug && (
           <a
-            href={`/${product.slug}`}
+            href={publicUrl(market, `/${product.slug}`)}
             target="_blank"
+            rel="noopener noreferrer"
             className="ml-auto inline-flex items-center gap-2 text-sm text-gray-500 hover:text-primary-600 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
 import { isValidMarket } from '@/lib/market';
+import { dbErrorResponse, unauthorized } from '../../_lib/http';
 import { findSocialChannel, isIntegrationEnabled, recordSyncResult } from '@/lib/integrations/registry';
 
 interface ScheduledPostRow {
@@ -29,16 +30,18 @@ interface ScheduledPostRow {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorizedRequest(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  if (!isAuthorizedRequest(req)) return unauthorized();
   const sb = getSupabaseAdmin();
+  // 20 posts au plus par passage (le cron tourne chaque minute) : une longue file ne fait plus
+  // durer la requête au-delà des délais du serveur, le reste part à la minute suivante.
   const { data: due, error } = await sb
     .from('scheduled_posts')
     .select('id, channel_ids, text, image_urls, video_url, link, market')
     .eq('status', 'pending')
-    .lte('scheduled_at', new Date().toISOString());
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    .lte('scheduled_at', new Date().toISOString())
+    .order('scheduled_at', { ascending: true })
+    .limit(20);
+  if (error) return dbErrorResponse('POST /api/cron/social-publish', error);
 
   const processed: { id: string; status: 'sent' | 'failed'; results: unknown[] }[] = [];
 
@@ -54,7 +57,7 @@ export async function POST(req: NextRequest) {
       .eq('id', post.id)
       .eq('status', 'pending')
       .select('id')
-      .single();
+      .maybeSingle();
     if (!claimed) continue;
 
     const market = isValidMarket(post.market) ? post.market : 'fr';
@@ -67,7 +70,7 @@ export async function POST(req: NextRequest) {
     };
 
     const results: { channelId: string; ok: boolean; message: string; postId?: string }[] = [];
-    for (const channelId of post.channel_ids) {
+    for (const channelId of post.channel_ids ?? []) {
       const channel = findSocialChannel(channelId);
       if (!channel) { results.push({ channelId, ok: false, message: 'Canal inconnu.' }); continue; }
       if (!channel.isConfigured()) { results.push({ channelId, ok: false, message: "Clé d'API absente." }); continue; }
@@ -84,7 +87,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const finalStatus: 'sent' | 'failed' = results.every((r) => r.ok) ? 'sent' : 'failed';
+    const finalStatus: 'sent' | 'failed' = results.length > 0 && results.every((r) => r.ok) ? 'sent' : 'failed';
     // La ligne appartient exclusivement à cette exécution depuis la
     // réclamation ci-dessus (status='processing') — .eq('status',
     // 'processing') reste une ceinture-bretelles défensive plutôt qu'une

@@ -120,3 +120,36 @@ describe('shipping : enregistrement', () => {
     expect(rep[1]).toMatchObject({ found: false });
   });
 });
+
+describe('shipping : cas limites', () => {
+  it('plusieurs semaines : l’annonce UK de la semaine la plus récente fait foi pour les fiches', async () => {
+    const t = {
+      trend_candidates: [
+        cand({ id: 'old', week: '2026-10-26', url_uk: 'https://www.aliexpress.com/item/1005088888888888.html' }),
+        cand({ id: 'new', week: '2026-11-02' }),
+      ],
+      products: [
+        { id: 'p-uk-old', aliexpress_id: '1005088888888888', market: 'uk', free_shipping: false },
+        { id: 'p-uk-new', aliexpress_id: '1005011111111111', market: 'uk', free_shipping: false },
+      ],
+    };
+    const rep = await applyShipping(fakeDb(t), [{ id: '1005007345056908', values: { uk: true } }]);
+    expect(rep[0]).toMatchObject({ candidates: 2, products: 1 });
+    expect(t.products.map((p) => p.free_shipping)).toEqual([false, true]);
+    expect(t.trend_candidates.every((c: any) => c.free_shipping_uk === 'Oui')).toBe(true);
+  });
+
+  it('relancer la même commande ne change rien de plus (idempotent)', async () => {
+    const t = { trend_candidates: [cand()], products: [{ id: 'p', aliexpress_id: '1005007345056908', market: 'fr', free_shipping: false }] };
+    const entries = [{ id: '1005007345056908', values: { fr: true } }];
+    await applyShipping(fakeDb(t), entries);
+    const once = JSON.stringify(t.products);
+    await applyShipping(fakeDb(t), entries);
+    expect(JSON.stringify(t.products)).toBe(once);
+  });
+
+  it('la liste rappelle de choisir le pays de livraison sur la page', async () => {
+    const res = await listShipping(fakeDb({ trend_candidates: [cand()], products: [] }));
+    expect(formatList(res)).toContain('pays de livraison');
+  });
+});

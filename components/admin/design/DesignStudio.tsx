@@ -8,6 +8,8 @@ import TemplateRenderer, { type TemplateOverrides } from '@/components/templates
 import TemplateThumbnail from './TemplateThumbnail';
 import EditorPanel from './EditorPanel';
 import { MOCK_PRODUCT, MOCK_OVERRIDES } from '@/lib/mock-product';
+import { publicUrl } from '@/lib/admin-products-view';
+import { useMarket } from '@/lib/market-context';
 
 // ─── Carousel shown when no product is selected ──────────────────────────────
 function TemplateCarousel({
@@ -17,6 +19,8 @@ function TemplateCarousel({
   selectedTemplateId: string;
   onSelect: (id: string) => void;
 }) {
+  // Les aperçus pleine page vivent sur le site public du marché affiché (le back-office n'y donne pas accès).
+  const { market: activeMarket } = useMarket();
   // Sync current index with selectedTemplateId (e.g. when user clicks top strip)
   const [current, setCurrent] = useState(() =>
     Math.max(0, TEMPLATES.findIndex((t) => t.id === selectedTemplateId))
@@ -151,7 +155,7 @@ function TemplateCarousel({
                   </div>
                   {/* Bouton HTML pleine page */}
                   <Link
-                    href={`/preview/${template.id}`}
+                    href={publicUrl(activeMarket, `/preview/${template.id}`)}
                     target="_blank"
                     onClick={(e) => e.stopPropagation()}
                     style={{
@@ -283,15 +287,33 @@ function buildDefaultOverrides(product: Product | undefined, templateId: string)
   };
 }
 
+/**
+ * Design ENREGISTRÉ d'un produit (template + réglages). Avant : le studio repartait toujours de
+ * « dark-pro » avec les réglages par défaut, et un clic sur Enregistrer écrasait le design
+ * personnalisé du produit sans prévenir.
+ */
+function savedDesignOf(product: Product | undefined): { templateId: string; overrides: TemplateOverrides } {
+  const templateId = product?.template_id && TEMPLATES.some((t) => t.id === product.template_id) ? product.template_id : 'dark-pro';
+  const base = buildDefaultOverrides(product, templateId);
+  const saved = (product?.template_config ?? null) as Partial<TemplateOverrides> | null;
+  if (!saved || typeof saved !== 'object') return { templateId, overrides: base };
+  return {
+    templateId,
+    overrides: {
+      ...base,
+      ...saved,
+      sections: { ...base.sections, ...(saved.sections ?? {}) },
+    },
+  };
+}
+
 export default function DesignStudio({ products, initialProductId }: Props) {
   const firstProductId = initialProductId || products[0]?.id || '';
 
   const [selectedProductId, setSelectedProductId] = useState<string>(firstProductId);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('dark-pro');
-  const [overrides, setOverrides] = useState<TemplateOverrides>(() => {
-    const product = products.find((p) => p.id === firstProductId);
-    return buildDefaultOverrides(product, 'dark-pro');
-  });
+  const initialDesign = savedDesignOf(products.find((p) => p.id === firstProductId));
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialDesign.templateId);
+  const [overrides, setOverrides] = useState<TemplateOverrides>(initialDesign.overrides);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
@@ -303,10 +325,12 @@ export default function DesignStudio({ products, initialProductId }: Props) {
   const handleProductChange = useCallback(
     (productId: string) => {
       setSelectedProductId(productId);
-      const product = products.find((p) => p.id === productId);
-      setOverrides(buildDefaultOverrides(product, selectedTemplateId));
+      // On charge le design déjà enregistré pour ce produit.
+      const design = savedDesignOf(products.find((p) => p.id === productId));
+      setSelectedTemplateId(design.templateId);
+      setOverrides(design.overrides);
     },
-    [products, selectedTemplateId]
+    [products]
   );
 
   const handleTemplateChange = useCallback(

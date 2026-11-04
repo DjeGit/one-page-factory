@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { GeneratedContent } from '@/types';
 import type { Market } from '@/lib/market';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 interface GenerateButtonProps {
   name: string;
@@ -40,15 +41,12 @@ export default function GenerateButton({
         body: JSON.stringify({ name, description, price, market: market || 'fr' }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erreur lors de la génération');
-      }
+      if (!res.ok) throw new Error(await readApiError(res, 'Erreur lors de la génération'));
 
       const content: GeneratedContent = await res.json();
       onGenerated(content);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      setError(networkErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -59,6 +57,7 @@ export default function GenerateButton({
       <button
         type="button"
         onClick={handleGenerate}
+        title={disabled ? 'Renseignez d’abord le nom et la description du produit' : undefined}
         disabled={loading || disabled}
         className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
       >
@@ -81,7 +80,7 @@ export default function GenerateButton({
       </button>
 
       {error && (
-        <p className="text-red-600 text-sm flex items-center gap-1">
+        <p role="alert" className="text-red-600 text-sm flex items-center gap-1">
           <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>

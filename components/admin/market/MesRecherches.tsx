@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 import { useMarket } from '@/lib/market-context';
 import { getMarketLabel } from '@/lib/market';
 import ManualAddForm from './ManualAddForm';
@@ -50,8 +52,12 @@ function ScoreBadge({ score, type }: { score: number; type: 'trend' | 'confidenc
  */
 export default function MesRecherches() {
   const { market } = useMarket();
+  const router = useRouter();
   const [data, setData] = useState<MarketProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const loadId = useRef(0);
   const [activeSources, setActiveSources] = useState<string[]>([]);
   const [checkingSources, setCheckingSources] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -62,12 +68,22 @@ export default function MesRecherches() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const loadProducts = useCallback(async () => {
+    const id = ++loadId.current;
     setLoading(true);
+    setLoadError(null);
     try {
-      const res = await fetch('/api/market');
-      setData(await res.json());
+      const res = await fetch('/api/market', { cache: 'no-store' });
+      if (!res.ok) throw new Error(await readApiError(res, 'Chargement impossible'));
+      const json = await res.json();
+      // Garde : une réponse inattendue (objet d'erreur) ne doit pas faire planter l'écran.
+      if (id === loadId.current) setData(Array.isArray(json) ? json : []);
+    } catch (err) {
+      if (id === loadId.current) {
+        setData([]);
+        setLoadError(networkErrorMessage(err, 'Chargement impossible'));
+      }
     } finally {
-      setLoading(false);
+      if (id === loadId.current) setLoading(false);
     }
   }, []);
 
@@ -75,8 +91,10 @@ export default function MesRecherches() {
     setCheckingSources(true);
     try {
       const res = await fetch('/api/market/refresh');
-      const json = await res.json();
-      setActiveSources(json.activeSources || []);
+      const json = res.ok ? await res.json() : {};
+      setActiveSources(Array.isArray(json.activeSources) ? json.activeSources : []);
+    } catch {
+      setActiveSources([]);
     } finally {
       setCheckingSources(false);
     }
@@ -93,14 +111,16 @@ export default function MesRecherches() {
     setIsRefreshing(true);
     setRefreshBanner(null);
     try {
-      const res = await fetch('/api/market/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      const json = await res.json();
-      if (json.success) {
-        setRefreshBanner({ ok: true, message: `${json.count} produits · sources utilisées : ${json.sourcesUsed.join(', ')}` });
+      const res = await fetch('/api/market/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market }) });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) {
+        setRefreshBanner({ ok: true, message: `${json.count} produits · sources utilisées : ${(json.sourcesUsed ?? []).join(', ')}` });
         await loadProducts();
       } else {
-        setRefreshBanner({ ok: false, message: json.error });
+        setRefreshBanner({ ok: false, message: json.error || (await readApiError(res, 'Actualisation impossible')) });
       }
+    } catch (err) {
+      setRefreshBanner({ ok: false, message: networkErrorMessage(err) });
     } finally {
       setIsRefreshing(false);
     }
@@ -108,8 +128,14 @@ export default function MesRecherches() {
 
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm('Supprimer ce produit de la veille ?')) return;
-    await fetch(`/api/market/${id}`, { method: 'DELETE' });
-    setData((prev) => prev.filter((p) => p.id !== id));
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/market/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await readApiError(res, 'Suppression impossible'));
+      setData((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      setActionError(networkErrorMessage(err));
+    }
   }, []);
 
   const handleAddToFactory = useCallback((product: MarketProduct) => {
@@ -119,8 +145,8 @@ export default function MesRecherches() {
       price: String(product.price_avg || product.price_min || ''),
       prefill: '1',
     });
-    window.location.href = `/admin/products/new?${params.toString()}`;
-  }, []);
+    router.push(`/admin/products/new?${params.toString()}`);
+  }, [router]);
 
   const sources = useMemo(() => ['all', ...Array.from(new Set(data.map((p) => p.source).filter(Boolean) as string[]))], [data]);
 
@@ -136,6 +162,16 @@ export default function MesRecherches() {
   return (
     <div className="space-y-6">
       <ManualAddForm onCreated={loadProducts} />
+
+      {loadError && (
+        <div role="alert" className="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-800 flex items-center justify-between gap-3">
+          <span>Impossible de charger la liste : {loadError}</span>
+          <button type="button" onClick={loadProducts} className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700">Réessayer</button>
+        </div>
+      )}
+      {actionError && (
+        <div role="alert" className="bg-red-50 border border-red-200 rounded-2xl p-4 text-sm text-red-800">{actionError}</div>
+      )}
 
       {/* Sources actives + refresh */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
@@ -240,7 +276,16 @@ export default function MesRecherches() {
                 <div key={product.id}>
                   <div
                     className="grid grid-cols-12 gap-2 px-5 py-4 items-start hover:bg-gray-50/70 transition-colors cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={expandedRow === product.id}
                     onClick={() => setExpandedRow(expandedRow === product.id ? null : product.id)}
+                    onKeyDown={(e) => {
+                      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault();
+                        setExpandedRow(expandedRow === product.id ? null : product.id);
+                      }
+                    }}
                   >
                     <div className="col-span-3 min-w-0">
                       <div className="font-semibold text-gray-900 text-sm leading-snug">{product.name}</div>
@@ -267,7 +312,8 @@ export default function MesRecherches() {
                     <div className="col-span-1 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleAddToFactory(product)}
-                        title="Créer une landing page"
+                        title="Créer une fiche produit à partir de cette ligne"
+                        aria-label={`Créer une fiche produit : ${product.name}`}
                         className="p-1.5 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-lg transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -277,6 +323,7 @@ export default function MesRecherches() {
                       <button
                         onClick={() => handleDelete(product.id)}
                         title="Supprimer"
+                        aria-label={`Supprimer ${product.name} de la veille`}
                         className="p-1.5 hover:bg-red-50 text-gray-300 hover:text-red-400 rounded-lg transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

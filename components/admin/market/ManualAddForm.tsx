@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMarket } from '@/lib/market-context';
 import { getMarketLabel } from '@/lib/market';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 /**
  * Ajout manuel de produit (Sprint 4) — indépendant de l'étude de marché,
@@ -42,16 +43,17 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          market, // le marché affiché dans le formulaire, sans dépendre du cookie
           price: form.price || null,
           cost_price: form.cost_price || null,
           commission_rate: form.commission_rate ? Number(form.commission_rate) / 100 : null,
         }),
       });
-      const json = await res.json();
       if (!res.ok) {
-        setError(json.error || 'Erreur lors de la création du produit.');
+        setError(await readApiError(res, 'Erreur lors de la création du produit'));
         return;
       }
+      const json = await res.json();
       setSuccess({ id: json.id, name: json.name });
       setForm({
         name: '',
@@ -65,7 +67,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
       });
       onCreated?.();
     } catch (err) {
-      setError(String(err));
+      setError(networkErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -205,7 +207,7 @@ export default function ManualAddForm({ onCreated }: { onCreated?: () => void })
           />
         </div>
 
-        {error && <p className="col-span-2 text-sm text-red-600">{error}</p>}
+        {error && <p role="alert" className="col-span-2 text-sm text-red-600">{error}</p>}
         {success && (
           <div className="col-span-2 flex items-center justify-between bg-green-50 border border-green-200 rounded-xl px-4 py-2.5 text-sm text-green-700">
             <span>« {success.name} » créé en brouillon.</span>

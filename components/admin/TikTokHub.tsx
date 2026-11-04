@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Product } from '@/types';
+import { useMarket } from '@/lib/market-context';
+import { publicUrl } from '@/lib/admin-products-view';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 interface Props { products: Product[]; }
 type Tab = 'scripts' | 'merchant' | 'bio' | 'hashtags';
@@ -26,6 +29,8 @@ export default function TikTokHub({ products }: Props) {
   const [regen, setRegen] = useState(false);
   const [regenErr, setRegenErr] = useState<string|null>(null);
   const router = useRouter();
+  const { market } = useMarket();
+  const [bioErr, setBioErr] = useState<string|null>(null);
 
   const [bios, setBios] = useState<Record<string,boolean>>(
     Object.fromEntries(products.map(p=>[p.id, p.active]))
@@ -43,23 +48,27 @@ export default function TikTokHub({ products }: Props) {
     if(!prod) return;
     setRegen(true); setRegenErr(null);
     try {
-      const r = await fetch('/api/generate',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name:prod.name, description:prod.description, price:prod.price }) });
-      if(!r.ok) throw new Error('Erreur generation');
+      const r = await fetch('/api/generate',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ name:prod.name, description:prod.description, price:prod.price, market:prod.market || market }) });
+      if(!r.ok) throw new Error(await readApiError(r,'Erreur de génération'));
       const d = await r.json();
       if(d.tiktok_script) {
         const s = await fetch('/api/products/'+prod.id,{ method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ tiktok_script:d.tiktok_script }) });
-        if(!s.ok) throw new Error('Erreur sauvegarde');
+        if(!s.ok) throw new Error(await readApiError(s,'Erreur de sauvegarde'));
         router.refresh();
       }
-    } catch(e){ setRegenErr(e instanceof Error ? e.message : 'Erreur'); }
+    } catch(e){ setRegenErr(networkErrorMessage(e)); }
     finally{ setRegen(false); }
   };
 
   const handleBio = async (id:string) => {
     const v = !bios[id];
-    setBios(p=>({...p,[id]:v})); setSavingBio(id);
-    try { await fetch('/api/products/'+id,{ method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ active:v }) }); }
-    catch { setBios(p=>({...p,[id]:!v})); }
+    setBios(p=>({...p,[id]:v})); setSavingBio(id); setBioErr(null);
+    try {
+      const r = await fetch('/api/products/'+id,{ method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ active:v }) });
+      // Avant : un refus du serveur laissait l'interrupteur affiché comme enregistré.
+      if(!r.ok) throw new Error(await readApiError(r,'Modification refusée'));
+    }
+    catch(e) { setBios(p=>({...p,[id]:!v})); setBioErr(networkErrorMessage(e)); }
     finally { setSavingBio(null); }
   };
 
@@ -70,7 +79,8 @@ export default function TikTokHub({ products }: Props) {
   const wc = (t:string)=>t.split(/\s+/).filter(Boolean).length;
   const dur = (t:string)=>{ const s=Math.round((wc(t)/150)*60); return s<60?s+'s':Math.floor(s/60)+'m'+(s%60)+'s'; };
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL||'https://votre-site.com';
+  // Adresse publique du marché affiché (et non une adresse unique pour les 3 sites).
+  const siteUrl = publicUrl(market, '/');
   const TABS: {id:Tab;label:string}[] = [
     {id:'scripts',  label:'📝 Scripts TikTok'},
     {id:'merchant', label:'🛍️ Google Merchant'},
@@ -239,13 +249,14 @@ export default function TikTokHub({ products }: Props) {
               <h3 className="font-bold text-gray-900">Produits a inclure</h3>
               <p className="text-xs text-gray-400 mt-0.5">Les produits actifs apparaissent sur votre page /bio</p>
             </div>
+            {bioErr && <div role="alert" className="px-6 py-3 bg-red-50 border-b border-red-200 text-sm text-red-700">{bioErr}</div>}
             <div className="divide-y divide-gray-100">
               {products.map(p=>(
                 <div key={p.id} className="px-6 py-4 flex items-center justify-between">
                   <div><p className="font-medium text-gray-900">{p.name}</p><p className="text-sm text-gray-400">/{p.slug}</p></div>
                   <div className="flex items-center gap-3">
                     {savingBio===p.id&&<span className="text-xs text-gray-400">Sauvegarde...</span>}
-                    <button type="button" onClick={()=>handleBio(p.id)} disabled={savingBio===p.id}
+                    <button type="button" role="switch" aria-checked={!!bios[p.id]} aria-label={'Afficher '+p.name+' sur la page /bio'} onClick={()=>handleBio(p.id)} disabled={savingBio===p.id}
                       className={'relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 disabled:opacity-50 '+(bios[p.id]?'bg-green-500':'bg-gray-300')}>
                       <span className={'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 '+(bios[p.id]?'translate-x-6':'translate-x-1')}/>
                     </button>

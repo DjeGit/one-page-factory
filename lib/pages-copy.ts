@@ -142,7 +142,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Prix et disponibilité",
           paragraphs: [
-            "Nous n'affichons pas de prix : ils changent trop vite pour qu'une page les garde à jour. Le prix qui compte est celui affiché chez le marchand au moment de l'achat ; en cas d'écart avec ce que vous lisez ici, c'est le marchand qui fait foi.",
+            "Nous n'affichons pas de prix pour les produits Amazon. Pour les autres marchands, un prix peut apparaître, toujours suivi d'un astérisque et accompagné de sa date : c'est le prix relevé chez le marchand ce jour-là, à titre indicatif, car les prix changent vite. Le prix qui compte est celui affiché chez le marchand au moment de l'achat ; en cas d'écart avec ce que vous lisez ici, c'est le marchand qui fait foi.",
           ],
         },
         {
@@ -380,7 +380,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Precios y disponibilidad",
           paragraphs: [
-            "No mostramos precios: cambian demasiado rápido para que una página los mantenga al día. El que cuenta es el que muestra la tienda en el momento de la compra; si hay diferencia con lo que lees aquí, prevalece el de la tienda.",
+            "No mostramos precios de los productos de Amazon. En el resto de tiendas puede aparecer un precio, siempre con un asterisco y su fecha: es el precio que mostraba la tienda ese día, a título orientativo, porque los precios cambian rápido. El que cuenta es el que muestra la tienda en el momento de la compra; si hay diferencia con lo que lees aquí, prevalece el de la tienda.",
           ],
         },
         {
@@ -618,7 +618,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Prices and availability",
           paragraphs: [
-            "We do not show prices: they change too fast for a page to keep up. The one that counts is the retailer's price at the moment of purchase; where it differs from anything you read here, the retailer is right.",
+            "We do not show prices for Amazon products. For other retailers a price may appear, always marked with an asterisk and its date: it is the price the retailer showed on that day, for guidance only, because prices change fast. The one that counts is the retailer's price at the moment of purchase; where it differs from anything you read here, the retailer is right.",
           ],
         },
         {

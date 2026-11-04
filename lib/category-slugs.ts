@@ -1,5 +1,5 @@
 import type { Market } from '@/lib/market';
-import { MARKET_HREFLANG, MARKET_ORIGIN, X_DEFAULT_ORIGIN } from '@/lib/site-url';
+import { MARKET_HREFLANG, MARKET_ORIGIN } from '@/lib/site-url';
 
 /**
  * Slugs d'URL de catégories traduits par marché (/c/<slug>).
@@ -64,16 +64,25 @@ export function baseCategorySlug(urlSlug: string): string {
   return urlSlug;
 }
 
-/** Canonical + hreflang d'une catégorie : chaque langue pointe vers SON URL. */
-export function categoryAlternates(baseSlug: string, market: Market) {
+/**
+ * Canonical + hreflang d'une catégorie : chaque langue pointe vers SON URL.
+ *
+ * `availableMarkets` = marchés où la catégorie a au moins un produit en ligne
+ * (donc où la page existe vraiment : /c/<slug> répond 404 sur les autres).
+ * Un hreflang vers une page qui n'existe pas est une erreur pour Google ; on
+ * ne déclare donc que les versions qui répondent 200. Sans cette liste
+ * (anciens appels), les trois versions sont déclarées. La page courante est
+ * toujours déclarée (hreflang auto-référent).
+ */
+export function categoryAlternates(baseSlug: string, market: Market, availableMarkets?: Market[]) {
   const url = (m: Market) => `${MARKET_ORIGIN[m]}${categoryPath(baseSlug, m)}`;
-  return {
-    canonical: url(market),
-    languages: {
-      [MARKET_HREFLANG.fr]: url('fr'),
-      [MARKET_HREFLANG.es]: url('es'),
-      [MARKET_HREFLANG.uk]: url('uk'),
-      'x-default': `${X_DEFAULT_ORIGIN}${categoryPath(baseSlug, 'uk')}`,
-    },
-  };
+  const present = new Set<Market>(availableMarkets ?? MARKETS);
+  present.add(market);
+  const languages: Record<string, string> = {};
+  for (const m of MARKETS) {
+    if (present.has(m)) languages[MARKET_HREFLANG[m]] = url(m);
+  }
+  const defaultMarket: Market = present.has('uk') ? 'uk' : MARKETS.find((m) => present.has(m)) ?? market;
+  languages['x-default'] = `${MARKET_ORIGIN[defaultMarket]}${categoryPath(baseSlug, defaultMarket)}`;
+  return { canonical: url(market), languages };
 }

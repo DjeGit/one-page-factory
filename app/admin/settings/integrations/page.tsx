@@ -1,9 +1,10 @@
 import { listIntegrationsWithStatus } from '@/lib/integrations/registry';
 import IntegrationsManager from '@/components/admin/settings/IntegrationsManager';
+import { withAdminAuth } from '@/app/admin/admin-guard';
 
 export const dynamic = 'force-dynamic';
 
-export default async function IntegrationsSettingsPage() {
+export default withAdminAuth(async function IntegrationsSettingsPage() {
   const { dataSources, socialChannels } = await listIntegrationsWithStatus();
 
   return (
@@ -18,4 +19,4 @@ export default async function IntegrationsSettingsPage() {
       <IntegrationsManager initialDataSources={dataSources} initialSocialChannels={socialChannels} />
     </div>
   );
-}
+});

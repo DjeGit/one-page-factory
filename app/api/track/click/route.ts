@@ -31,6 +31,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { isAuthorizedRequest } from '@/lib/admin-auth';
+import { badRequest, createRateLimiter, getClientIp, intParam, isUuid, serverError, unauthorized } from '../../_lib/http';
+import { isLegacyMarket } from '../../_lib/legacy-sync-input';
+
+// Plafond par adresse IP (la limite par session ci-dessous se contourne en changeant d'identifiant de session).
+const ipLimiter = createRateLimiter(120, 60_000);
 
 // Simple in-memory rate limiter: max 1 click per session per product per minute
 const clickRateCache = new Map<string, number>();
@@ -58,30 +64,33 @@ function checkRateLimit(sessionId: string, productId: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  let body: {
-    product_id?: string;  // UUID (Supabase)
-    market_id?: string;
-    session_id?: string;
-  } = {};
+  const ip = getClientIp(request.headers);
+  if (ip && !ipLimiter.allow(ip)) {
+    return NextResponse.json({ tracked: false, reason: 'rate_limited' }, { status: 429 });
+  }
 
+  let body: Record<string, unknown>;
   try {
-    body = await request.json();
+    const parsed: unknown = await request.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return badRequest('Invalid JSON');
+    body = parsed as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    return badRequest('Invalid JSON');
   }
 
-  const { product_id, market_id, session_id } = body;
+  const { product_id, market_id } = body;
+  const session_id = typeof body.session_id === 'string' ? body.session_id.slice(0, 100) : undefined;
 
-  if (!product_id || typeof product_id !== 'string') {
-    return NextResponse.json({ error: 'product_id (UUID) required' }, { status: 400 });
+  if (typeof product_id !== 'string' || !isUuid(product_id)) {
+    return badRequest('product_id (UUID) required');
   }
 
-  if (!market_id || !['fr', 'es', 'com'].includes(market_id)) {
-    return NextResponse.json({ error: 'market_id must be fr, es, or com' }, { status: 400 });
+  if (!isLegacyMarket(market_id)) {
+    return badRequest('market_id must be fr, es, or com');
   }
 
   // Rate limiting
-  const sid = session_id ?? request.headers.get('x-forwarded-for') ?? 'anonymous';
+  const sid = session_id ?? ip ?? 'anonymous';
   if (!checkRateLimit(sid, product_id)) {
     // Return 200 to avoid revealing rate limit to client (they don't need to know)
     return NextResponse.json({ tracked: false, reason: 'rate_limited' });
@@ -106,11 +115,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** GET — click stats for dashboard */
+/** GET — click stats for dashboard (admin uniquement : avant, ouvert à tout visiteur) */
 export async function GET(request: NextRequest) {
+  if (!isAuthorizedRequest(request)) return unauthorized();
+
   const { searchParams } = new URL(request.url);
   const market = searchParams.get('market') ?? 'fr';
-  const days = Math.min(90, parseInt(searchParams.get('days') ?? '30', 10));
+  if (!isLegacyMarket(market)) return badRequest('market invalide : fr, es ou com');
+  const days = intParam(searchParams.get('days'), 30, 1, 90);
 
   try {
     const stats = await query<{
@@ -147,7 +159,7 @@ export async function GET(request: NextRequest) {
       topProducts: stats,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error('[ClickTrack] statistiques :', err instanceof Error ? err.message : err);
+    return serverError('Erreur de base de données');
   }
 }

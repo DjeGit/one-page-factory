@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useMarket } from '@/lib/market-context';
 import { getMarketLabel } from '@/lib/market';
+import { publicUrl } from '@/lib/admin-products-view';
+import { networkErrorMessage } from '@/components/admin/http';
 
 interface IntegrationStatus {
   id: string;
@@ -42,22 +44,28 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<{ channelId: string; ok: boolean; message: string }[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [mode, setMode] = useState<'now' | 'schedule'>('now');
   const [scheduledAt, setScheduledAt] = useState('');
   const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
-      const [integrationsRes, productsRes] = await Promise.all([fetch('/api/integrations'), fetch('/api/products')]);
+      const [integrationsRes, productsRes] = await Promise.all([fetch('/api/integrations'), fetch(`/api/products?market=${market}`)]);
+      if (!integrationsRes.ok) throw new Error('Impossible de lire les canaux de diffusion.');
       const integrations: { socialChannels: IntegrationStatus[] } = await integrationsRes.json();
       const activeChannels = (integrations.socialChannels || []).filter((i) => i.configured && i.enabled);
       setChannels(activeChannels);
-      setProducts(await productsRes.json());
+      const prods = productsRes.ok ? await productsRes.json() : [];
+      setProducts(Array.isArray(prods) ? prods : []);
+    } catch (err) {
+      setLoadError(networkErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [market]);
 
   useEffect(() => {
     load();
@@ -70,8 +78,8 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
   const handleProductPick = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (!product) return;
-    const base = process.env.NEXT_PUBLIC_SITE_URL || '';
-    setLink(`${base}/${product.slug}`);
+    // Adresse du site du marché (tendpick.fr / .es / .com), pas une adresse unique pour les 3 marchés.
+    setLink(publicUrl(market, `/${product.slug}`));
   };
 
   const handlePublish = async () => {
@@ -90,8 +98,10 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
           market,
         }),
       });
-      const json = await res.json();
-      setResults(json.results || [{ channelId: '?', ok: false, message: json.error || 'Erreur inconnue' }]);
+      const json = await res.json().catch(() => ({}));
+      setResults(json.results || [{ channelId: '?', ok: false, message: json.error || `Publication impossible (erreur ${res.status})` }]);
+    } catch (err) {
+      setResults([{ channelId: '?', ok: false, message: networkErrorMessage(err) }]);
     } finally {
       setSubmitting(false);
     }
@@ -114,9 +124,9 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
           scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
         }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setScheduleMessage(`Erreur : ${json.error ?? 'inconnue'}`);
+        setScheduleMessage(`Erreur : ${json.error ?? `programmation impossible (erreur ${res.status})`}`);
       } else {
         setScheduleMessage(`Post programmé pour le ${new Date(json.scheduled_at).toLocaleString('fr-FR')}.`);
         setText('');
@@ -125,6 +135,8 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
         setScheduledAt('');
         onScheduled?.();
       }
+    } catch (err) {
+      setScheduleMessage(`Erreur : ${networkErrorMessage(err)}`);
     } finally {
       setSubmitting(false);
     }
@@ -132,6 +144,15 @@ export default function SocialComposer({ onScheduled }: SocialComposerProps) {
 
   if (loading) {
     return <div className="bg-white rounded-2xl border border-gray-200 p-8 text-center text-gray-400 text-sm">Chargement...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" className="bg-red-50 border border-red-200 rounded-2xl p-6 text-sm text-red-800 flex items-center justify-between gap-3">
+        <span>{loadError}</span>
+        <button type="button" onClick={load} className="px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700">Réessayer</button>
+      </div>
+    );
   }
 
   if (channels.length === 0) {

@@ -58,7 +58,7 @@ export function scoreTitle(name, title) {
 }
 
 async function getJson(url, fetchImpl) {
-  const res = await fetchImpl(url);
+  const res = await fetchImpl(url, { signal: AbortSignal.timeout(20000) });
   if (!res.ok) throw new Error(`YouTube ${res.status}`);
   return res.json();
 }

@@ -79,19 +79,29 @@ export function categorySlugFromLabel(label: string): string | null {
   return CATEGORY_BY_LABEL[norm(label)] ?? null;
 }
 
-/** Nombre au format français ou anglais ; « 7 % » → 7. */
+/** Nombre au format français ou anglais ; « 7 % » → 7 ; « 1.234,56 » → 1234.56 ; « 1,234.56 » → 1234.56. */
 export function parseNumber(v: string | null | undefined): number | null {
   if (v == null) return null;
-  const s = String(v).replace(/[€£%\s ]/g, '').replace(/,(?=\d{1,2}$)/, '.').replace(/,/g, '');
+  let s = String(v).replace(/[€£$%\s ]/g, '');
   if (!s) return null;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma >= 0 && lastDot >= 0) {
+    // Les deux séparateurs : le dernier est le séparateur décimal, l'autre sépare les milliers.
+    s = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  } else if (lastComma >= 0) {
+    // Virgule seule : décimale si 1 ou 2 chiffres derrière (12,5 / 12,50), sinon milliers (1,234).
+    s = /,\d{1,2}$/.test(s) ? s.replace(/,(?=\d{1,2}$)/, '.').replace(/,/g, '') : s.replace(/,/g, '');
+  }
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
 
-/** Commission : 0.07, 7 ou « 7 % » donnent toujours 0.07. */
+/** Commission : 0.07, 7 ou « 7 % » donnent toujours 0.07 (avec le signe %, « 1 % » = 0.01). */
 export function parseCommission(v: string | null | undefined): number | null {
   const n = parseNumber(v);
   if (n == null) return null;
+  if (String(v).includes('%')) return Math.round(n * 100) / 10000;
   return n > 1 ? Math.round(n * 100) / 10000 : n;
 }
 
@@ -239,4 +249,55 @@ export function toTrendCsv(rows: TrendCandidate[]): string {
     );
   }
   return '﻿' + lines.join('\r\n') + '\r\n';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vues de l'écran « Tendance de la semaine » (fonctions pures, testées)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TrendFilter = 'active' | 'pending' | 'yes' | 'no';
+
+export interface TrendViews {
+  list: TrendCandidate[];
+  counts: { active: number; pending: number; yes: number; no: number };
+}
+
+/**
+ * Produits refusés = refusés de la semaine + archive des semaines précédentes, sans doublon
+ * (un même produit AliExpress refusé plusieurs semaines de suite n'apparaît qu'une fois).
+ */
+export function refusedList(candidates: TrendCandidate[], archive: TrendCandidate[]): TrendCandidate[] {
+  const out = candidates.filter((c) => c.decision === 'no');
+  const seen = new Set(out.map((c) => c.aliexpress_id));
+  for (const a of archive) {
+    if (seen.has(a.aliexpress_id)) continue;
+    seen.add(a.aliexpress_id);
+    out.push(a);
+  }
+  return out;
+}
+
+/** Liste à afficher selon le filtre et la catégorie, avec des compteurs qui correspondent à ce qu'on voit. */
+export function buildTrendViews(candidates: TrendCandidate[], archive: TrendCandidate[], filter: TrendFilter, category = 'all'): TrendViews {
+  const refused = refusedList(candidates, archive);
+  const pending = candidates.filter((c) => c.decision === 'pending');
+  const yes = candidates.filter((c) => c.decision === 'yes');
+  const base = filter === 'no' ? refused : filter === 'pending' ? pending : filter === 'yes' ? yes : candidates.filter((c) => c.decision !== 'no');
+  return {
+    list: category === 'all' ? base : base.filter((c) => c.category_slug === category),
+    counts: { active: pending.length + yes.length, pending: pending.length, yes: yes.length, no: refused.length },
+  };
+}
+
+/**
+ * Une décision peut-elle encore être changée ?
+ *  - « locked » : fiche en cours de création ou déjà en ligne (le serveur ignore tout changement) ;
+ *  - « confirm » : fiche prête avant sa mise en ligne automatique (annulable, mais à confirmer) ;
+ *  - « free » : libre.
+ */
+export function trendLockState(c: Pick<TrendCandidate, 'decision' | 'status'>): 'free' | 'confirm' | 'locked' {
+  if (c.decision !== 'yes') return 'free';
+  if (c.status === 'in_progress' || c.status === 'live') return 'locked';
+  if (c.status === 'ready') return 'confirm';
+  return 'free';
 }

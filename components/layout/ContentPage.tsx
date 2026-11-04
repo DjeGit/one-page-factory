@@ -1,11 +1,10 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
-import { getActiveCategories } from '@/lib/supabase';
-import { getMarketFromHost } from '@/lib/market-from-host';
+import { getNavCategories } from '@/lib/site-products';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import { serializeJsonLd } from '@/lib/json-ld';
-import { marketUrl } from '@/lib/site-url';
+import { getRequestMarket, marketUrl } from '@/lib/site-url';
 import type { StaticPageCopy } from '@/lib/pages-copy';
 import type { Market } from '@/lib/market';
 
@@ -39,8 +38,8 @@ interface Props {
 }
 
 export default async function ContentPage({ copy, path }: Props) {
-  const market: Market = getMarketFromHost(headers().get('host'));
-  const categories = await getActiveCategories(market);
+  const market: Market = getRequestMarket(headers());
+  const categories = await getNavCategories(market);
   const pageUrl = marketUrl(market, path);
 
   const jsonLd = {

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { Contact, Invoice } from '@/types';
 import { MARKETS } from '@/lib/market';
+import { networkErrorMessage, readApiError } from '@/components/admin/http';
 import InvoiceFormModal from './invoices/InvoiceFormModal';
 import InvoiceDetailPanel from './invoices/InvoiceDetailPanel';
 
@@ -79,10 +80,13 @@ export default function InvoicesManager() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Supprimer ce brouillon ? Cette action est irréversible.')) return;
-    const res = await fetch(`/api/invoices/${id}`, { method: 'DELETE' });
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/invoices/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(await readApiError(res, 'Suppression refusée'));
       setInvoices((prev) => prev.filter((i) => i.id !== id));
       setSelectedInvoice(null);
+    } catch (err) {
+      alert(`Suppression impossible : ${networkErrorMessage(err)}`);
     }
   };
 

@@ -12,7 +12,7 @@ interface NurturePreview {
 }
 
 interface NurtureEnrollPanelProps {
-  products: Product[];
+  products: (Pick<Product, 'id' | 'name'> & { market?: string })[];
 }
 
 const SEQUENCES = [
@@ -46,6 +46,8 @@ export default function NurtureEnrollPanel({ products }: NurtureEnrollPanelProps
       if (dateTo) params.set('date_to', dateTo);
       const res = await fetch(`/api/nurture/enroll?${params}`);
       if (res.ok) setPreview(await res.json());
+    } catch {
+      // l'aperçu reste celui d'avant ; le bouton d'inscription refera le point
     } finally {
       setLoadingPreview(false);
     }
@@ -64,13 +66,15 @@ export default function NurtureEnrollPanel({ products }: NurtureEnrollPanelProps
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ market: market || undefined, product_id: productId || undefined, date_from: dateFrom || undefined, date_to: dateTo || undefined, sequence }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setResult(`Erreur : ${data.error ?? 'inconnue'}`);
+        setResult(`Erreur : ${data.error ?? `inscription impossible (erreur ${res.status})`}`);
       } else {
         setResult(`${data.enrolled} lead(s) inscrit(s)${data.skipped_no_list ? `, ${data.skipped_no_list} ignoré(s) (liste Brevo non configurée pour leur marché)` : ''}${data.failed ? `, ${data.failed} échec(s)` : ''}.`);
         fetchPreview();
       }
+    } catch {
+      setResult('Erreur : problème de connexion, réessayez.');
     } finally {
       setEnrolling(false);
     }
@@ -106,7 +110,7 @@ export default function NurtureEnrollPanel({ products }: NurtureEnrollPanelProps
           <label className="block text-xs font-semibold text-gray-500 mb-1">Produit</label>
           <select value={productId} onChange={(e) => setProductId(e.target.value)} className="px-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-900 text-sm">
             <option value="">Tous les produits</option>
-            {products.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+            {products.map((p) => (<option key={p.id} value={p.id}>{p.name}{p.market ? ` (${p.market.toUpperCase()})` : ''}</option>))}
           </select>
         </div>
         <div>

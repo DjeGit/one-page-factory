@@ -1,8 +1,7 @@
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import ContentPage from '@/components/layout/ContentPage';
-import { getMarketFromHost } from '@/lib/market-from-host';
-import { buildAlternates } from '@/lib/site-url';
+import { buildAlternates, getRequestMarket } from '@/lib/site-url';
 import { PAGES_COPY } from '@/lib/pages-copy';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +11,7 @@ const KEY = 'partners' as const;
 
 export async function generateMetadata(): Promise<Metadata> {
   const h = headers();
-  const copy = PAGES_COPY[getMarketFromHost(h.get('host'))][KEY];
+  const copy = PAGES_COPY[getRequestMarket(h)][KEY];
   const alternates = buildAlternates(h, PATH);
   return {
     title: copy.metaTitle,
@@ -29,6 +28,6 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Page() {
-  const copy = PAGES_COPY[getMarketFromHost(headers().get('host'))][KEY];
+  const copy = PAGES_COPY[getRequestMarket(headers())][KEY];
   return <ContentPage copy={copy} path={PATH} />;
 }

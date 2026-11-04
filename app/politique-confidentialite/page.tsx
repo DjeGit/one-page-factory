@@ -1,8 +1,7 @@
 import { headers } from 'next/headers';
 import type { Metadata } from 'next';
 import ContentPage from '@/components/layout/ContentPage';
-import { getMarketFromHost } from '@/lib/market-from-host';
-import { buildAlternates } from '@/lib/site-url';
+import { buildAlternates, getRequestMarket } from '@/lib/site-url';
 import { LEGAL_COPY } from '@/lib/legal-copy';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +13,7 @@ const KEY = 'privacy' as const;
 // indexé : page obligatoire, sans valeur de recherche.
 export async function generateMetadata(): Promise<Metadata> {
   const h = headers();
-  const copy = LEGAL_COPY[getMarketFromHost(h.get('host'))][KEY];
+  const copy = LEGAL_COPY[getRequestMarket(h)][KEY];
   return {
     title: copy.metaTitle,
     description: copy.metaDescription,
@@ -24,6 +23,6 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function Page() {
-  const copy = LEGAL_COPY[getMarketFromHost(headers().get('host'))][KEY];
+  const copy = LEGAL_COPY[getRequestMarket(headers())][KEY];
   return <ContentPage copy={copy} path={PATH} />;
 }

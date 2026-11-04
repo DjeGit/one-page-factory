@@ -1,12 +1,12 @@
 import { headers } from 'next/headers';
 import { notFound, permanentRedirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { getMarketFromHost } from '@/lib/market-from-host';
 import { getPublishedBlogPostBySlug } from '@/lib/blog';
+import { requestCache } from '@/lib/site-request-cache';
 import { getCloudinaryUrl } from '@/lib/cloudinary';
 import PostView from '@/components/blog/PostView';
 import { isValidMarket, DEFAULT_MARKET } from '@/lib/market';
-import { marketUrl } from '@/lib/site-url';
+import { getRequestMarket, marketUrl } from '@/lib/site-url';
 import { redirectToMarketDomain } from '@/lib/market-redirect';
 import { GUIDE_CATEGORY_SLUG, guidePostPath } from '@/lib/buying-guide';
 
@@ -16,8 +16,11 @@ interface Props {
   params: { slug: string };
 }
 
+// generateMetadata et la page lisent le même article : une seule requête par visite.
+const loadPost = requestCache((slug: string) => getPublishedBlogPostBySlug(slug));
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const post = await getPublishedBlogPostBySlug(params.slug);
+  const post = await loadPost(params.slug);
   if (!post) return {};
   // Audit C1/C3 : canonical sur le domaine du marché de l'article, pas de
   // hreflang tant que les traductions ne sont pas reliées entre elles.
@@ -41,16 +44,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description,
       url,
-      images: image ? [image] : undefined,
+      // Clé omise sans image : Next applique alors l'image de partage par défaut du site.
+      ...(image ? { images: [image] } : {}),
       publishedTime: post.published_at ?? undefined,
       modifiedTime: post.updated_at,
     },
-    twitter: { card: 'summary_large_image', title, description, images: image ? [image] : undefined },
+    twitter: { card: 'summary_large_image', title, description, ...(image ? { images: [image] } : {}) },
   };
 }
 
 export default async function BlogPostPage({ params }: Props) {
-  const post = await getPublishedBlogPostBySlug(params.slug);
+  const post = await loadPost(params.slug);
   if (!post) notFound();
 
   const postMarket = isValidMarket(post.market) ? post.market : DEFAULT_MARKET;
@@ -66,7 +70,7 @@ export default async function BlogPostPage({ params }: Props) {
   // Audit C3 : un article ne répond que sur le domaine de son marché.
   redirectToMarketDomain(postMarket, `/blog/${post.slug}`);
 
-  const market = getMarketFromHost(headers().get('host'));
+  const market = getRequestMarket(headers());
 
   return <PostView post={post} market={market} section="blog" path={`/blog/${post.slug}`} />;
 }

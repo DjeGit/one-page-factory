@@ -174,7 +174,7 @@ export async function callGemini(prompt, { key = process.env.GEMINI_API_KEY, mod
     }),
     signal: AbortSignal.timeout(120000),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`Gemini ${res.status} : ${data?.error?.message || 'erreur'}`);
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
   if (!text) throw new Error(`Gemini : réponse vide (${data.candidates?.[0]?.finishReason || 'inconnue'})`);
@@ -190,9 +190,12 @@ export async function generateFicheText(input, deps) {
   let feedback = '';
   let lastErrors = [];
   for (let attempt = 1; attempt <= 2; attempt++) {
+    // Une erreur du service (surcharge, réseau, clé absente) remonte telle quelle : le worker décide s'il réessaie plus tard.
+    // Seule une réponse illisible (JSON cassé) vaut une 2e tentative avec la raison du refus.
+    const answer = await deps.llm(buildPrompt(input, feedback));
     let raw;
     try {
-      raw = parseJsonLoose(await deps.llm(buildPrompt(input, feedback)));
+      raw = parseJsonLoose(answer);
     } catch (e) {
       lastErrors = [e.message];
       feedback = e.message;

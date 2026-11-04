@@ -54,10 +54,58 @@ la quasi-totalité des opérations admin (échecs, pas de fuite).
 
 ## Authentification admin
 
-`app/api/admin/login/route.ts` applique un rate-limiting en mémoire
-(5 tentatives / 15 min par IP) et pose un cookie de session `httpOnly`.
-2FA (TOTP) non implémenté à ce jour — à considérer si le nombre d'admins
-augmente.
+- **Cookie `admin_auth`** = sha256(`ADMIN_SECRET` + `ADMIN_SALT`), posé par
+  `app/api/admin/login/route.ts` (`httpOnly`). Vérifié par
+  `isAuthorizedRequest()` (`lib/admin-auth.ts`) à temps constant.
+- **Automates (cron, n8n, scripts)** : `Authorization: Bearer <secret>` avec
+  `INTERNAL_CRON_SECRET`, `PIPELINE_SECRET` ou `ADMIN_SECRET`. Les routes
+  historiques « Keepa » (`/api/sync/*`, `/api/scores/*`) utilisent
+  `INTERNAL_API_KEY` ; `/api/weekly-report` accepte le cookie admin **ou**
+  cette clé (`isAuthorizedAdminOrInternal`).
+- **`ADMIN_SECRET` est obligatoire en production** : s'il est absent, l'accès
+  admin est refusé (échec fermé) et la connexion répond 503. Avant, une valeur
+  par défaut connue (`changeme`) était utilisée — n'importe qui pouvait se
+  connecter. La valeur par défaut n'existe plus qu'en développement/test.
+- **Anti force brute** : 5 tentatives / 15 min par IP, plus un plafond global
+  de 200 échecs / 15 min (rotation d'IP). Limiteurs en mémoire (un seul
+  processus PM2) ; l'IP vient de `cf-connecting-ip` (Cloudflare), puis
+  `x-real-ip`, puis `x-forwarded-for`.
+- 2FA (TOTP) non implémenté à ce jour — à considérer si le nombre d'admins
+  augmente.
+
+## Conventions des routes API (`app/api/**`)
+
+Règles à respecter pour toute nouvelle route (outils communs dans
+`app/api/_lib/` — dossier préfixé `_`, jamais exposé comme route) :
+
+1. **Authentification d'abord** : toute route d'administration commence par
+   `if (!isAuthorizedRequest(req)) return unauthorized();`. Seules sont
+   publiques : `GET /api/health`, `GET /api/feeds/google-merchant`,
+   `GET /api/go/[code]` (redirection affiliée), `POST /api/leads` (inscription),
+   `POST /api/analytics` (vues), `POST /api/visit`, `POST /api/track/click`,
+   `POST /api/ab-test/track`, `GET /api/ab-test/variant/[slug]`,
+   `POST /api/admin/login|logout`, `POST /api/market-preference`.
+   Une route publique n'expose jamais de donnée sensible (e-mails, chiffres
+   d'affaires, clés) et limite les colonnes lues.
+2. **Valider avant la base** : corps JSON illisible → 400 (`readJsonObject`),
+   identifiants en UUID (`isUuid`), marché `fr|es|uk` (`isValidMarket`),
+   bornes sur les nombres, tailles sur les textes, URLs en `http(s)`. Jamais de
+   saisie dans un filtre PostgREST `.or()` sans validation.
+3. **Erreurs** : jamais de 200 en cas d'échec ; statut juste (400, 404, 409,
+   502…) ; le texte brut de Postgres ou d'un fournisseur (IA, e-mail) n'est pas
+   renvoyé (`dbErrorResponse`, `aiErrorResponse`) — il est écrit dans les logs.
+4. **Public = limité** : les routes publiques qui écrivent en base ont un
+   limiteur (`createRateLimiter`).
+5. **Fiches produit** : tout passage par l'API valide la fiche avec
+   `validateProductInput()` (`_lib/product-input.ts`) — marché, lien http(s),
+   livraison gratuite booléenne, vidéo YouTube, identifiant AliExpress en
+   chiffres, taux de commission en fraction 0–1.
+6. **Un `route.ts` n'exporte que ses méthodes HTTP** (GET, POST…) : exporter
+   un utilitaire casse `next build`. Le code partagé va dans `_lib/`.
+7. **Pipeline automatique** (`/api/pipeline/run`) : ne génère et ne publie que
+   les fiches `product_source = 'auto_discovered'`, et uniquement avec un vrai
+   lien d'achat et une photo. Les brouillons manuels et ceux du pipeline
+   « tendances » ne sont jamais publiés par lui.
 
 ## En cas de fuite suspectée
 
