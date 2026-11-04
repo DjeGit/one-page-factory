@@ -12,7 +12,7 @@ import { slugify, uniqueSlug, buildProductRow } from '../scripts/pipeline/fiches
 // @ts-ignore
 import { renderEmail, sendMail } from '../scripts/pipeline/notify.mjs';
 // @ts-ignore
-import { runOnce, publishDue, isTransient, finalReport } from '../scripts/pipeline/worker.mjs';
+import { runOnce, publishDue, isTransient, isDailyQuota, finalReport } from '../scripts/pipeline/worker.mjs';
 // @ts-ignore
 import { redact } from '../scripts/pipeline/safe.mjs';
 // @ts-ignore
@@ -335,7 +335,7 @@ describe('worker', () => {
     const r = await runOnce(d);
     expect(r.prepared[0].outcome).toBe('error');
     const c = t.trend_candidates[0];
-    expect(c).toMatchObject({ status: 'error', photos_status: 'incomplete' });
+    expect(c).toMatchObject({ status: 'error', photos_status: 'review' });
     expect(c.error).toContain('photos à compléter : 2 sur 3');
     expect(c.error).not.toContain('#0');
     expect(t.products.length).toBeGreaterThan(0);
@@ -681,6 +681,26 @@ describe('worker : double exécution et reprise après coupure', () => {
 });
 
 describe('worker : erreurs, journal et secrets', () => {
+  it('quota journalier Gemini : produit remis en file sans consommer d’essai, passage arrêté, pas d’email', async () => {
+    const t = tables();
+    t.trend_candidates.push({ ...t.trend_candidates[0], id: 'c2', aliexpress_id: '1005000000002', decided_at: '2026-11-02T08:01:00Z' });
+    let calls = 0;
+    const { d, mails } = makeDeps(t, { llm: async () => { calls++; throw new Error('Gemini 429: You exceeded your current quota. Generate Content requests per day limit exceeded on Free Tier. Please retry in 14h54m'); } });
+    const r = await runOnce(d);
+    expect(r.prepared).toHaveLength(1);
+    expect(r.prepared[0].outcome).toBe('quota');
+    expect(t.trend_candidates[0]).toMatchObject({ status: 'validated' });
+    expect(t.trend_candidates[0].pipeline_log?.attempts ?? 0).toBe(0);
+    expect(t.trend_candidates[1].status).toBe('validated');
+    expect(mails).toHaveLength(0);
+  });
+
+  it('isDailyQuota : seulement le quota du jour', () => {
+    expect(isDailyQuota('Gemini 429: … requests per day limit exceeded on Free Tier. Please retry in 14h54m')).toBe(true);
+    expect(isDailyQuota('Gemini 429 : trop de requêtes par minute')).toBe(false);
+    expect(isDailyQuota('Gemini 503 : high demand')).toBe(false);
+  });
+
   it('isTransient : surcharge et réseau oui, erreurs définitives non', () => {
     for (const m of ['Gemini 503 : high demand', 'Gemini 429 : quota', 'Anthropic 529 : overloaded', 'fetch failed', 'The operation was aborted due to timeout', 'tri photos illisible : JSON invalide', 'Cloudinary : 502', 'HTTP 503']) expect(isTransient(m)).toBe(true);
     for (const m of ['Gemini 400 : API key not valid', 'GEMINI_API_KEY absente', 'seulement 1 photo(s) exploitable(s)', 'texte fr refusé après 2 essais : …', 'Cloudinary : Invalid Signature']) expect(isTransient(m)).toBe(false);

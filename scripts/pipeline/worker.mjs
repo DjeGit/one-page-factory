@@ -54,6 +54,9 @@ async function safeMail(d, payload) {
 const TRANSIENT = /(Gemini|Anthropic|YouTube|Cloudinary|Brevo)[^:]{0,3}:?\s*(429|5\d\d)\b|HTTP 5\d\d|fetch failed|timeout|timed out|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|UND_ERR|overloaded|high demand|tri photos illisible/i;
 export const isTransient = (message) => TRANSIENT.test(String(message || ''));
 
+/** Quota journalier de l'IA épuisé (offre gratuite Gemini : 20 requêtes par jour) : inutile de réessayer avant plusieurs heures. */
+export const isDailyQuota = (message) => /\b429\b/.test(String(message || '')) && /per day|PerDay|free tier|retry in \d+h/i.test(String(message || ''));
+
 /** Nombre d'essais déjà faits pour la décision OUI en cours (un nouveau clic sur OUI remet le compteur à zéro). */
 const attemptsOf = (c) => (c.pipeline_log?.decided_at === (c.decided_at ?? null) ? Number(c.pipeline_log?.attempts) || 0 : 0);
 
@@ -70,6 +73,12 @@ async function leaveInProgress(c, d, patch, what) {
 /** Rend un produit à la file (erreur passagère) ou le met en erreur après plusieurs essais. */
 async function retryOrFail(c, d, reason, extra = {}) {
   reason = redact(reason);
+  // Quota journalier épuisé : ce n'est pas la faute du produit. Il reste en file sans consommer d'essai, et le passage s'arrête.
+  if (isDailyQuota(reason)) {
+    d.log('  ⏸ Quota journalier de l’IA épuisé (offre gratuite Gemini) : le produit reste en file, sans compter d’essai. Le passage s’arrête ; reprise automatique dès que le quota revient (ou après activation de la facturation Google AI).');
+    const moved = await leaveInProgress(c, d, { status: 'validated', error: 'Quota IA du jour épuisé : reprise automatique', updated_at: d.now().toISOString() }, 'remise en file (quota)');
+    return { outcome: moved ? 'quota' : 'skipped', reason };
+  }
   const attempts = attemptsOf(c) + 1;
   if (attempts < MAX_ATTEMPTS) {
     d.log(`  ⟳ Problème passager (essai ${attempts} sur ${MAX_ATTEMPTS}) : ${reason}\n    Le produit est remis en file : nouvel essai automatique au prochain passage (dans environ 10 minutes).`);
@@ -197,7 +206,7 @@ export async function prepareCandidate(c, d, opts = {}) {
           if (p.images?.length || p.image_url) continue;
           must(await d.sb.from('products').update({ images: ids, image_url: ids[0] }).eq('id', p.id), `photos de ${p.slug}`);
         }
-        must(await d.sb.from('trend_candidates').update({ photos: partial, photos_status: 'incomplete' }).eq('id', c.id), 'enregistrement des photos partielles');
+        must(await d.sb.from('trend_candidates').update({ photos: partial, photos_status: 'review' }).eq('id', c.id), 'enregistrement des photos partielles');
         d.log(`  ${partial.length} bonne(s) photo(s) jointe(s) aux brouillons : il en manque ${MIN_PHOTOS - partial.length} (à ajouter dans la fiche).`);
         return fail(c, d, `photos à compléter : ${partial.length} sur ${MIN_PHOTOS} (le reste des images de l’annonce contient du texte). Les brouillons ont déjà ${partial.length === 1 ? 'cette photo' : 'ces photos'} : ajoute ${MIN_PHOTOS - partial.length === 1 ? 'la photo manquante' : 'les photos manquantes'} dans chaque fiche, puis active-la.`, { product_ids: productIds, products: summaryRows(), warnings: ['Photos à compléter dans les fiches en brouillon (liens, prix, textes et vidéo sont prêts).'] });
       }
@@ -395,10 +404,13 @@ export async function runOnce(d, { id, publish = true, limit = 2, redoPhotos = f
     const locked = must(await d.sb.from('trend_candidates').update({ status: 'in_progress', updated_at: d.now().toISOString() }).eq('id', c.id).in('status', startable).select('id'), 'verrou') || [];
     if (!locked.length) continue; // pris par un autre passage
     try {
-      prepared.push({ id: c.id, name: c.name, ...(await prepareCandidate(c, d, { redoPhotos })) });
+      const r = { id: c.id, name: c.name, ...(await prepareCandidate(c, d, { redoPhotos })) };
+      prepared.push(r);
+      if (r.outcome === 'quota') break; // inutile d'essayer le produit suivant : même quota
     } catch (e) {
       try {
         prepared.push({ id: c.id, name: c.name, ...(await retryOrFail(c, d, `erreur inattendue : ${e.message}`)) });
+        if (prepared[prepared.length - 1].outcome === 'quota') break;
       } catch (e2) {
         d.log(`  ✗ Impossible d’enregistrer l’erreur (${redact(e2.message)}) : le produit sera repris automatiquement dans 30 minutes.`);
         prepared.push({ id: c.id, name: c.name, outcome: 'error', reason: redact(e.message) });
@@ -412,7 +424,7 @@ export async function runOnce(d, { id, publish = true, limit = 2, redoPhotos = f
   return { prepared, published };
 }
 
-const OUTCOME_LABEL = { ready: 'prêt', retry: 'remis en file (problème passager)', error: 'en erreur', skipped: 'ignoré (modifié entre-temps)', live: 'mis en ligne', blocked: 'mise en ligne bloquée' };
+const OUTCOME_LABEL = { ready: 'prêt', retry: 'remis en file (problème passager)', quota: 'en attente (quota IA du jour épuisé)', error: 'en erreur', skipped: 'ignoré (modifié entre-temps)', live: 'mis en ligne', blocked: 'mise en ligne bloquée' };
 export function finalReport({ prepared, published }) {
   const rows = [...prepared, ...published];
   if (!rows.length) return '';
