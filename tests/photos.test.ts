@@ -231,6 +231,29 @@ describe('photos pipeline', () => {
   });
 });
 
+describe('photos pipeline : photos insuffisantes', () => {
+  it('processProduct : sous le minimum, l’erreur transporte les bonnes photos déjà retenues', async () => {
+    const origFetch = globalThis.fetch;
+    const imgs: Record<string, Buffer> = {};
+    for (let i = 0; i < 4; i++) imgs[`https://ae01.alicdn.com/kf/P${i}.jpg`] = await scene(1000 + i * 10, 900 + i * 15, i + 1);
+    globalThis.fetch = (async (u: any) => (imgs[String(u)] ? new Response(imgs[String(u)], { status: 200 }) : new Response('no', { status: 404 }))) as any;
+    try {
+      // 2 photos propres, 2 infographies sans zone propre exploitable
+      const classify = async (bufs: Buffer[]) => bufs.map((_, index) => (index < 2
+        ? { index, usable: true, kind: 'product_white', text: 'none', watermark: false, score: 8 - index, note: '' }
+        : { index, usable: true, kind: 'infographic', text: 'heavy', watermark: false, score: 3, note: '', cleanBox: null }));
+      const err: any = await processProduct({ aliexpress_id: '3', image_urls: Object.keys(imgs) }, { dryRun: true, classify }).catch((e: any) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect(err.message).toContain('seulement 2 photo(s)');
+      expect(err.message.length).toBeLessThan(200); // message lisible : le détail va à part
+      expect(err.detail).toContain('infographic');
+      expect(err.partial.photos).toHaveLength(2);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+});
+
 describe('photos pipeline : sécurité et erreurs', () => {
   it('le minimum de photos est le même pour le tri et pour la mise en ligne', () => {
     expect(PHOTOS_MIN).toBe(GATES_MIN);

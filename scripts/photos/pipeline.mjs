@@ -530,10 +530,12 @@ export async function processProduct(row, opts = {}) {
     writeFileSync(join(opts.debugDir, 'verdicts.json'), JSON.stringify({ report, verdicts: verdicts.map((v) => ({ ...v, source: unique[v.index].url })) }, null, 2));
   }
   const chosen = report.classified ? pickBest(verdicts) : verdicts.slice(0, MAX_PHOTOS);
-  if (chosen.length < MIN_PHOTOS) {
-    const detail = verdicts.map((v) => `#${v.index} ${v.usable ? 'ok' : 'écartée'} ${v.kind}/texte ${v.text}${v.cropped ? ' (recadrée)' : v.cleanBox ? ' (zone propre refusée : trop petite)' : ''}${v.note ? ' — ' + v.note : ''}`).join(' | ');
-    throw new Error(`seulement ${chosen.length} photo(s) exploitable(s) (minimum ${MIN_PHOTOS}). Verdicts : ${detail}`);
-  }
+  // Sous le minimum, on traite quand même les photos retenues : elles sont jointes en partie à l'erreur (voir plus bas)
+  // pour que les fiches en brouillon gardent les bonnes photos et que Jerome n'ait que les manquantes à ajouter.
+  const shortage = chosen.length < MIN_PHOTOS
+    ? verdicts.map((v) => `#${v.index} ${v.usable ? 'ok' : 'écartée'} ${v.kind}/texte ${v.text}${v.cropped ? ' (recadrée)' : v.cleanBox ? ' (zone propre refusée : trop petite)' : ''}${v.note ? ' — ' + v.note : ''}`).join(' | ')
+    : null;
+  if (shortage && !chosen.length) throw Object.assign(new Error(`aucune photo exploitable (minimum ${MIN_PHOTOS})`), { detail: shortage });
 
   const photos = [];
   const previews = [];
@@ -551,6 +553,9 @@ export async function processProduct(row, opts = {}) {
     let up = { public_id: `products/${name}`, url: null };
     if (!opts.dryRun) up = await (opts.upload || uploadToCloudinary)(sq.buffer, name);
     photos.push({ public_id: up.public_id, url: up.url, kind: v.kind, text: v.text, watermark: v.watermark, mode: sq.mode, score: v.score, shot: v.shot || '', source: src.url, flags });
+  }
+  if (shortage) {
+    throw Object.assign(new Error(`seulement ${photos.length} photo(s) exploitable(s) (minimum ${MIN_PHOTOS}) : les annonces de ce produit contiennent surtout des images avec du texte`), { detail: shortage, partial: { photos, report } });
   }
   return { photos, report, previews };
 }

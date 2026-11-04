@@ -186,9 +186,21 @@ export async function prepareCandidate(c, d, opts = {}) {
       warnings.push(...(res.report?.warnings || []));
       must(await d.sb.from('trend_candidates').update({ photos, photos_status: 'approved', photos_report: res.report, image_urls: imageUrls }).eq('id', c.id), 'enregistrement des photos');
     } catch (e) {
-      must(await d.sb.from('trend_candidates').update({ photos_status: 'error', photos_report: { error: redact(e.message) } }).eq('id', c.id), 'enregistrement du statut photos');
+      const partial = Array.isArray(e.partial?.photos) ? e.partial.photos.filter((p) => p?.public_id) : [];
+      must(await d.sb.from('trend_candidates').update({ photos_status: 'error', photos_report: { error: redact(e.message), detail: e.detail ? redact(e.detail) : undefined } }).eq('id', c.id), 'enregistrement du statut photos');
       // Service momentanément indisponible (surcharge Gemini, réseau) : on remet en file au lieu d'échouer.
       if (isTransient(e.message)) return retryOrFail(c, d, `photos : ${e.message}`, { product_ids: productIds, products: summaryRows() });
+      // Pas assez de photos propres : les bonnes photos déjà trouvées sont jointes aux brouillons, il ne reste qu'à compléter.
+      if (partial.length) {
+        const ids = partial.map((p) => p.public_id);
+        for (const p of all) {
+          if (p.images?.length || p.image_url) continue;
+          must(await d.sb.from('products').update({ images: ids, image_url: ids[0] }).eq('id', p.id), `photos de ${p.slug}`);
+        }
+        must(await d.sb.from('trend_candidates').update({ photos: partial, photos_status: 'incomplete' }).eq('id', c.id), 'enregistrement des photos partielles');
+        d.log(`  ${partial.length} bonne(s) photo(s) jointe(s) aux brouillons : il en manque ${MIN_PHOTOS - partial.length} (à ajouter dans la fiche).`);
+        return fail(c, d, `photos à compléter : ${partial.length} sur ${MIN_PHOTOS} (le reste des images de l’annonce contient du texte). Les brouillons ont déjà ${partial.length === 1 ? 'cette photo' : 'ces photos'} : ajoute ${MIN_PHOTOS - partial.length === 1 ? 'la photo manquante' : 'les photos manquantes'} dans chaque fiche, puis active-la.`, { product_ids: productIds, products: summaryRows(), warnings: ['Photos à compléter dans les fiches en brouillon (liens, prix, textes et vidéo sont prêts).'] });
+      }
       return fail(c, d, `photos : ${e.message}`, { product_ids: productIds, products: summaryRows(), warnings: ['Les fiches (liens, prix, textes) sont créées en brouillon : ajoute les photos dans l’admin, puis active le produit.'] });
     }
   }

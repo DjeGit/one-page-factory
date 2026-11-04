@@ -329,6 +329,21 @@ describe('worker', () => {
     expect(mails[0]).toMatchObject({ kind: 'problem' });
   });
 
+  it('photos à compléter : les bonnes photos sont jointes aux brouillons, produit en erreur avec un message clair', async () => {
+    const t = tables();
+    const { d, mails, logs } = makeDeps(t, { photos: async () => { throw Object.assign(new Error('seulement 2 photo(s) exploitable(s) (minimum 3)'), { detail: '#0 ok …', partial: { photos: [1, 2].map((i) => ({ public_id: `products/ae-p-${i}` })), report: {} } }); } });
+    const r = await runOnce(d);
+    expect(r.prepared[0].outcome).toBe('error');
+    const c = t.trend_candidates[0];
+    expect(c).toMatchObject({ status: 'error', photos_status: 'incomplete' });
+    expect(c.error).toContain('photos à compléter : 2 sur 3');
+    expect(c.error).not.toContain('#0');
+    expect(t.products.length).toBeGreaterThan(0);
+    expect(t.products.every((p) => !p.active && p.images.length === 2 && p.image_url === 'products/ae-p-1')).toBe(true);
+    expect(mails[0]).toMatchObject({ kind: 'problem' });
+    expect(logs.join('\n')).toContain('jointe');
+  });
+
   it('erreur API passagère : remise en file, puis échec après 3 essais ; note trop basse refusée', async () => {
     const t = tables();
     const { d, mails } = makeDeps(t, { api: { getProduct: async () => { throw new Error('ApiCallLimit'); }, verify: async () => ({ ok: true, checks: [] }) } });
