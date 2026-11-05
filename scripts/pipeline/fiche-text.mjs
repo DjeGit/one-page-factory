@@ -181,6 +181,48 @@ export async function callGemini(prompt, { key = process.env.GEMINI_API_KEY, mod
   return text;
 }
 
+/** Modèle Claude par défaut pour les textes (surchargeable par ANTHROPIC_TEXT_MODEL). */
+export const DEFAULT_CLAUDE_TEXT_MODEL = 'claude-sonnet-5-5';
+
+/** Appel Claude (clé ANTHROPIC_API_KEY, API Messages). Modèle : ANTHROPIC_TEXT_MODEL, sinon Sonnet 5.5. */
+export async function callClaude(prompt, { key = process.env.ANTHROPIC_API_KEY, model = process.env.ANTHROPIC_TEXT_MODEL || DEFAULT_CLAUDE_TEXT_MODEL, fetchImpl = fetch } = {}) {
+  if (!key) throw new Error('ANTHROPIC_API_KEY absente');
+  const res = await fetchImpl('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      max_tokens: 6000,
+      system: 'Tu réponds uniquement par un objet JSON valide, sans texte autour et sans balises markdown.',
+      messages: [{ role: 'user', content: prompt }],
+    }),
+    signal: AbortSignal.timeout(120000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Anthropic ${res.status} : ${data?.error?.message || 'erreur'}`);
+  const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text || '').join('');
+  if (!text) throw new Error(`Anthropic : réponse vide (${data.stop_reason || 'inconnue'})`);
+  return text;
+}
+
+/** Fournisseur des textes : TEXT_AI_PROVIDER=claude|gemini pour forcer, sinon Claude si ANTHROPIC_API_KEY, sinon Gemini. */
+export function textProvider(env = process.env) {
+  const forced = String(env.TEXT_AI_PROVIDER || '').toLowerCase();
+  if (forced === 'gemini' && env.GEMINI_API_KEY) return 'gemini';
+  if (forced === 'claude' && env.ANTHROPIC_API_KEY) return 'claude';
+  if (env.ANTHROPIC_API_KEY) return 'claude';
+  if (env.GEMINI_API_KEY) return 'gemini';
+  return 'none';
+}
+
+/** Appel du fournisseur de texte actif. */
+export function callText(prompt, opts = {}) {
+  const provider = opts.provider || textProvider();
+  if (provider === 'claude') return callClaude(prompt, opts);
+  if (provider === 'gemini') return callGemini(prompt, opts);
+  throw new Error('aucune clé IA (ANTHROPIC_API_KEY ou GEMINI_API_KEY)');
+}
+
 /**
  * Rédige la fiche d'une langue ; une seule nouvelle tentative avec les raisons du refus.
  * @param {{lang:'fr'|'es'|'en', title:string, categoryLabel:string, productType?:string, notes?:string}} input

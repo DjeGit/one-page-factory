@@ -4,7 +4,7 @@ import { checkCandidate, computePublishAt, isPriceStale, parseFreeShipping, publ
 // @ts-ignore
 import { collectOffers, itemIdFor } from '../scripts/pipeline/offers.mjs';
 // @ts-ignore
-import { validateFicheText, generateFicheText, buildPrompt, fit, fixedFaq, longDate } from '../scripts/pipeline/fiche-text.mjs';
+import { validateFicheText, generateFicheText, buildPrompt, fit, fixedFaq, longDate, callClaude, textProvider, callText } from '../scripts/pipeline/fiche-text.mjs';
 // @ts-ignore
 import { extractSpecs, formatSpecs } from '../scripts/pipeline/specs.mjs';
 // @ts-ignore
@@ -693,6 +693,43 @@ describe('worker : erreurs, journal et secrets', () => {
     expect(t.trend_candidates[0].pipeline_log?.attempts ?? 0).toBe(0);
     expect(t.trend_candidates[1].status).toBe('validated');
     expect(mails).toHaveLength(0);
+  });
+
+  it('callClaude : appelle l’API Messages avec Sonnet 5.5 et lit le texte de la réponse', async () => {
+    let seen: any;
+    const fetchImpl = async (url: string, init: any) => {
+      seen = { url, init, body: JSON.parse(init.body) };
+      return { ok: true, json: async () => ({ content: [{ type: 'text', text: '{"a":' }, { type: 'text', text: '1}' }] }) } as any;
+    };
+    const out = await callClaude('bonjour', { key: 'sk-test', fetchImpl: fetchImpl as any });
+    expect(out).toBe('{"a":1}');
+    expect(seen.url).toBe('https://api.anthropic.com/v1/messages');
+    expect(seen.init.headers['x-api-key']).toBe('sk-test');
+    expect(seen.body.model).toBe('claude-sonnet-5-5');
+    expect(seen.body.messages).toEqual([{ role: 'user', content: 'bonjour' }]);
+  });
+
+  it('callClaude : erreur Anthropic remontée avec son code, clé absente refusée', async () => {
+    const fetchImpl = async () => ({ ok: false, status: 400, json: async () => ({ error: { message: 'Your credit balance is too low to access the Anthropic API.' } }) }) as any;
+    await expect(callClaude('x', { key: 'k', fetchImpl: fetchImpl as any })).rejects.toThrow('Anthropic 400 : Your credit balance is too low');
+    await expect(callClaude('x', { key: '' })).rejects.toThrow('ANTHROPIC_API_KEY absente');
+  });
+
+  it('textProvider : Claude dès que la clé Anthropic existe, Gemini sinon, forçage possible', () => {
+    expect(textProvider({ ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g' })).toBe('claude');
+    expect(textProvider({ GEMINI_API_KEY: 'g' })).toBe('gemini');
+    expect(textProvider({ ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g', TEXT_AI_PROVIDER: 'gemini' })).toBe('gemini');
+    expect(textProvider({ ANTHROPIC_API_KEY: 'a', TEXT_AI_PROVIDER: 'gemini' })).toBe('claude');
+    expect(textProvider({})).toBe('none');
+    expect(() => callText('x', { provider: 'none' })).toThrow('aucune clé IA');
+  });
+
+  it('isDailyQuota : crédit Anthropic épuisé ou plafond de dépense atteint = pause, pas un échec', () => {
+    expect(isDailyQuota('Anthropic 400 : Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing')).toBe(true);
+    expect(isDailyQuota('Anthropic 400 : You have reached your specified API usage limits. You will regain access on 2026-12-01 at 00:00 UTC.')).toBe(true);
+    expect(isDailyQuota('Anthropic 429 : rate_limit_error, retry later')).toBe(false);
+    expect(isDailyQuota('Anthropic 401 : invalid x-api-key')).toBe(false);
+    expect(isTransient('Anthropic 429 : rate limit')).toBe(true);
   });
 
   it('isDailyQuota : seulement le quota du jour', () => {

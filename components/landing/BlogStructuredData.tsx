@@ -50,9 +50,11 @@ export default function BlogStructuredData({
         inLanguage: MARKET_HREFLANG[market],
         datePublished: post.published_at ?? post.created_at,
         dateModified: post.updated_at,
-        author: post.author_name
-          ? { '@type': 'Person', name: post.author_name }
-          : { '@type': 'Organization', name: 'Tendpick', url: marketUrl(market, '/') },
+        // Auteur = Tendpick (Organization) par défaut ; une personne nommée reste un Person (décision 05/11/2026).
+        author:
+          post.author_name && post.author_name.trim().toLowerCase() !== 'tendpick'
+            ? { '@type': 'Person', name: post.author_name }
+            : { '@type': 'Organization', name: 'Tendpick', url: marketUrl(market, '/') },
         publisher: {
           '@type': 'Organization',
           name: 'Tendpick',

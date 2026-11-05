@@ -274,7 +274,7 @@ async function classifyWithClaude(buffers, { apiKey, model } = {}) {
     method: 'POST',
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
-      model: model || process.env.ANTHROPIC_VISION_MODEL || 'claude-sonnet-4-6',
+      model: model || process.env.ANTHROPIC_VISION_MODEL || 'claude-haiku-5-5',
       max_tokens: 3000,
       messages: [{ role: 'user', content }],
     }),

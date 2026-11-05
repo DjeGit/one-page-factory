@@ -8,6 +8,7 @@ const ENV_ALLOWLIST = [
   // ─── Core (Supabase + IA) ──────────────────────────────────────────────
   'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY',
   'GEMINI_API_KEY', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY',
+  'AI_PROVIDER', 'ANTHROPIC_TEXT_MODEL', 'ANTHROPIC_VISION_MODEL',
 
   // ─── Admin & sécurité (Sprint 0) ───────────────────────────────────────
   'ADMIN_SECRET', 'ADMIN_SALT', 'ADMIN_EMAIL',

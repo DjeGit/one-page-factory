@@ -54,8 +54,14 @@ async function safeMail(d, payload) {
 const TRANSIENT = /(Gemini|Anthropic|YouTube|Cloudinary|Brevo)[^:]{0,3}:?\s*(429|5\d\d)\b|HTTP 5\d\d|fetch failed|timeout|timed out|ECONN|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|UND_ERR|overloaded|high demand|tri photos illisible/i;
 export const isTransient = (message) => TRANSIENT.test(String(message || ''));
 
-/** Quota journalier de l'IA épuisé (offre gratuite Gemini : 20 requêtes par jour) : inutile de réessayer avant plusieurs heures. */
-export const isDailyQuota = (message) => /\b429\b/.test(String(message || '')) && /per day|PerDay|free tier|retry in \d+h/i.test(String(message || ''));
+/**
+ * Quota ou crédit de l'IA épuisé : inutile de réessayer avant plusieurs heures.
+ * Gemini (offre gratuite : 20 requêtes par jour) ; Anthropic (crédit à zéro, ou plafond de dépense mensuel atteint dans la Console).
+ */
+export const isDailyQuota = (message) => {
+  const m = String(message || '');
+  return (/\b429\b/.test(m) && /per day|PerDay|free tier|retry in \d+h/i.test(m)) || /credit balance is too low|reached your specified .{0,40}usage limits/i.test(m);
+};
 
 /** Nombre d'essais déjà faits pour la décision OUI en cours (un nouveau clic sur OUI remet le compteur à zéro). */
 const attemptsOf = (c) => (c.pipeline_log?.decided_at === (c.decided_at ?? null) ? Number(c.pipeline_log?.attempts) || 0 : 0);
@@ -75,8 +81,8 @@ async function retryOrFail(c, d, reason, extra = {}) {
   reason = redact(reason);
   // Quota journalier épuisé : ce n'est pas la faute du produit. Il reste en file sans consommer d'essai, et le passage s'arrête.
   if (isDailyQuota(reason)) {
-    d.log('  ⏸ Quota journalier de l’IA épuisé (offre gratuite Gemini) : le produit reste en file, sans compter d’essai. Le passage s’arrête ; reprise automatique dès que le quota revient (ou après activation de la facturation Google AI).');
-    const moved = await leaveInProgress(c, d, { status: 'validated', error: 'Quota IA du jour épuisé : reprise automatique', updated_at: d.now().toISOString() }, 'remise en file (quota)');
+    d.log('  ⏸ Quota ou crédit de l’IA épuisé (quota du jour Gemini, ou crédit / plafond de dépense Anthropic) : le produit reste en file, sans compter d’essai. Le passage s’arrête ; reprise automatique dès que le service est de nouveau disponible (recharger le crédit ou relever le plafond dans la Console Anthropic).');
+    const moved = await leaveInProgress(c, d, { status: 'validated', error: 'Quota ou crédit IA épuisé : reprise automatique après recharge', updated_at: d.now().toISOString() }, 'remise en file (quota)');
     return { outcome: moved ? 'quota' : 'skipped', reason };
   }
   const attempts = attemptsOf(c) + 1;
@@ -424,7 +430,7 @@ export async function runOnce(d, { id, publish = true, limit = 2, redoPhotos = f
   return { prepared, published };
 }
 
-const OUTCOME_LABEL = { ready: 'prêt', retry: 'remis en file (problème passager)', quota: 'en attente (quota IA du jour épuisé)', error: 'en erreur', skipped: 'ignoré (modifié entre-temps)', live: 'mis en ligne', blocked: 'mise en ligne bloquée' };
+const OUTCOME_LABEL = { ready: 'prêt', retry: 'remis en file (problème passager)', quota: 'en attente (quota ou crédit IA épuisé)', error: 'en erreur', skipped: 'ignoré (modifié entre-temps)', live: 'mis en ligne', blocked: 'mise en ligne bloquée' };
 export function finalReport({ prepared, published }) {
   const rows = [...prepared, ...published];
   if (!rows.length) return '';
@@ -451,7 +457,7 @@ async function main() {
   const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { getProductForMarket, verifyAffiliateLink } = await import('../aliexpress/api.mjs');
   const api = { getProduct: getProductForMarket, verify: verifyAffiliateLink };
-  const { callGemini } = await import('./fiche-text.mjs');
+  const { callText } = await import('./fiche-text.mjs');
   const { fetchSpecs } = await import('./specs.mjs');
   // En-tête daté seulement quand il se passe quelque chose : un passage « rien à faire » toutes les 10 minutes tient sur une ligne.
   let headed = false;
@@ -491,7 +497,7 @@ async function main() {
       } catch (e) {
         console.log(`\nCaractéristiques illisibles : ${e.message}`);
       }
-      const { text } = await generateFicheText({ lang, title: first.detail.title || c.name, categoryLabel: CATEGORY_LABELS[c.category_slug] || c.category_slug, productType: c.product_type, notes: c.note, specs }, { llm: (p) => callGemini(p) });
+      const { text } = await generateFicheText({ lang, title: first.detail.title || c.name, categoryLabel: CATEGORY_LABELS[c.category_slug] || c.category_slug, productType: c.product_type, notes: c.note, specs }, { llm: (p) => callText(p) });
       console.log(`\nAperçu du texte (${lang}) :\n${JSON.stringify(text, null, 2)}`);
     }
     return;
@@ -503,7 +509,7 @@ async function main() {
   const d = {
     sb, api, log,
     now: () => new Date(),
-    llm: (p) => callGemini(p),
+    llm: (p) => callText(p),
     // Les pages AliExpress sont rendues côté navigateur : aucune caractéristique lisible sans navigateur (PIPELINE_SPECS=1 pour réessayer).
     specs: process.env.PIPELINE_SPECS ? (id) => fetchSpecs(id) : undefined,
     photos: (row) => processProduct(row, { dryRun: false }),

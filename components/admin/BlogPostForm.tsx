@@ -80,7 +80,7 @@ export default function BlogPostForm({ post, mode, products, categories }: BlogP
     tags: post?.tags?.join(', ') || '',
     category_id: post?.category_id || ('' as string),
     linked_product_ids: post?.linked_product_ids || ([] as string[]),
-    author_name: post?.author_name || 'Jerome',
+    author_name: post?.author_name || 'Tendpick',
     meta_title: post?.meta_title || '',
     meta_description: post?.meta_description || '',
     generated_by_ai: post?.generated_by_ai || false,

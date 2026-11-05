@@ -1,6 +1,7 @@
 /**
  * AI Provider — Multi-provider content generation
- * Priority: Gemini 2.5 Flash → Claude Sonnet → OpenAI (fallback)
+ * Priority: Claude Sonnet → Gemini 2.5 Flash → OpenAI (fallback)
+ * (AI_PROVIDER=claude|gemini|openai pour forcer ; ANTHROPIC_TEXT_MODEL pour changer de modèle Claude)
  *
  * Gemini uses Google's OpenAI-compatible endpoint (no extra package needed).
  * Claude uses Anthropic's OpenAI-compatible endpoint.
@@ -139,17 +140,20 @@ function getOpenAIClient(): OpenAI {
 type Provider = 'gemini' | 'claude' | 'openai';
 
 function getActiveProvider(): Provider {
-  // Gemini free tier en priorité (pas de quota billing)
-  // OpenAI désactivé : quota dépassé (recharger sur platform.openai.com/billing)
-  if (process.env.GEMINI_API_KEY) return 'gemini';
+  // Claude en priorité depuis le 05/11/2026 (décision Jerome : un seul fournisseur payant, Gemini gratuit limité à 20 requêtes/jour).
+  const forced = String(process.env.AI_PROVIDER || '').toLowerCase();
+  if (forced === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini';
+  if (forced === 'claude' && process.env.ANTHROPIC_API_KEY) return 'claude';
+  if (forced === 'openai' && process.env.OPENAI_API_KEY) return 'openai';
   if (process.env.ANTHROPIC_API_KEY) return 'claude';
+  if (process.env.GEMINI_API_KEY) return 'gemini';
   if (process.env.OPENAI_API_KEY) return 'openai';
   return 'openai';
 }
 
 const PROVIDER_MODELS: Record<Provider, string> = {
   gemini: 'gemini-2.5-flash',
-  claude: 'claude-sonnet-4-6',
+  claude: process.env.ANTHROPIC_TEXT_MODEL || 'claude-sonnet-5-5',
   openai: 'gpt-4o-mini',
 };
 
@@ -271,7 +275,7 @@ export async function generateProductContent(
     return { ...result, _provider: provider };
   } catch (err) {
     // Fallback chain
-    const fallbacks: Provider[] = ['gemini', 'claude', 'openai'].filter(
+    const fallbacks: Provider[] = ['claude', 'gemini', 'openai'].filter(
       (p) => p !== provider
     ) as Provider[];
 
@@ -296,7 +300,7 @@ export async function generateProductContent(
 
 // ─── Blog draft generation (Sprint 3, chantier "Blog + Vente directe") ───────
 // Reutilise generateWithProvider/getActiveProvider ci-dessus (meme fallback
-// Gemini -> Claude -> OpenAI que generateProductContent) — aucun nouveau
+// Claude -> Gemini -> OpenAI que generateProductContent) — aucun nouveau
 // provider IA introduit pour le blog.
 
 function buildBlogContentPrompt(subject: string, angle: string, market: Market = 'fr'): string {
@@ -370,7 +374,7 @@ export async function generateBlogDraft(
     const raw = await generateWithProvider(prompt, provider);
     return parseAndValidateBlogDraft(raw, subject);
   } catch (err) {
-    const fallbacks: Provider[] = ['gemini', 'claude', 'openai'].filter((p) => p !== provider) as Provider[];
+    const fallbacks: Provider[] = ['claude', 'gemini', 'openai'].filter((p) => p !== provider) as Provider[];
     for (const fallback of fallbacks) {
       const key = fallback === 'gemini' ? process.env.GEMINI_API_KEY
         : fallback === 'claude' ? process.env.ANTHROPIC_API_KEY

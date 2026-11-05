@@ -48,7 +48,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         "Tendpick repère les produits qui montent et explique comment ils sont choisis. Qui édite le site, comment il est financé, et ce qu'il ne fait pas.",
       intro: [
         "Tendpick est un site de sélection de produits. Nous repérons ce qui se vend et ce qui monte dans nos univers produit — tech, maison, mode et beauté, sport et bien-être, art et design, jeux et jouets, bébé et puériculture, loisirs — et nous expliquons pourquoi un produit vaut le détour, ou pas.",
-        "Le site est édité par Jérôme, son fondateur, depuis l'Espagne. C'est un projet indépendant, mené à une personne, sans rédaction externalisée ni investisseur.",
+        "Le site est édité par Tendpick, depuis l'Espagne. C'est un projet indépendant, sans rédaction externalisée ni investisseur.",
       ],
       sections: [
         {
@@ -205,7 +205,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Éditeur du site",
           paragraphs: [
-            "Tendpick est édité par Jérôme, son fondateur, depuis l'Espagne. Les informations d'immatriculation seront complétées dès la création de la structure juridique ; elles figureront dans les mentions légales.",
+            "Tendpick est édité depuis l'Espagne. Les informations d'immatriculation seront complétées dès la création de la structure juridique ; elles figureront dans les mentions légales.",
           ],
         },
       ],
@@ -286,7 +286,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         "Tendpick detecta los productos que suben y explica cómo los elige. Quién edita el sitio, cómo se financia y lo que no hace.",
       intro: [
         "Tendpick es un sitio de selección de productos. Detectamos lo que se vende y lo que sube en nuestros universos de producto — tecnología, hogar, moda y belleza, deporte y bienestar, arte y diseño, juguetes y juegos, bebé y puericultura, ocio — y explicamos por qué un producto merece la pena, o no.",
-        "El sitio lo edita Jérôme, su fundador, desde España. Es un proyecto independiente, llevado por una sola persona, sin redacción externa ni inversores.",
+        "El sitio lo edita Tendpick, desde España. Es un proyecto independiente, sin redacción externa ni inversores.",
       ],
       sections: [
         {
@@ -443,7 +443,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Editor del sitio",
           paragraphs: [
-            "Tendpick lo edita Jérôme, su fundador, desde España. Los datos de registro se añadirán en cuanto exista la estructura jurídica; figurarán en el aviso legal.",
+            "Tendpick se edita desde España. Los datos de registro se añadirán en cuanto exista la estructura jurídica; figurarán en el aviso legal.",
           ],
         },
       ],
@@ -524,7 +524,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         "Tendpick spots the products that are taking off and explains how they are picked. Who runs the site, how it is funded, and what it does not do.",
       intro: [
         "Tendpick is a product selection site. We track what sells and what is taking off across our product areas — tech, home, fashion and beauty, sport and wellbeing, art and design, toys and games, baby and nursery, hobbies — and explain why a product is worth it, or not.",
-        "The site is run by Jérôme, its founder, from Spain. It is an independent one-person project, with no outsourced writing and no investors.",
+        "The site is run by Tendpick, from Spain. It is an independent project, with no outsourced writing and no investors.",
       ],
       sections: [
         {
@@ -681,7 +681,7 @@ export const PAGES_COPY: Record<Market, Record<StaticPageKey, StaticPageCopy>> =
         {
           heading: "Who publishes this site",
           paragraphs: [
-            "Tendpick is published by Jérôme, its founder, from Spain. Registration details will be added as soon as the legal entity exists; they will appear in the legal notice.",
+            "Tendpick is published from Spain. Registration details will be added as soon as the legal entity exists; they will appear in the legal notice.",
           ],
         },
       ],
