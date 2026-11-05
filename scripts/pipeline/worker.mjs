@@ -27,6 +27,8 @@ import { redact } from './safe.mjs';
 
 const MAX_ATTEMPTS = 3;
 const STALE_LOCK_MIN = 30;
+const BATCH_DEFAULT = 10; // produits traités par passage (PIPELINE_BATCH ou --limit pour changer) ; avant le 05/11/2026 : 2
+const START_BUDGET_MIN = 17; // au-delà, on ne démarre plus de nouveau produit : le passage finit proprement avant l'arrêt forcé
 const MAX_RUN_MIN = 25; // le processus s'arrête de lui-même avant que son verrou ne soit jugé périmé
 const PRODUCT_COLS = 'id, slug, name, market, aliexpress_id, active, images, image_url, video_url, free_shipping, source_product_ref';
 const CATEGORY_LABELS = {
@@ -107,7 +109,7 @@ async function fail(c, d, reason, { products = [], warnings = [], product_ids } 
 
 const OFFER_LABEL = { ok: 'disponible', unavailable: 'indisponible', blocked: 'bloqué', error: 'erreur du service AliExpress' };
 const offerLine = (o) =>
-  `  Marché ${o.market.toUpperCase()} : ${OFFER_LABEL[o.status]}${o.status === 'ok' ? ` — ${o.detail.price} ${o.detail.currency}, lien affilié vérifié, écart de prix ${o.gap == null ? 'n/a' : `${Math.round(o.gap * 100)} %`} avec la recherche` : ` — ${o.reasons.join(' ; ')}`}`;
+  `  Marché ${o.market.toUpperCase()} : ${OFFER_LABEL[o.status]}${o.status === 'ok' ? ` — ${o.detail.price} ${o.detail.currency}, lien affilié vérifié, écart de prix ${o.gap == null ? 'n/a' : `${Math.round(o.gap * 100)} %`} avec la recherche${o.priceFrom && o.priceFrom !== o.market ? ` (prix ${o.priceFrom.toUpperCase()} pris comme référence)` : ''}` : ` — ${o.reasons.join(' ; ')}`}`;
 
 const rowOf = (p) => ({ market: p.market, name: p.name || p.slug, slug: p.slug, price: p.offer?.detail?.price ?? p.price, currency: p.offer?.detail?.currency ?? p.price_currency, commission_rate: p.offer?.detail?.commissionRate ?? p.commission_rate });
 
@@ -398,8 +400,9 @@ async function recoverStale(d) {
 }
 
 /** Un passage complet : reprise des verrous oubliés, préparation des OUI, mise en ligne des produits prêts. */
-export async function runOnce(d, { id, publish = true, limit = 2, redoPhotos = false } = {}) {
+export async function runOnce(d, { id, publish = true, limit = BATCH_DEFAULT, redoPhotos = false, budgetMin = START_BUDGET_MIN } = {}) {
   await recoverStale(d);
+  const startedAt = d.now().getTime();
 
   let q = d.sb.from('trend_candidates').select('*').eq('decision', 'yes');
   const startable = redoPhotos ? ['validated', 'error', 'ready'] : ['validated', 'error'];
@@ -407,6 +410,10 @@ export async function runOnce(d, { id, publish = true, limit = 2, redoPhotos = f
   const todo = must(await q.order('decided_at').limit(limit), 'lecture des produits OUI') || [];
   const prepared = [];
   for (const c of todo) {
+    if (d.now().getTime() - startedAt > budgetMin * 60000) {
+      d.log('  ⏱ Le temps du passage est presque écoulé : les produits restants seront traités au prochain passage.');
+      break;
+    }
     const locked = must(await d.sb.from('trend_candidates').update({ status: 'in_progress', updated_at: d.now().toISOString() }).eq('id', c.id).in('status', startable).select('id'), 'verrou') || [];
     if (!locked.length) continue; // pris par un autre passage
     try {
@@ -517,7 +524,8 @@ async function main() {
     video: process.env.YOUTUBE_API_KEY ? (q) => findVideo(q, { apiKey: process.env.YOUTUBE_API_KEY }) : undefined,
     mail: (payload) => sendMail(renderEmail(payload)),
   };
-  const res = await runOnce(d, { id: val('id'), publish: !args.includes('--no-publish'), redoPhotos: args.includes('--redo-photos') });
+  const batch = Math.floor(Number(val('limit') || process.env.PIPELINE_BATCH)) || BATCH_DEFAULT;
+  const res = await runOnce(d, { id: val('id'), limit: batch, publish: !args.includes('--no-publish'), redoPhotos: args.includes('--redo-photos') });
 
   const report = finalReport(res);
   if (report) log(`\n${report}`);

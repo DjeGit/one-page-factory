@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 // @ts-ignore — modules Node purs (.mjs)
 import { checkCandidate, computePublishAt, isPriceStale, parseFreeShipping, publishIssues, needsManualReview, priceGap, shippingState, parseShippingValue, MIN_PHOTOS } from '../scripts/pipeline/gates.mjs';
 // @ts-ignore
-import { collectOffers, itemIdFor } from '../scripts/pipeline/offers.mjs';
+import { collectOffers, itemIdFor, referencePrice, isTrusted } from '../scripts/pipeline/offers.mjs';
 // @ts-ignore
 import { validateFicheText, generateFicheText, buildPrompt, fit, fixedFaq, longDate, callClaude, textProvider, callText } from '../scripts/pipeline/fiche-text.mjs';
 // @ts-ignore
@@ -527,9 +527,36 @@ describe('offers : contrôles indépendants de verify()', () => {
     expect(edge[0].status).toBe('ok'); // 20 % pile : accepté
   });
   it('sans prix de référence : on ne devine pas', async () => {
-    const r = await collectOffers(cand({ price_es: null }), { getProduct: async () => detail('es'), verify: okVerify }, ['es']);
+    const r = await collectOffers(cand({ price_es: null, price_fr: null }), { getProduct: async () => detail('es'), verify: okVerify }, ['es']);
     expect(r[0]).toMatchObject({ status: 'blocked' });
     expect(r[0].reasons[0]).toContain('prix de référence');
+  });
+  it('prix FR absent de la recherche : le prix ES (même devise) sert de référence, avec la même tolérance de 20 %', async () => {
+    const c = cand({ price_fr: null, price_es: 100, price_uk: null });
+    const ok = await collectOffers(c, { getProduct: async () => detail('fr', { price: 108 }), verify: okVerify }, ['fr']);
+    expect(ok[0]).toMatchObject({ status: 'ok', priceFrom: 'es' });
+    const bad = await collectOffers(c, { getProduct: async () => detail('fr', { price: 140 }), verify: okVerify }, ['fr']);
+    expect(bad[0].status).toBe('blocked');
+    expect(bad[0].reasons[0]).toContain('40 %');
+    // le UK (livres) n'emprunte jamais un prix en euros
+    expect(referencePrice(c, 'uk')).toEqual({ price: null, from: null });
+    expect(referencePrice(cand({ price_fr: 90 }), 'fr')).toEqual({ price: 90, from: 'fr' });
+  });
+  it('produit de confiance (bien noté, assez vendu ou commenté) : prix de l’API cru, même sans prix de recherche ni écart de 20 %', async () => {
+    expect(isTrusted(cand({ rating: 4.7, sales: 1000 }))).toBe(true);
+    expect(isTrusted(cand({ rating: 4.7, reviews: 80 }))).toBe(true);
+    expect(isTrusted(cand({ rating: 4.2, sales: 5000 }))).toBe(false);
+    expect(isTrusted(cand({ rating: 4.9, reviews: 3, sales: 20 }))).toBe(false);
+    const trusted = cand({ rating: 4.8, sales: 1000, price_fr: 100 });
+    const wide = await collectOffers(trusted, { getProduct: async () => detail('fr', { price: 135 }), verify: okVerify }, ['fr']);
+    expect(wide[0]).toMatchObject({ status: 'ok', trusted: true }); // 35 % : accepté
+    const none = await collectOffers(cand({ rating: 4.8, sales: 1000, price_fr: null, price_es: null }), { getProduct: async () => detail('fr'), verify: okVerify }, ['fr']);
+    expect(none[0].status).toBe('ok'); // aucun prix de référence : accepté
+    const crazy = await collectOffers(trusted, { getProduct: async () => detail('fr', { price: 260 }), verify: okVerify }, ['fr']);
+    expect(crazy[0].status).toBe('blocked'); // 160 % : erreur probable de l'API
+    // un produit sans assez d'avis ni de ventes garde le contrôle strict
+    const strict = await collectOffers(cand({ rating: 4.8, price_fr: 100 }), { getProduct: async () => detail('fr', { price: 135 }), verify: okVerify }, ['fr']);
+    expect(strict[0].status).toBe('blocked');
   });
   it('lien neutre, hors AliExpress ou mauvaise devise : bloqué', async () => {
     const neutral = await collectOffers(cand(), { getProduct: async () => detail('fr', { promotionLink: 'https://www.aliexpress.com/item/1005010428515910.html' }), verify: okVerify }, ['fr']);
@@ -567,6 +594,25 @@ describe('worker : double exécution et reprise après coupure', () => {
     await runOnce(d, { publish: false });
     expect(t.products).toHaveLength(4);
     expect(new Set(t.products.map((p) => p.slug)).size).toBe(4);
+  });
+
+  it('plusieurs produits OUI : jusqu’à 10 par passage (et --limit possible) ; passé le budget de temps, on n’en démarre plus', async () => {
+    const mk = () => tables([1, 2, 3, 4].map((n) => cand({ id: `m${n}`, aliexpress_id: `10050999999999${n}0`, url_fr: `https://www.aliexpress.com/item/10050999999999${n}0.html`, url_uk: null, price_uk: null, name: `Produit ${n}`, decided_at: `2026-11-02T08:0${n}:00Z` })));
+    const t1 = mk();
+    const a = makeDeps(t1); a.offers.uk = null;
+    const r1 = await runOnce(a.d, { publish: false });
+    expect(r1.prepared).toHaveLength(4); // avant : 2 au plus
+    const t2 = mk();
+    const b = makeDeps(t2); b.offers.uk = null;
+    const r2 = await runOnce(b.d, { publish: false, limit: 3 });
+    expect(r2.prepared).toHaveLength(3);
+    expect(t2.trend_candidates.filter((c: any) => c.status === 'validated')).toHaveLength(1); // le 4e attend le passage suivant
+    const t3 = mk();
+    const c = makeDeps(t3); c.offers.uk = null;
+    const r3 = await runOnce(c.d, { publish: false, budgetMin: -1 });
+    expect(r3.prepared).toHaveLength(0);
+    expect(t3.trend_candidates.every((x: any) => x.status === 'validated')).toBe(true);
+    expect(c.logs.join('\n')).toContain('temps du passage');
   });
 
   it('Gemini surchargé pendant la rédaction du 2e marché : remise en file, la reprise ne réécrit pas le 1er texte', async () => {

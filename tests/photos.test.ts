@@ -59,6 +59,18 @@ describe('photos pipeline', () => {
     expect(picked.filter((p: any) => p.kind === 'detail').length).toBeLessThanOrEqual(2);
   });
 
+  it('pickBest : les photos à gros texte ne servent qu’en dernier recours, pour atteindre le minimum', () => {
+    const v = (index: number, kind: string, extra: any = {}) => ({ index, usable: true, kind, shot: `s${index}`, text: 'none', score: 3, ...extra });
+    const picked = pickBest([v(0, 'product_white', { score: 5 }), v(1, 'infographic', { text: 'heavy', score: 4 }), v(2, 'product_in_use', { text: 'heavy', score: 5 })]);
+    expect(picked.map((p: any) => p.index).sort()).toEqual([0, 1, 2]);
+    // assez de photos propres : les photos à texte restent écartées
+    const enough = pickBest([v(0, 'product_white'), v(1, 'detail'), v(2, 'product_in_use'), v(3, 'infographic', { text: 'heavy', score: 5 })]);
+    expect(enough.map((p: any) => p.index).sort()).toEqual([0, 1, 2]);
+    // jamais de promo, d'emballage ni de tableau de tailles, même en dernier recours
+    const none = pickBest([v(0, 'product_white'), v(1, 'promo', { text: 'heavy' }), v(2, 'size_chart', { text: 'heavy' })]);
+    expect(none.length).toBe(1);
+  });
+
   it('pickBest : jamais deux fois la même prise de vue, photos propres avant les photos à texte ou recadrées', () => {
     const v = (index: number, kind: string, shot: string, score = 4, extra: any = {}) => ({ index, kind, shot, score, text: 'none', usable: true, watermark: false, ...extra });
     const picked = pickBest([
@@ -238,16 +250,35 @@ describe('photos pipeline : photos insuffisantes', () => {
     for (let i = 0; i < 4; i++) imgs[`https://ae01.alicdn.com/kf/P${i}.jpg`] = await scene(1000 + i * 10, 900 + i * 15, i + 1);
     globalThis.fetch = (async (u: any) => (imgs[String(u)] ? new Response(imgs[String(u)], { status: 200 }) : new Response('no', { status: 404 }))) as any;
     try {
-      // 2 photos propres, 2 infographies sans zone propre exploitable
+      // 2 photos propres, 2 affiches promo (jamais gardées, même en dernier recours)
       const classify = async (bufs: Buffer[]) => bufs.map((_, index) => (index < 2
         ? { index, usable: true, kind: 'product_white', text: 'none', watermark: false, score: 8 - index, note: '' }
-        : { index, usable: true, kind: 'infographic', text: 'heavy', watermark: false, score: 3, note: '', cleanBox: null }));
+        : { index, usable: true, kind: 'promo', text: 'heavy', watermark: false, score: 3, note: '', cleanBox: null }));
       const err: any = await processProduct({ aliexpress_id: '3', image_urls: Object.keys(imgs) }, { dryRun: true, classify }).catch((e: any) => e);
       expect(err).toBeInstanceOf(Error);
       expect(err.message).toContain('seulement 2 photo(s)');
       expect(err.message.length).toBeLessThan(200); // message lisible : le détail va à part
-      expect(err.detail).toContain('infographic');
+      expect(err.detail).toContain('promo');
       expect(err.partial.photos).toHaveLength(2);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+});
+
+describe('photos pipeline : dernier recours avec texte', () => {
+  it('processProduct : 2 photos propres + 1 photo à gros texte sans zone propre = 3 photos, la dernière marquée texte_lourd', async () => {
+    const origFetch = globalThis.fetch;
+    const imgs: Record<string, Buffer> = {};
+    for (let i = 0; i < 3; i++) imgs[`https://ae01.alicdn.com/kf/Q${i}.jpg`] = await scene(1000 + i * 10, 900 + i * 15, i + 1);
+    globalThis.fetch = (async (u: any) => (imgs[String(u)] ? new Response(imgs[String(u)], { status: 200 }) : new Response('no', { status: 404 }))) as any;
+    try {
+      const classify = async (bufs: Buffer[]) => bufs.map((_, index) => (index < 2
+        ? { index, usable: true, kind: 'product_white', shot: `vue ${index}`, text: 'none', watermark: false, score: 5, note: '' }
+        : { index, usable: true, kind: 'infographic', shot: 'schéma', text: 'heavy', watermark: false, score: 4, note: '', cleanBox: null }));
+      const out: any = await processProduct({ aliexpress_id: '4', image_urls: Object.keys(imgs) }, { dryRun: true, classify });
+      expect(out.photos).toHaveLength(3);
+      expect(out.photos.filter((p: any) => p.flags.includes('texte_lourd'))).toHaveLength(1);
     } finally {
       globalThis.fetch = origFetch;
     }

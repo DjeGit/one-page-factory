@@ -345,22 +345,26 @@ export async function classifyImages(buffers, opts = {}) {
  * Choix des photos (5 au plus, 3 au moins). La qualité passe avant le nombre :
  *  - niveau 0 : photos propres (aucun texte, non recadrées) ;
  *  - niveau 1 : photos avec un petit texte discret (souvent en anglais) ;
- *  - niveau 2 : zones recadrées dans une image à gros texte (elles paraissent « coupées »).
- * Les niveaux 1 et 2 ne servent qu'à atteindre le minimum.
+ *  - niveau 2 : zones recadrées dans une image à gros texte (elles paraissent « coupées ») ;
+ *  - niveau 3 : photos du produit avec beaucoup de texte (souvent en anglais), gardées telles quelles (décision Jerome du 05/11/2026 :
+ *    mieux vaut une photo avec du texte que pas de photo).
+ * Les niveaux 1, 2 et 3 ne servent qu'à atteindre le minimum.
  * Ordre : couverture = meilleure photo sur fond blanc (sinon la meilleure mise en situation),
  * puis variété : jamais deux fois la même prise de vue (« shot »), max 2 par type.
  */
 export function pickBest(items, n = MAX_PHOTOS, min = MIN_PHOTOS) {
-  const ok = items.filter((x) => x.usable && !REJECT_KINDS.has(x.kind) && x.text !== 'heavy' && x.kind !== 'infographic');
+  const all = items.filter((x) => x.usable && !REJECT_KINDS.has(x.kind));
+  const isHeavy = (x) => !x.cropped && (x.text === 'heavy' || x.kind === 'infographic');
+  const ok = all.filter((x) => !isHeavy(x));
   const byScore = (a, b) => b.score - a.score || a.index - b.index;
-  const tier = (x) => (x.cropped ? 2 : x.text === 'light' ? 1 : 0);
+  const tier = (x) => (x.cropped ? 2 : isHeavy(x) ? 3 : x.text === 'light' ? 1 : 0);
   const sameShot = (a, b) => !!a.shot && !!b.shot && a.kind === b.kind && a.shot === b.shot;
   const chosen = [];
   const count = (k) => chosen.filter((c) => c.kind === k).length;
-  for (const t of [0, 1, 2]) {
+  for (const t of [0, 1, 2, 3]) {
     const limit = t === 0 ? n : min;
     if (chosen.length >= limit) continue;
-    const pool = ok.filter((x) => tier(x) === t).sort(byScore);
+    const pool = (t === 3 ? all : ok).filter((x) => tier(x) === t).sort(byScore);
     if (t === 0 && !chosen.length) {
       const cover = pool.find((x) => x.kind === 'product_white') || pool.find((x) => x.kind === 'product_in_use') || pool[0];
       if (cover) chosen.push(cover);
@@ -376,7 +380,7 @@ export function pickBest(items, n = MAX_PHOTOS, min = MIN_PHOTOS) {
   }
   // Dernier recours : pas assez de photos distinctes → on tolère une prise de vue répétée pour atteindre le minimum.
   if (chosen.length < min) {
-    for (const x of [...ok].sort((a, b) => tier(a) - tier(b) || byScore(a, b))) {
+    for (const x of [...all].sort((a, b) => tier(a) - tier(b) || byScore(a, b))) {
       if (chosen.length >= min) break;
       if (!chosen.includes(x)) chosen.push(x);
     }
@@ -547,6 +551,7 @@ export async function processProduct(row, opts = {}) {
     if (v.watermark) flags.push('filigrane');
     if (v.text === 'light') flags.push('texte_leger');
     if (v.cropped) flags.push('recadree_sans_texte');
+    if (!v.cropped && (v.text === 'heavy' || v.kind === 'infographic')) flags.push('texte_lourd');
     if (!report.classified) flags.push('non_classee');
     const name = `ae-${row.aliexpress_id}-${i + 1}`;
     previews.push({ name: `${String(i + 1).padStart(2, '0')}-${v.kind}.jpg`, buffer: sq.buffer });
@@ -555,7 +560,7 @@ export async function processProduct(row, opts = {}) {
     photos.push({ public_id: up.public_id, url: up.url, kind: v.kind, text: v.text, watermark: v.watermark, mode: sq.mode, score: v.score, shot: v.shot || '', source: src.url, flags });
   }
   if (shortage) {
-    throw Object.assign(new Error(`seulement ${photos.length} photo(s) exploitable(s) (minimum ${MIN_PHOTOS}) : les annonces de ce produit contiennent surtout des images avec du texte`), { detail: shortage, partial: { photos, report } });
+    throw Object.assign(new Error(`seulement ${photos.length} photo(s) exploitable(s) (minimum ${MIN_PHOTOS}) : les annonces de ce produit ne contiennent pas assez de vraies photos du produit`), { detail: shortage, partial: { photos, report } });
   }
   return { photos, report, previews };
 }
