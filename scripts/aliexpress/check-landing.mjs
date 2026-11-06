@@ -5,6 +5,10 @@
 //   node --env-file=.env.local scripts/aliexpress/check-landing.mjs --slug <slug>   (une seule fiche)
 //   node --env-file=.env.local scripts/aliexpress/check-landing.mjs --market fr     (un seul marché)
 //   node --env-file=.env.local scripts/aliexpress/check-landing.mjs --verbose       (affiche toute la chaîne de redirections)
+// Deux contrôles : (1) la page atteinte ne doit pas imposer la langue d'un AUTRE de nos marchés (es sur une fiche FR, etc.) ;
+// (2) le prix inscrit dans le lien par AliExpress (paramètre pdp_npi) doit être celui de la fiche : un lien fabriqué pour l'Espagne
+// porte le prix espagnol, donc une fiche française qui aurait reçu un lien espagnol est détectée à coup sûr.
+// Les redirections vers un autre pays (de.aliexpress.com, etc.) sont seulement signalées : elles dépendent de la position du serveur.
 // Lecture seule : rien n'est modifié. Limite : le serveur n'a pas ton adresse IP ; AliExpress peut aussi adapter la page à la position
 // du visiteur (un visiteur en Espagne voit souvent le site espagnol), ce que ce contrôle ne peut pas voir.
 import { createClient } from '@supabase/supabase-js';
@@ -34,6 +38,15 @@ export function localeSignals(href) {
   return [...out];
 }
 
+/** Prix inscrits par AliExpress dans pdp_npi (« 6@dis!EUR!80.44!75.69!!!… ») : devise + deux montants (d'origine, de vente). */
+export function pdpPrices(href) {
+  try {
+    const v = new URL(href).searchParams.get('pdp_npi');
+    const m = v && v.match(/!([A-Z]{3})!([\d.]+)!([\d.]+)!/);
+    return m ? { currency: m[1], amounts: [Number(m[2]), Number(m[3])] } : null;
+  } catch { return null; }
+}
+
 async function follow(link, market) {
   const trail = [];
   let url = link;
@@ -48,7 +61,7 @@ async function follow(link, market) {
 }
 
 const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
-let q = sb.from('products').select('id, slug, market, active, aliexpress_id, affiliate_url').not('affiliate_url', 'is', null);
+let q = sb.from('products').select('id, slug, market, active, aliexpress_id, affiliate_url, price, price_currency').not('affiliate_url', 'is', null);
 if (val('--slug')) q = q.eq('slug', val('--slug'));
 if (val('--market')) q = q.eq('market', val('--market'));
 const { data: rows, error } = await q.order('market').order('slug');
@@ -67,14 +80,24 @@ for (const r of list) {
     const issues = [];
     if (r.aliexpress_id && id && String(id) !== String(r.aliexpress_id)) issues.push(`mauvais produit (${id} au lieu de ${r.aliexpress_id})`);
     if (!id) issues.push('identifiant produit introuvable dans la chaîne');
-    const foreign = signals.filter((s) => !['aliexpress', want, ...(r.market === 'uk' ? ['gb', 'uk'] : [])].includes(s));
-    if (foreign.length) issues.push(`la page impose : ${foreign.join(', ')} (marché de la fiche : ${r.market.toUpperCase()})`);
+    const OURS = ['fr', 'es', 'en', 'gb', 'uk'];
+    const own = [want, ...(r.market === 'uk' ? ['gb', 'uk'] : [])];
+    const cross = signals.filter((s) => OURS.includes(s) && !own.includes(s));
+    const other = signals.filter((s) => !OURS.includes(s));
+    if (cross.length) issues.push(`la page impose la langue d'un autre marché : ${cross.join(', ')} (fiche ${r.market.toUpperCase()})`);
+    const notes = other.length ? [`redirigé vers ${other.join(', ')} depuis le serveur (selon sa position : normal)`] : [];
+    const pdp = trail.map(pdpPrices).find(Boolean);
+    if (pdp && r.price != null) {
+      const near = pdp.amounts.some((a) => Math.abs(a - Number(r.price)) / Number(r.price) <= 0.03);
+      if (pdp.currency !== (r.price_currency || pdp.currency)) issues.push(`devise du lien ${pdp.currency} au lieu de ${r.price_currency}`);
+      else if (!near) issues.push(`prix du lien ${pdp.amounts.join(' / ')} ${pdp.currency} ≠ prix de la fiche ${r.price} : lien peut-être fabriqué pour un autre pays`);
+    } else if (!pdp) notes.push('prix non lisible dans le lien');
     if (status !== 200 && status !== 'trop de redirections' && !(typeof status === 'number' && status < 400)) issues.push(`réponse finale ${status}`);
     if (status === 'trop de redirections') issues.push(status);
     if (issues.length) bad++;
     let host = '?';
     try { host = new URL(final).host; } catch {}
-    console.log(`${issues.length ? '✗' : '✓'} ${r.market.toUpperCase()} ${r.active ? 'EN LIGNE ' : 'brouillon'} ${r.slug}\n    → ${host} · produit ${id || '?'} · signaux de langue/pays : ${signals.join(', ') || 'aucun'}${issues.length ? '\n    ⚠ ' + issues.join(' ; ') : ''}`);
+    console.log(`${issues.length ? '✗' : '✓'} ${r.market.toUpperCase()} ${r.active ? 'EN LIGNE ' : 'brouillon'} ${r.slug}\n    → ${host} · produit ${id || '?'} · signaux : ${signals.join(', ') || 'aucun'}${pdp ? ` · prix du lien ${pdp.amounts.join(' / ')} ${pdp.currency} (fiche ${r.price ?? '?'})` : ''}${issues.length ? '\n    ⚠ ' + issues.join(' ; ') : ''}${verbose && notes.length ? '\n    ℹ ' + notes.join(' ; ') : ''}`);
     if (verbose) trail.forEach((u, i) => console.log(`      ${i + 1}. ${u.slice(0, 200)}`));
   } catch (e) {
     bad++;
