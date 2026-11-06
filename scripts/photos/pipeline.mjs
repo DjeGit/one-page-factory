@@ -229,14 +229,57 @@ export async function cropToCleanBox(buf, box) {
   return sharp(buf).extract({ left, top, width: Math.min(w, width - left), height: Math.min(h, height - top) }).toBuffer();
 }
 
+/** Objets complets d'un tableau JSON abîmé (coupé en route, virgule manquante…) ; un objet illisible donne null. */
+export function salvageObjects(text) {
+  const start = String(text).indexOf('[');
+  if (start < 0) return [];
+  const out = [];
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let from = -1;
+  for (let i = start + 1; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === '{') {
+      if (depth === 0) from = i;
+      depth++;
+    } else if (ch === '}' && depth > 0) {
+      depth--;
+      if (depth === 0 && from >= 0) {
+        try {
+          out.push(JSON.parse(text.slice(from, i + 1)));
+        } catch {
+          out.push(null);
+        }
+        from = -1;
+      }
+    }
+  }
+  return out;
+}
+
 export function parseClassification(text, count) {
   const m = text.match(/\[[\s\S]*\]/);
-  if (!m) throw new Error(`tri photos illisible : réponse sans tableau JSON (${text.slice(0, 200)})`);
   let arr;
+  let failure = null;
   try {
+    if (!m) throw new Error('réponse sans tableau JSON');
     arr = JSON.parse(m[0]);
   } catch (e) {
-    throw new Error(`tri photos illisible : JSON invalide (${e.message})`);
+    failure = m ? `JSON invalide (${e.message})` : `réponse sans tableau JSON (${text.slice(0, 200)})`;
+  }
+  if (failure) {
+    // Réponse coupée ou légèrement abîmée : on garde les objets complets, à condition qu'il y en ait pour toutes les images.
+    const salvaged = salvageObjects(text).filter(Boolean);
+    if (salvaged.length < count) throw new Error(`tri photos illisible : ${failure}`);
+    arr = salvaged;
   }
   if (!Array.isArray(arr)) throw new Error('tri photos illisible : la réponse n\'est pas un tableau');
   const idx = arr.map((o) => Number(o?.index));
@@ -260,6 +303,13 @@ export function parseClassification(text, count) {
   });
 }
 
+/** Modèles essayés pour le tri : Haiku d'abord (peu cher) ; si sa réponse est illisible, Sonnet reprend la même demande. */
+export function visionModels(env = process.env, forced) {
+  const first = forced || env.ANTHROPIC_VISION_MODEL || 'claude-haiku-5-5';
+  const fallback = env.ANTHROPIC_VISION_FALLBACK_MODEL || env.ANTHROPIC_TEXT_MODEL || 'claude-sonnet-5-5';
+  return first === fallback ? [first] : [first, fallback];
+}
+
 async function classifyWithClaude(buffers, { apiKey, model } = {}) {
   const key = apiKey || process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error('ANTHROPIC_API_KEY absente');
@@ -270,19 +320,24 @@ async function classifyWithClaude(buffers, { apiKey, model } = {}) {
     content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: small.toString('base64') } });
   }
   content.push({ type: 'text', text: CLASSIFY_PROMPT });
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: model || process.env.ANTHROPIC_VISION_MODEL || 'claude-haiku-5-5',
-      max_tokens: 3000,
-      messages: [{ role: 'user', content }],
-    }),
-    signal: AbortSignal.timeout(120000),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Anthropic ${res.status} : ${data?.error?.message || 'erreur'}`);
-  return parseClassification(data.content?.map((c) => c.text || '').join('') || '', buffers.length);
+  let lastError;
+  for (const mdl of visionModels(process.env, model)) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: mdl, max_tokens: 8000, messages: [{ role: 'user', content }] }),
+      signal: AbortSignal.timeout(120000),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`Anthropic ${res.status} : ${data?.error?.message || 'erreur'}`);
+    try {
+      return parseClassification(data.content?.map((c) => c.text || '').join('') || '', buffers.length);
+    } catch (e) {
+      if (!/tri photos illisible/.test(e.message)) throw e;
+      lastError = new Error(`${e.message} [modèle ${mdl}, fin : ${data.stop_reason || '?'}]`);
+    }
+  }
+  throw lastError;
 }
 
 async function classifyWithGemini(buffers, { apiKey, model, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {

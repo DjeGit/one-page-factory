@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import sharp from 'sharp';
 // @ts-ignore — module Node pur (.mjs) sans déclaration de types
-import { normalizeImageUrl, dedupe, toSquareJpeg, pickBest, parseClassification, processProduct, visionProvider, classifyImages, parseBox, cropToCleanBox, isPublicUrl, MIN_PHOTOS as PHOTOS_MIN } from '../scripts/photos/pipeline.mjs';
+import { normalizeImageUrl, dedupe, toSquareJpeg, pickBest, parseClassification, salvageObjects, visionModels, processProduct, visionProvider, classifyImages, parseBox, cropToCleanBox, isPublicUrl, MIN_PHOTOS as PHOTOS_MIN } from '../scripts/photos/pipeline.mjs';
 // @ts-ignore
 import { MIN_PHOTOS as GATES_MIN } from '../scripts/pipeline/gates.mjs';
 
@@ -260,6 +260,54 @@ describe('photos pipeline : photos insuffisantes', () => {
       expect(err.message.length).toBeLessThan(200); // message lisible : le détail va à part
       expect(err.detail).toContain('promo');
       expect(err.partial.photos).toHaveLength(2);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+});
+
+describe('photos pipeline : réponse du tri abîmée (Haiku)', () => {
+  const full = (n: number) => '[' + Array.from({ length: n }, (_, i) => `{"index":${i},"usable":true,"kind":"detail","text":"none","score":4,"note":"ok, \\"net\\""}`).join(',') + ']';
+  it('salvageObjects : garde les objets complets, ignore un objet cassé ou coupé', () => {
+    const cut = full(3).slice(0, -30); // coupée au milieu du 3e objet
+    expect(salvageObjects(cut).filter(Boolean)).toHaveLength(2);
+    const broken = '[{"index":0,"usable":true},{"index":1,"usable" "oops"},{"index":2,"usable":false}]';
+    const s = salvageObjects(broken);
+    expect(s[1]).toBeNull();
+    expect(s.filter(Boolean).map((o: any) => o.index)).toEqual([0, 2]);
+  });
+  it('parseClassification : une réponse coupée mais complète pour toutes les images est acceptée, sinon erreur « illisible »', () => {
+    expect(parseClassification(full(3) + ' fin de réponse ]]]', 3)).toHaveLength(3);
+    expect(parseClassification(full(3).slice(0, -1), 3)).toHaveLength(3); // seul le « ] » final manque
+    expect(() => parseClassification(full(3).slice(0, -30), 3)).toThrow(/tri photos illisible/);
+  });
+  it('visionModels : Haiku puis Sonnet en reprise, un seul si identiques', () => {
+    expect(visionModels({})).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5']);
+    expect(visionModels({ ANTHROPIC_VISION_MODEL: 'x', ANTHROPIC_TEXT_MODEL: 'x' })).toEqual(['x']);
+  });
+  it('classifyImages (Claude) : réponse illisible de Haiku → Sonnet reprend et la réponse valide est utilisée', async () => {
+    const origFetch = globalThis.fetch;
+    const calls: string[] = [];
+    globalThis.fetch = (async (_u: any, init: any) => {
+      const model = JSON.parse(init.body).model;
+      calls.push(model);
+      const text = model.includes('haiku') ? '[{"index":0,"usable":true,"kind":"detail","tex' : full(2);
+      return new Response(JSON.stringify({ content: [{ type: 'text', text }], stop_reason: 'end_turn' }), { status: 200 });
+    }) as any;
+    try {
+      const out: any = await classifyImages([await scene(700, 700, 1), await scene(700, 700, 2)], { provider: 'claude', apiKey: 'k' });
+      expect(calls).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5']);
+      expect(out).toHaveLength(2);
+      expect(out[0].usable).toBe(true);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+  it('classifyImages (Claude) : si les deux modèles sont illisibles, l’erreur dit lequel et pourquoi la réponse s’est arrêtée', async () => {
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ content: [{ type: 'text', text: '[{"index":0,' }], stop_reason: 'max_tokens' }), { status: 200 })) as any;
+    try {
+      await expect(classifyImages([await scene(700, 700, 1)], { provider: 'claude', apiKey: 'k' })).rejects.toThrow(/tri photos illisible.*claude-sonnet-5-5.*max_tokens/);
     } finally {
       globalThis.fetch = origFetch;
     }
