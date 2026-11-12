@@ -405,19 +405,26 @@ export async function runOnce(d, { id, publish = true, limit = BATCH_DEFAULT, re
   const startedAt = d.now().getTime();
 
   let q = d.sb.from('trend_candidates').select('*').eq('decision', 'yes');
-  const startable = redoPhotos ? ['validated', 'error', 'ready'] : ['validated', 'error'];
+  // Produit déjà prêt ou en ligne : seule la reprise des photos est permise (--redo-photos, ou photos_status « redo » posé par set-images.mjs).
+  const startable = redoPhotos ? ['validated', 'error', 'ready', 'live'] : ['validated', 'error'];
   q = id ? q.eq('aliexpress_id', id).in('status', startable) : q.eq('status', 'validated');
-  const todo = must(await q.order('decided_at').limit(limit), 'lecture des produits OUI') || [];
+  const todo = (must(await q.order('decided_at').limit(limit), 'lecture des produits OUI') || []).map((c) => ({ c, redo: redoPhotos }));
+  if (!id) {
+    // Photos complétées à la main ou par set-images.mjs sur un produit déjà prêt / en ligne : le tri des photos est refait automatiquement.
+    const redo = must(await d.sb.from('trend_candidates').select('*').eq('decision', 'yes').eq('photos_status', 'redo').in('status', ['ready', 'live', 'error']).order('decided_at').limit(limit), 'lecture des reprises de photos') || [];
+    for (const c of redo) if (!todo.some((t) => t.c.id === c.id)) todo.push({ c, redo: true });
+  }
   const prepared = [];
-  for (const c of todo) {
+  for (const { c, redo } of todo) {
     if (d.now().getTime() - startedAt > budgetMin * 60000) {
       d.log('  ⏱ Le temps du passage est presque écoulé : les produits restants seront traités au prochain passage.');
       break;
     }
-    const locked = must(await d.sb.from('trend_candidates').update({ status: 'in_progress', updated_at: d.now().toISOString() }).eq('id', c.id).in('status', startable).select('id'), 'verrou') || [];
+    const canStart = redo ? ['validated', 'error', 'ready', 'live'] : ['validated', 'error'];
+    const locked = must(await d.sb.from('trend_candidates').update({ status: 'in_progress', updated_at: d.now().toISOString() }).eq('id', c.id).in('status', canStart).select('id'), 'verrou') || [];
     if (!locked.length) continue; // pris par un autre passage
     try {
-      const r = { id: c.id, name: c.name, ...(await prepareCandidate(c, d, { redoPhotos })) };
+      const r = { id: c.id, name: c.name, ...(await prepareCandidate(c, d, { redoPhotos: redo })) };
       prepared.push(r);
       if (r.outcome === 'quota') break; // inutile d'essayer le produit suivant : même quota
     } catch (e) {

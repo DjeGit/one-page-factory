@@ -179,6 +179,58 @@ export function parseProductDetail(json, wantedId) {
   };
 }
 
+/**
+ * Réponse de aliexpress.affiliate.product.query (recherche par mots-clés) → produits normalisés.
+ * evaluate_rate est un pourcentage de satisfaction (« 94.1% ») : divisé par 20, il donne une note sur 5.
+ * lastest_volume = commandes récentes. Les produits sans identifiant, sans titre ou sans prix sont écartés.
+ */
+export function parseProductQuery(json) {
+  const root = json?.aliexpress_affiliate_product_query_response?.resp_result;
+  if (!root) throw new Error('réponse inattendue (resp_result absent)');
+  if (String(root.resp_code) !== '200') throw new Error(`API AliExpress : ${root.resp_code} ${root.resp_msg || ''}`.trim());
+  return list(root.result?.products?.product)
+    .map((p) => {
+      const pct = num(p.evaluate_rate);
+      return {
+        productId: p.product_id != null ? String(p.product_id) : null,
+        title: p.product_title || null,
+        price: num(p.target_sale_price),
+        currency: p.target_sale_price_currency || null,
+        commissionRate: parseRate(p.commission_rate),
+        rating: pct == null ? null : Math.round((pct / 20) * 100) / 100,
+        sales: num(p.lastest_volume),
+        shopName: p.shop_name || null,
+        productUrl: p.product_detail_url || null,
+        mainImage: p.product_main_image_url || null,
+        category: p.first_level_category_name || null,
+      };
+    })
+    .filter((p) => p.productId && p.title && p.price != null);
+}
+
+/**
+ * Recherche de produits pour un marché : mots-clés, tri (par défaut les plus commandés), page de 50 au plus.
+ * Si l'API refuse la valeur de tri, la recherche est refaite sans tri plutôt que d'échouer.
+ */
+export async function searchProducts(keywords, market, { sort = 'LAST_VOLUME_DESC', pageNo = 1, pageSize = 50, ...opts } = {}) {
+  const m = MARKET_PARAMS[market];
+  if (!m) throw new Error(`marché inconnu : ${market}`);
+  const c = opts.creds || getCredentials();
+  const call = (withSort) => callApi(
+    'aliexpress.affiliate.product.query',
+    { keywords, ...(withSort ? { sort } : {}), page_no: String(pageNo), page_size: String(pageSize), ship_to_country: m.country, target_currency: m.currency, target_language: m.language, tracking_id: c.trackingId },
+    { ...opts, creds: c }
+  );
+  let json;
+  try {
+    json = await call(Boolean(sort));
+  } catch (e) {
+    if (!sort || !/sort/i.test(String(e.message))) throw e;
+    json = await call(false);
+  }
+  return parseProductQuery(json);
+}
+
 /** Réponse de aliexpress.affiliate.link.generate → liens affiliés par adresse source. */
 export function parseLinkGenerate(json) {
   const root = json?.aliexpress_affiliate_link_generate_response?.resp_result;

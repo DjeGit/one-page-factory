@@ -20,12 +20,19 @@
 #   * * * * *      /var/www/one-page-factory/pipeline-cron.sh social-publish >> /var/log/opf-social.log 2>&1
 #   15 4 * * *     /var/www/one-page-factory/pipeline-cron.sh purge-visits >> /var/log/opf-market.log 2>&1
 #   */10 * * * *   /var/www/one-page-factory/pipeline-cron.sh trend-worker >> /var/log/opf-trend-worker.log 2>&1
+#   30 4 * * 1     /var/www/one-page-factory/pipeline-cron.sh trend-search >> /var/log/opf-trend-search.log 2>&1
+#   45 4 * * 1     /var/www/one-page-factory/pipeline-cron.sh video-backfill >> /var/log/opf-video.log 2>&1
 #
 # trend-worker : flux automatique du OUI de la page Tendance (scripts/pipeline/worker.mjs). Il lit .env.local lui-même
 # (node --env-file), prend un verrou (/tmp/opf-trend-worker.lock, partagé avec deploy.sh : pas de passage pendant un
 # déploiement, jamais deux passages en même temps) et s'arrête de force au bout de 27 minutes. Un passage « rien à faire »
 # n'écrit qu'une ligne. Essais à la main : ./pipeline-cron.sh trend-worker --id <aliexpress_id> --dry-run
 # Journaux : prévoir une rotation (logrotate) de /var/log/opf-*.log, ils grossissent à chaque passage.
+#
+# trend-search : recherche hebdomadaire des produits tendance (scripts/pipeline/trend-search.mjs), le lundi à 4h30 (heure du serveur).
+# Remplit la page Tendance de la semaine (10 produits par catégorie, prix FR/ES/UK) et envoie un e-mail. N'écrit jamais deux fois la même
+# semaine (--force pour refaire). Essai sans écriture : ./pipeline-cron.sh trend-search --dry-run [--category tech]
+# video-backfill : cherche une vidéo YouTube pour les fiches qui n'en ont pas (scripts/pipeline/video-backfill.mjs). État : ./pipeline-cron.sh video-backfill --status
 #
 # market-refresh et exchange-rates utilisent INTERNAL_CRON_SECRET (ou, à
 # défaut, PIPELINE_SECRET puis ADMIN_SECRET) — cf. .env.example.
@@ -67,6 +74,8 @@ esac
 # Jamais deux passages de la même action en même temps (un appel lent ne doit pas s'empiler toutes les minutes).
 LOCK="/tmp/opf-cron-${ACTION}-${MARKET}.lock"
 [ "$ACTION" = "trend-worker" ] && LOCK="/tmp/opf-trend-worker.lock"
+[ "$ACTION" = "trend-search" ] && LOCK="/tmp/opf-trend-search.lock"
+[ "$ACTION" = "video-backfill" ] && LOCK="/tmp/opf-video-backfill.lock"
 exec 9>"$LOCK"
 if ! flock -n 9; then
   echo "[$LOG_DATE] $ACTION : un passage est déjà en cours (ou un déploiement), celui-ci est ignoré."
@@ -106,7 +115,7 @@ $code
 }
 
 # trend-worker : lignes d'en-tête propres, pas de bannière « Starting »/« Done » (le worker écrit son propre journal).
-if [ "$ACTION" != "trend-worker" ]; then
+if [ "$ACTION" != "trend-worker" ] && [ "$ACTION" != "trend-search" ] && [ "$ACTION" != "video-backfill" ]; then
   echo "[$LOG_DATE] Starting pipeline action: $ACTION"
 fi
 
@@ -203,8 +212,25 @@ if n:
     exit $?
     ;;
 
+  trend-search|video-backfill)
+    NODE_BIN="${NODE_BIN:-$(command -v node || true)}"
+    if [ -z "$NODE_BIN" ]; then
+      echo "[$LOG_DATE] $ACTION : node introuvable (définir NODE_BIN ou PATH dans la crontab)"
+      exit 1
+    fi
+    cd "$APP_DIR"
+    if [ ! -f .env.local ]; then
+      echo "[$LOG_DATE] $ACTION : .env.local introuvable dans $APP_DIR"
+      exit 1
+    fi
+    echo "[$LOG_DATE] $ACTION"
+    # 27 min au plus : un service qui ne répond plus ne bloque pas la semaine suivante.
+    timeout --kill-after=30 1620 "$NODE_BIN" --env-file=.env.local "scripts/pipeline/${ACTION}.mjs" "${@:2}"
+    exit $?
+    ;;
+
   *)
-    echo "Usage: $0 {run|optimize|discover|dry-run|market-refresh|exchange-rates|social-publish|purge-visits|trend-worker [options du worker]}"
+    echo "Usage: $0 {run|optimize|discover|dry-run|market-refresh|exchange-rates|social-publish|purge-visits|trend-worker [options]|trend-search [options]|video-backfill [options]}"
     exit 1
     ;;
 esac

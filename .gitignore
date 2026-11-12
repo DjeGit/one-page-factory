@@ -41,3 +41,4 @@ tmp-photos/
 __pycache__/
 *.pyc
 commande terminal/
+.video-misses.json

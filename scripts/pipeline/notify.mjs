@@ -30,6 +30,8 @@ const list = (items) => (items?.length ? `<ul style="padding-left:18px;margin:8p
  * @param {{kind:'ready'|'live'|'problem', candidate:{name:string,aliexpress_id:string}, products?:object[], photos?:number, publishAt?:Date|string, holdReason?:string|null, skipped?:{market:string,reasons:string[]}[], summary?:string[], warnings?:string[], error?:string}} d
  */
 export function renderEmail(d) {
+  if (d.kind === 'trends') return renderTrendsEmail(d.result);
+  if (d.kind === 'videos') return renderVideosEmail(d.result);
   const name = d.candidate.name;
   if (d.kind === 'problem') {
     const body = `<p>Le produit <b>${esc(name)}</b> (AliExpress ${esc(d.candidate.aliexpress_id)}) n'a pas pu être traité automatiquement.</p>
@@ -48,6 +50,28 @@ ${d.products?.length ? `<p>Fiches déjà créées (en brouillon) :</p>${table(d.
   const body = `<p>La fiche <b>${esc(name)}</b> est prête (liens affiliés vérifiés, ${d.photos ?? 0} photos, textes rédigés).</p>${table(d.products)}${summary}${skipped}${hold}
 <p style="font-size:13px;color:#374151">Relis surtout les textes : ils sont rédigés automatiquement à partir du titre de l'annonce.</p>${list(d.warnings)}`;
   return { subject: `[Tendpick] Fiche prête : ${name}`, html: page('Fiche prête', body) };
+}
+
+/** Récapitulatif de la recherche hebdomadaire (scripts/pipeline/trend-search.mjs). */
+function renderTrendsEmail(r) {
+  if (r.error) {
+    const body = `<p>La recherche hebdomadaire de la semaine du <b>${esc(r.week)}</b> n'a pas abouti.</p>
+<p style="background:#fef2f2;padding:10px;border-radius:8px"><b>Raison :</b> ${esc(r.error)}</p>${list(r.warnings)}
+<p>Rien n'a été modifié dans la page Tendance. Tu peux relancer sur le serveur : <code>./pipeline-cron.sh trend-search --force</code></p>`;
+    return { subject: '[Tendpick] Recherche hebdomadaire : échec', html: page('Recherche hebdomadaire en échec', body) };
+  }
+  const rows = (r.summary || []).map((s) => `<tr><td style="padding:4px 8px;border-bottom:1px solid #e5e7eb">${esc(s.label)}</td><td style="padding:4px 8px;border-bottom:1px solid #e5e7eb;text-align:right">${esc(s.kept)}</td><td style="padding:4px 8px;border-bottom:1px solid #e5e7eb;color:#6b7280">${s.ranked ? 'choix de Claude' : 'classement calculé'}</td></tr>`).join('');
+  const body = `<p><b>${esc(r.created)} nouveaux produits</b> t'attendent dans la page Tendance (semaine du ${esc(r.week)}). Dis OUI ou NON : les OUI sont traités automatiquement.</p>
+<table style="border-collapse:collapse;width:100%;font-size:14px"><tr style="text-align:left;color:#6b7280"><th style="padding:4px 8px">Catégorie</th><th style="padding:4px 8px;text-align:right">Produits</th><th style="padding:4px 8px"></th></tr>${rows}</table>
+${list(r.warnings)}${r.failed?.length ? `<p>Non enregistrés :</p>${list(r.failed)}` : ''}
+<p style="font-size:13px;color:#374151">${esc(r.purged ?? 0)} ancien(s) candidat(s) non décidé(s) supprimé(s). La livraison gratuite n'est pas fournie par l'API : elle reste à relever avant de valider.</p>`;
+  return { subject: `[Tendpick] ${r.created} nouvelles tendances à valider`, html: page('Nouvelles tendances à valider', body) };
+}
+
+/** Récapitulatif du rattrapage des vidéos (scripts/pipeline/video-backfill.mjs). */
+function renderVideosEmail(r) {
+  const body = `<p>Rattrapage des vidéos : <b>${esc(r.found)}</b> vidéo(s) ajoutée(s) sur ${esc(r.checked)} fiche(s) sans vidéo.</p>${list(r.lines)}`;
+  return { subject: `[Tendpick] Vidéos : ${r.found} ajoutée(s)`, html: page('Vidéos ajoutées aux fiches', body) };
 }
 
 /** Envoie un email via Brevo. Ne lève jamais d'exception. @returns {{ok:boolean,status:number,error?:string}} */
