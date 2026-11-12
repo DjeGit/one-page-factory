@@ -46,6 +46,21 @@ export default function TrendsManager() {
   const category = view ?? 'all';
   // Semaine affichée (null = la plus récente). Gardée en référence pour que les relectures la conservent.
   const weekRef = useRef<string | null>(null);
+  const [weekMenu, setWeekMenu] = useState(false);
+  const weekMenuRef = useRef<HTMLDivElement>(null);
+  // Clic ailleurs (ou toucher sur mobile) : le menu se ferme.
+  useEffect(() => {
+    if (!weekMenu) return;
+    const close = (e: Event) => {
+      if (weekMenuRef.current && !weekMenuRef.current.contains(e.target as Node)) setWeekMenu(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('touchstart', close);
+    };
+  }, [weekMenu]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<Message | null>(null);
   const [busy, setBusy] = useState(false);
@@ -219,24 +234,54 @@ export default function TrendsManager() {
 
   return (
     <div className="space-y-5">
-      {/* 1. Choix de la semaine */}
-      <nav aria-label="Semaines" className="flex items-center gap-2 overflow-x-auto pb-1">
-        <span className="shrink-0 text-sm font-semibold text-gray-600">Semaine :</span>
-        {weekList.map((w) => {
-          const active = w.week === week;
-          return (
-            <button key={w.week} type="button" onClick={() => goWeek(w.week)} aria-current={active ? 'date' : undefined} className={chip(active)}>
-              <span aria-hidden>📅</span> {fmtDate(w.week)}
-              <span className={`text-xs ${active ? 'text-primary-100' : 'text-gray-400'}`}>{w.total}</span>
-              {w.pending > 0 && (
-                <span className={`text-xs font-semibold px-1.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`} title="Produits restant à choisir">
-                  {w.pending} à choisir
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      {/* 1. Choix de la semaine : menu déroulant (s'ouvre au survol ou au clic) */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div
+          ref={weekMenuRef}
+          className="relative"
+          onMouseEnter={() => setWeekMenu(true)}
+          onMouseLeave={() => setWeekMenu(false)}
+          onKeyDown={(e) => e.key === 'Escape' && setWeekMenu(false)}
+        >
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={weekMenu}
+            onClick={() => setWeekMenu((o) => !o)}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:border-primary-400 transition-colors"
+          >
+            Semaine <span className="font-normal text-gray-500">du {week ? fmtDate(week) : '—'}</span>
+            <svg className={`h-4 w-4 text-gray-400 transition-transform ${weekMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {weekMenu && (
+            // pt-1 (et non mt) : pas de trou entre le bouton et la liste, sinon le survol se ferme en traversant.
+            <div className="absolute left-0 top-full z-20 pt-1">
+              <ul role="listbox" aria-label="Semaine" className="max-h-80 min-w-[16rem] overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                {weekList.map((w) => {
+                  const active = w.week === week;
+                  return (
+                    <li key={w.week} role="option" aria-selected={active}>
+                      <button
+                        type="button"
+                        onClick={() => { setWeekMenu(false); goWeek(w.week); }}
+                        className={`flex w-full items-center justify-between gap-4 px-4 py-2 text-left text-sm hover:bg-primary-50 ${active ? 'font-bold text-primary-700' : 'text-gray-700'}`}
+                      >
+                        <span>{fmtDate(w.week)}</span>
+                        <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                          {w.total} produit{w.total > 1 ? 's' : ''}
+                          {w.pending > 0 && <span className="rounded-full bg-amber-100 px-1.5 font-semibold text-amber-700">{w.pending} à choisir</span>}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* 2. Catégories (cartes) ou barre d'icônes quand on est dans une catégorie */}
       <div className="flex flex-wrap items-center gap-3">
