@@ -240,12 +240,24 @@ describe('recherche : semaine complète', () => {
     expect(r.rows.map((x: any) => x.aliexpress_id)).not.toContain(item(1).productId);
     expect(r.rows).toHaveLength(2);
   });
-  it('relevés de prix en erreur : comptés, signalés, et le produit reste proposé', async () => {
-    const { deps } = makeDeps({ search: async () => [item(1), item(2), item(3)], getProduct: async (_id: string, m: string) => { if (m === 'uk') throw new Error('API AliExpress : ApiCallLimit'); return detail(m); } });
+  it('relevé en erreur : repris à la fin, et le prix est complété', async () => {
+    const seen = new Set<string>();
+    const { deps } = makeDeps({
+      search: async () => [item(1), item(2), item(3)], sleep: async () => {},
+      getProduct: async (id: string, m: string) => { const k = `${id}-${m}`; if (m === 'uk' && !seen.has(k)) { seen.add(k); throw new Error('API AliExpress : ApiCallLimit'); } return detail(m); },
+    });
+    const r = await searchWeek(deps, { week: 'w', categories: ['tech'], cfg: { ...DEFAULTS, perCategory: 3 } });
+    expect(r.rows).toHaveLength(3);
+    expect(r.detailErrors).toBe(0);
+    expect(r.rows.every((x: any) => x.price_uk === 34)).toBe(true);
+    expect(r.warnings.join(' ')).not.toContain('impossibles');
+  });
+  it('relevés de prix en erreur persistants : comptés, signalés, et le produit reste proposé', async () => {
+    const { deps } = makeDeps({ sleep: async () => {}, search: async () => [item(1), item(2), item(3)], getProduct: async (_id: string, m: string) => { if (m === 'uk') throw new Error('API AliExpress : ApiCallLimit'); return detail(m); } });
     const r = await searchWeek(deps, { week: 'w', categories: ['tech'], cfg: { ...DEFAULTS, perCategory: 3 } });
     expect(r.rows).toHaveLength(3);
     expect(r.detailErrors).toBe(3);
-    expect(r.warnings.join(' ')).toContain('relevé(s) de prix ont échoué');
+    expect(r.warnings.join(' ')).toContain('relevé(s) de prix sont restés impossibles');
     expect(r.rows.every((x: any) => x.price_uk === null && x.url_uk)).toBe(true);
   });
   it('une recherche en erreur ne bloque pas les autres, mais est comptée', async () => {

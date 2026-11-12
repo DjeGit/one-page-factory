@@ -30,18 +30,18 @@ export const CATEGORY_LABELS = {
 /** Mots-clés (anglais : c'est la langue où AliExpress renvoie le plus de résultats) interrogés pour chaque catégorie. À ajuster librement. */
 export const CATEGORY_QUERIES = {
   tech: ['smart watch', 'smart glasses', 'wireless earbuds', 'graphics card', 'mini projector', 'power bank'],
-  'mode-beaute': ['led face mask', 'hair straightener brush', 'electric facial cleanser', 'jewelry set', 'eyelash curler heated'],
+  'mode-beaute': ['led face mask', 'hair straightener brush', 'electric facial cleanser', 'jewelry set', 'eyelash curler heated', 'makeup brush set', 'automatic hair curler', 'electric shaver women'],
   'maison-deco': ['robot vacuum cleaner', 'led strip lights', 'air fryer', 'smart plug', 'humidifier'],
   'sport-bien-etre': ['massage gun', 'resistance bands', 'yoga mat', 'smart jump rope', 'neck massager'],
   'art-design': ['diamond painting kit', 'drawing tablet', '3d printing pen', 'acrylic paint set', 'sketchbook set'],
   loisirs: ['camping lantern', 'fishing reel', 'foldable drone', 'binoculars', 'portable speaker'],
-  'jeux-jouets': ['building blocks', 'rc car', 'board game', 'jigsaw puzzle', 'plush toy'],
-  puericulture: ['baby monitor', 'baby stroller organizer', 'baby carrier', 'bottle sterilizer', 'baby bath toys'],
+  'jeux-jouets': ['building blocks', 'rc car', 'board game', 'jigsaw puzzle', 'plush toy', 'magnetic building tiles', 'remote control robot', 'educational toy kids', 'fidget toy'],
+  puericulture: ['baby monitor', 'baby stroller organizer', 'baby carrier', 'bottle sterilizer', 'baby bath toys', 'baby stroller', 'baby sleeping bag', 'baby high chair', 'portable baby bed'],
 };
 
 export const DEFAULTS = {
   perCategory: 10,      // produits proposés par catégorie
-  shortlist: 25,        // produits soumis au classement de Claude
+  shortlist: 40,        // produits soumis au classement de Claude (assez large pour qu'il en reste 10 bien dans la catégorie)
   minRating: 4.5,       // note idéale (sur 5)
   floorRating: 4.0,     // note minimale acceptée si la catégorie manque de produits (même seuil que le flux du OUI)
   minSales: 100,        // commandes récentes minimales
@@ -202,9 +202,11 @@ export function buildRow({ week, slug, choice, details, now = new Date() }) {
  */
 export async function searchWeek(deps, { week, exclude = new Set(), categories = Object.keys(CATEGORY_QUERIES), cfg = DEFAULTS }) {
   const log = deps.log || (() => {});
+  const sleep = deps.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const rows = [];
   const summary = [];
   const warnings = [];
+  const toRetry = []; // produits dont un relevé de prix a échoué : repris une fois à la fin, quand la limite de l'API est retombée
   let searchErrors = 0;
   let searchCalls = 0;
   let detailErrors = 0;
@@ -236,7 +238,6 @@ export async function searchWeek(deps, { week, exclude = new Set(), categories =
           details[m] = await deps.getProduct(choice.item.productId, m);
         } catch (e) {
           details[m] = { error: true };
-          detailErrors++;
           log(`  ${choice.item.productId} (${m}) : ${e.message}`);
         }
       }
@@ -245,6 +246,7 @@ export async function searchWeek(deps, { week, exclude = new Set(), categories =
         log(`  ${choice.item.productId} écarté : introuvable sur les 3 marchés`);
         continue;
       }
+      if (MARKETS.some((m) => details[m]?.error)) toRetry.push({ index: rows.length, slug, choice, details });
       rows.push(row);
       exclude.add(choice.item.productId);
       kept++;
@@ -253,7 +255,23 @@ export async function searchWeek(deps, { week, exclude = new Set(), categories =
     if (!picks.ranked) warnings.push(`${label} : classé par la note calculée seulement (Claude n'a pas répondu).`);
     summary.push({ slug, label, found: found.length, kept, ranked: picks.ranked === true });
   }
-  if (detailErrors) warnings.push(`${detailErrors} relevé(s) de prix ont échoué (limite de fréquence de l'API AliExpress) : certains prix FR/ES/UK sont vides. Relance avec --force pour les compléter.`);
+  if (toRetry.length) {
+    log(`Reprise de ${toRetry.length} produit(s) dont un relevé de prix a échoué…`);
+    await sleep(5000);
+    for (const t of toRetry) {
+      for (const m of MARKETS) {
+        if (!t.details[m]?.error) continue;
+        try {
+          t.details[m] = await deps.getProduct(t.choice.item.productId, m);
+        } catch (e) {
+          detailErrors++;
+          log(`  ${t.choice.item.productId} (${m}) : toujours impossible (${e.message})`);
+        }
+      }
+      rows[t.index] = buildRow({ week, slug: t.slug, choice: t.choice, details: t.details }) || rows[t.index];
+    }
+  }
+  if (detailErrors) warnings.push(`${detailErrors} relevé(s) de prix sont restés impossibles (limite de fréquence de l'API AliExpress) : le prix de ces marchés est vide dans la page Tendance. Le worker relit de toute façon les prix au moment du OUI.`);
   return { rows, summary, warnings, searchErrors, searchCalls, detailErrors };
 }
 
