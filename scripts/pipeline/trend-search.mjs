@@ -110,8 +110,11 @@ export function buildRankPrompt(label, items, n) {
 Voici ${items.length} produits (identifiant | titre | prix | note | commandes récentes | commission) :
 ${lines.join('\n')}
 
-Choisis les ${n} meilleurs à proposer cette semaine : produits du moment, utiles ou désirables, bon rapport qualité-prix (ni le moins cher douteux, ni dix fois trop cher), commission intéressante, et de la variété (jamais deux fois le même type de produit).
-Écarte : produits pour adultes, armes et couteaux, cigarettes électroniques, produits médicaux ou réglementés, produits dangereux, et les accessoires sans intérêt (coque, câble générique).
+Choisis au plus ${n} produits à proposer cette semaine : produits du moment, utiles ou désirables, bon rapport qualité-prix (ni le moins cher douteux, ni dix fois trop cher), commission intéressante.
+Règles strictes :
+- Ne garde que des produits qui appartiennent clairement à la catégorie « ${label} » : pas de pièces ou accessoires de voiture dans la maison, pas de montre-bracelet de mode dans le sport, pas de produit d'un autre univers. Mieux vaut proposer moins de ${n} produits que des produits hors sujet.
+- De la variété : au plus 2 produits du même type (par exemple 2 masques LED au maximum, pas 5).
+- Écarte : produits pour adultes, armes et couteaux, cigarettes électroniques, produits médicaux ou réglementés, produits dangereux, accessoires sans intérêt (coque, câble générique, outil de réparation, petit consommable) et produits de niche très locale ou de collection.
 Réponds uniquement en JSON, sans autre texte : {"picks":[{"id":"identifiant","product_type":"type de produit en 2 à 4 mots, en français","reason":"une phrase en français : pourquoi ce produit"}]}`;
 }
 
@@ -185,7 +188,8 @@ export function buildRow({ week, slug, choice, details, now = new Date() }) {
     sales: num(item.sales ?? first.sales),
     seller: item.shopName || first.shopName || null,
     url_fr: itemUrl(item.productId),
-    url_uk: ok.uk ? itemUrl(item.productId) : null,
+    // Un relevé UK en erreur (limite de l'API…) n'est pas une absence : on garde le lien, le worker revérifiera à l'heure du OUI.
+    url_uk: ok.uk || details?.uk?.error ? itemUrl(item.productId) : null,
     note: choice.reason ? `Sélection automatique : ${choice.reason}` : 'Sélection automatique (classement par gain attendu).',
     updated_at: now.toISOString(),
   };
@@ -203,6 +207,7 @@ export async function searchWeek(deps, { week, exclude = new Set(), categories =
   const warnings = [];
   let searchErrors = 0;
   let searchCalls = 0;
+  let detailErrors = 0;
   for (const slug of categories) {
     const label = CATEGORY_LABELS[slug] || slug;
     const found = [];
@@ -230,7 +235,8 @@ export async function searchWeek(deps, { week, exclude = new Set(), categories =
         try {
           details[m] = await deps.getProduct(choice.item.productId, m);
         } catch (e) {
-          details[m] = null;
+          details[m] = { error: true };
+          detailErrors++;
           log(`  ${choice.item.productId} (${m}) : ${e.message}`);
         }
       }
@@ -247,7 +253,8 @@ export async function searchWeek(deps, { week, exclude = new Set(), categories =
     if (!picks.ranked) warnings.push(`${label} : classé par la note calculée seulement (Claude n'a pas répondu).`);
     summary.push({ slug, label, found: found.length, kept, ranked: picks.ranked === true });
   }
-  return { rows, summary, warnings, searchErrors, searchCalls };
+  if (detailErrors) warnings.push(`${detailErrors} relevé(s) de prix ont échoué (limite de fréquence de l'API AliExpress) : certains prix FR/ES/UK sont vides. Relance avec --force pour les compléter.`);
+  return { rows, summary, warnings, searchErrors, searchCalls, detailErrors };
 }
 
 const must = ({ data, error }, what) => {
@@ -329,7 +336,9 @@ export async function runSearch(deps, { sb, now = new Date(), force = false, dry
 
 export function reportText(r) {
   if (r.skipped) return `Rien à faire : ${r.skipped}`;
-  const lines = [`Semaine du ${r.week} : ${r.created} produit(s) proposé(s), ${r.purged} ancien(s) candidat(s) non décidé(s) supprimé(s).`];
+  const lines = [r.preview
+    ? `SIMULATION — semaine du ${r.week} : ${r.preview.length} produit(s) seraient proposé(s), rien n'est enregistré ni supprimé.`
+    : `Semaine du ${r.week} : ${r.created} produit(s) proposé(s), ${r.purged} ancien(s) candidat(s) non décidé(s) supprimé(s).`];
   for (const s of r.summary) lines.push(`  - ${s.label} : ${s.kept} proposé(s) sur ${s.found} trouvés${s.ranked ? '' : ' (classement calculé)'}`);
   for (const w of r.warnings) lines.push(`  ! ${w}`);
   for (const f of r.failed) lines.push(`  ✗ non enregistré : ${f}`);
@@ -364,12 +373,14 @@ async function main() {
   let llm;
   if (textProvider() === 'none') console.log('Aucune clé IA (ANTHROPIC_API_KEY) : classement calculé uniquement.');
   else llm = (p) => callText(p);
+  if (args.includes('--category') && !val('category')) throw new Error(`--category demande une valeur (${Object.keys(CATEGORY_QUERIES).join(', ')})`);
   const cats = val('category') ? [val('category')] : undefined;
   if (cats && !CATEGORY_QUERIES[cats[0]]) throw new Error(`catégorie inconnue : ${cats[0]} (attendu : ${Object.keys(CATEGORY_QUERIES).join(', ')})`);
   const cfg = { ...DEFAULTS, ...(val('per') ? { perCategory: Math.max(1, Math.floor(Number(val('per')))) } : {}) };
   const deps = {
-    search: (kw, market) => searchProducts(kw, market),
-    getProduct: (id, market) => getProductForMarket(id, market),
+    // L'API refuse plus d'environ un appel par seconde (« ApiCallLimit ») : on espace les appels et on réessaie plus longtemps que d'habitude.
+    search: (kw, market) => searchProducts(kw, market, { minGapMs: 1100, retries: 6 }),
+    getProduct: (id, market) => getProductForMarket(id, market, { minGapMs: 1100, retries: 6 }),
     llm, parseJson: parseJsonLoose,
     log: (m) => console.log(redact(m)),
   };

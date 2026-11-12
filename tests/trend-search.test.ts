@@ -176,9 +176,11 @@ describe('recherche : choix de Claude', () => {
     const junk = await chooseProducts('Tech', items, 2, { llm: async () => '{"picks":[]}', parseJson: parseJsonLoose });
     expect(junk.ranked).toBe(false);
   });
-  it('la consigne cite la catégorie et chaque produit', () => {
+  it('la consigne cite la catégorie, exige la pertinence et la variété, et chaque produit', () => {
     const p = buildRankPrompt('Tech', items, 10);
     expect(p).toContain('« Tech »');
+    expect(p).toContain('hors sujet');
+    expect(p).toContain('au plus 2 produits du même type');
     for (const i of items) expect(p).toContain(i.productId);
   });
 });
@@ -196,6 +198,12 @@ describe('recherche : ligne enregistrée', () => {
     expect(usd.price_es).toBeNull();
     expect(usd.price_uk).toBe(34);
     expect(usd.url_uk).not.toBeNull();
+  });
+  it('relevé UK en erreur (limite de l\'API) : le lien UK est gardé, pas déclaré absent', () => {
+    const row = buildRow({ week: 'w', slug: 'tech', choice, details: { fr: detail('fr'), es: detail('es'), uk: { error: true } } });
+    expect(row.price_uk).toBeNull();
+    expect(row.url_uk).toBe(`https://www.aliexpress.com/item/${item(1).productId}.html`);
+    expect(buildRow({ week: 'w', slug: 'tech', choice, details: { fr: { error: true }, es: { error: true }, uk: { error: true } } })).toBeNull();
   });
   it('produit introuvable partout ou sans lien affilié : écarté', () => {
     expect(buildRow({ week: 'w', slug: 'tech', choice, details: { fr: null, es: null, uk: null } })).toBeNull();
@@ -231,6 +239,14 @@ describe('recherche : semaine complète', () => {
     const r = await searchWeek(deps, { week: 'w', categories: ['tech'], exclude: new Set([item(1).productId]), cfg: { ...DEFAULTS, perCategory: 5 } });
     expect(r.rows.map((x: any) => x.aliexpress_id)).not.toContain(item(1).productId);
     expect(r.rows).toHaveLength(2);
+  });
+  it('relevés de prix en erreur : comptés, signalés, et le produit reste proposé', async () => {
+    const { deps } = makeDeps({ search: async () => [item(1), item(2), item(3)], getProduct: async (_id: string, m: string) => { if (m === 'uk') throw new Error('API AliExpress : ApiCallLimit'); return detail(m); } });
+    const r = await searchWeek(deps, { week: 'w', categories: ['tech'], cfg: { ...DEFAULTS, perCategory: 3 } });
+    expect(r.rows).toHaveLength(3);
+    expect(r.detailErrors).toBe(3);
+    expect(r.warnings.join(' ')).toContain('relevé(s) de prix ont échoué');
+    expect(r.rows.every((x: any) => x.price_uk === null && x.url_uk)).toBe(true);
   });
   it('une recherche en erreur ne bloque pas les autres, mais est comptée', async () => {
     let n = 0;
@@ -292,6 +308,8 @@ describe('recherche : enregistrement et sécurité', () => {
     const r = await runSearch(deps, { sb: fakeDb(t), now: NOW, dryRun: true, categories: ['tech'], cfg: { ...DEFAULTS, perCategory: 3 } });
     expect(r.preview.length).toBeGreaterThan(0);
     expect(t.trend_candidates).toHaveLength(1);
+    expect(reportText(r)).toContain('SIMULATION');
+    expect(reportText(r)).toContain('seraient proposé');
   });
   it('loadExclusions : produits en fiche, en cours, ou refusés depuis moins de 8 semaines', async () => {
     const t = tables();
