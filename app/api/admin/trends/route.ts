@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { isAuthorizedRequest } from '@/lib/admin-auth';
-import { extractAliexpressId, mondayOf, parseTrendCsv } from '@/lib/trends';
+import { extractAliexpressId, mondayOf, parseTrendCsv, summarizeWeeks } from '@/lib/trends';
 import { badRequest, dbErrorResponse, isIsoDate, isUuid, notFound, readJsonObject, unauthorized } from '../../_lib/http';
 
 export const dynamic = 'force-dynamic';
@@ -22,11 +22,14 @@ export async function GET(req: NextRequest) {
     const { data } = await sb.from('trend_candidates').select('week').order('week', { ascending: false }).limit(1);
     week = data?.[0]?.week ?? mondayOf(new Date());
   }
-  const [{ data: rows, error }, { data: archive }] = await Promise.all([
+  const [{ data: rows, error }, { data: archive }, { data: weekRows }, { data: cats }] = await Promise.all([
     sb.from('trend_candidates').select('*').eq('week', week)
       .order('category_slug').order('sales', { ascending: false, nullsFirst: false }),
     sb.from('trend_candidates').select('*').eq('decision', 'no').neq('week', week)
       .order('decided_at', { ascending: false, nullsFirst: false }).limit(500),
+    // Liste des semaines disponibles (choix de la semaine à l'écran) et icônes des catégories (comme la page Produits).
+    sb.from('trend_candidates').select('week, decision').order('week', { ascending: false }).limit(5000),
+    sb.from('categories').select('slug, icon'),
   ]);
   if (error) return dbErrorResponse('GET /api/admin/trends', error);
   // Produits de la semaine déjà refusés lors d'une recherche précédente.
@@ -34,7 +37,10 @@ export async function GET(req: NextRequest) {
   for (const a of archive ?? []) {
     if (!refusedBefore[a.aliexpress_id]) refusedBefore[a.aliexpress_id] = a.decided_at ?? a.week;
   }
-  return NextResponse.json({ week, candidates: rows ?? [], archive: archive ?? [], refusedBefore });
+  const weeks = summarizeWeeks((weekRows ?? []) as { week: string; decision: 'pending' | 'yes' | 'no' }[]);
+  const icons: Record<string, string> = {};
+  for (const c of cats ?? []) if (c.slug && c.icon) icons[c.slug] = c.icon;
+  return NextResponse.json({ week, weeks, icons, candidates: rows ?? [], archive: archive ?? [], refusedBefore });
 }
 
 /** PATCH : { ids: string[], decision: 'pending' | 'yes' | 'no' } — décision en lot ; ou { id, shipping } — livraison gratuite relevée. */

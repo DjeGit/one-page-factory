@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TREND_CATEGORIES, buildTrendViews, trendLockState, type TrendCandidate, type TrendFilter } from '@/lib/trends';
+import { TREND_CATEGORIES, buildTrendViews, categoryStats, trendLockState, type TrendCandidate, type TrendFilter, type TrendWeek } from '@/lib/trends';
 import { networkErrorMessage, readApiError } from '@/components/admin/http';
 
 interface ApiData {
   week: string;
+  weeks: TrendWeek[];
+  icons: Record<string, string>;
   candidates: TrendCandidate[];
   archive: TrendCandidate[];
   refusedBefore: Record<string, string>;
@@ -39,7 +41,11 @@ const nextShip = (v: 'Oui' | 'Non' | null): 'Oui' | 'Non' | null => (v === null 
 export default function TrendsManager() {
   const [data, setData] = useState<ApiData | null>(null);
   const [filter, setFilter] = useState<TrendFilter>('active');
-  const [category, setCategory] = useState<string>('all');
+  // null = écran d'accueil (cartes des catégories) ; 'all' = toutes les catégories ; sinon le slug d'une catégorie.
+  const [view, setView] = useState<string | null>(null);
+  const category = view ?? 'all';
+  // Semaine affichée (null = la plus récente). Gardée en référence pour que les relectures la conservent.
+  const weekRef = useRef<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<Message | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,11 +54,13 @@ export default function TrendsManager() {
   // Numéro de la dernière lecture : une réponse lente ne doit jamais écraser une plus récente.
   const loadId = useRef(0);
 
-  const load = useCallback(async (silent = false) => {
+  const load = useCallback(async (silent = false, weekParam?: string) => {
     const id = ++loadId.current;
+    if (weekParam !== undefined) weekRef.current = weekParam;
     if (!silent) setLoading(true);
     try {
-      const res = await fetch('/api/admin/trends', { cache: 'no-store' });
+      const q = weekRef.current ? `?week=${encodeURIComponent(weekRef.current)}` : '';
+      const res = await fetch(`/api/admin/trends${q}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(await readApiError(res, 'Erreur de chargement'));
       const json: ApiData = await res.json();
       if (id === loadId.current) setData(json);
@@ -192,44 +200,73 @@ export default function TrendsManager() {
   if (loading && !data) return <p className="text-gray-500" role="status">Chargement…</p>;
 
   const week = data?.week;
+  const weeks = data?.weeks ?? [];
+  const latestWeek = weeks[0]?.week ?? week;
+  const cards = categoryStats(data?.candidates ?? [], data?.icons);
+  const refusedCount = counts.no;
+  const chip = (active: boolean) =>
+    `inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+      active ? 'bg-primary-600 border-primary-600 text-white shadow-sm' : 'bg-white border-gray-200 text-gray-700 hover:border-primary-400 hover:text-primary-700'
+    }`;
+  const goWeek = (w: string) => {
+    if (w === week) return;
+    setView(null);
+    setFilter('active');
+    load(false, w);
+  };
+  // La semaine affichée figure toujours dans la liste, même sans produit (début de semaine).
+  const weekList = week && !weeks.some((w) => w.week === week) ? [{ week, total: 0, pending: 0, yes: 0 }, ...weeks] : weeks;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm text-gray-600">
-          Semaine du <strong>{week ? fmtDate(week) : '—'}</strong>
-        </span>
-        <div className="flex flex-wrap gap-1.5">
-          {([
-            ['active', `Actifs (${counts.active})`],
-            ['pending', `À choisir (${counts.pending})`],
-            ['yes', `Retenus (${counts.yes})`],
-            ['no', `Refusés / archive (${counts.no})`],
-          ] as [TrendFilter, string][]).map(([f, label]) => (
-            <button
-              key={f}
-              type="button"
-              aria-pressed={filter === f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-full text-sm font-semibold border ${
-                filter === f ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              {label}
+      {/* 1. Choix de la semaine */}
+      <nav aria-label="Semaines" className="flex items-center gap-2 overflow-x-auto pb-1">
+        <span className="shrink-0 text-sm font-semibold text-gray-600">Semaine :</span>
+        {weekList.map((w) => {
+          const active = w.week === week;
+          return (
+            <button key={w.week} type="button" onClick={() => goWeek(w.week)} aria-current={active ? 'date' : undefined} className={chip(active)}>
+              <span aria-hidden>📅</span> {fmtDate(w.week)}
+              <span className={`text-xs ${active ? 'text-primary-100' : 'text-gray-400'}`}>{w.total}</span>
+              {w.pending > 0 && (
+                <span className={`text-xs font-semibold px-1.5 rounded-full ${active ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`} title="Produits restant à choisir">
+                  {w.pending} à choisir
+                </span>
+              )}
             </button>
-          ))}
-        </div>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          aria-label="Filtrer par catégorie"
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
-        >
-          <option value="all">Toutes les catégories</option>
-          {TREND_CATEGORIES.map((c) => (
-            <option key={c.slug} value={c.slug}>{c.label}</option>
-          ))}
-        </select>
+          );
+        })}
+      </nav>
+
+      {/* 2. Catégories (cartes) ou barre d'icônes quand on est dans une catégorie */}
+      <div className="flex flex-wrap items-center gap-3">
+        {view !== null && (
+          <button type="button" onClick={() => { setView(null); setFilter('active'); }} className="text-sm font-medium text-primary-600 hover:text-primary-700">
+            ← Toutes les catégories
+          </button>
+        )}
+        {view !== null && (
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ['active', `Actifs (${counts.active})`],
+              ['pending', `À choisir (${counts.pending})`],
+              ['yes', `Retenus (${counts.yes})`],
+              ['no', `Refusés / archive (${counts.no})`],
+            ] as [TrendFilter, string][]).map(([f, label]) => (
+              <button
+                key={f}
+                type="button"
+                aria-pressed={filter === f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-full text-sm font-semibold border ${
+                  filter === f ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="ml-auto flex gap-2">
           <a
             href={`/api/admin/trends/export${week ? `?week=${week}` : ''}`}
@@ -256,6 +293,21 @@ export default function TrendsManager() {
         </div>
       </div>
 
+      {view !== null && (
+        <nav aria-label="Catégories" className="flex gap-2 overflow-x-auto pb-1">
+          <button type="button" onClick={() => setView('all')} className={chip(view === 'all')}>
+            <span aria-hidden>🗂️</span> Tous <span className={`text-xs ${view === 'all' ? 'text-primary-100' : 'text-gray-400'}`}>{filter === 'no' ? counts.no : counts.active}</span>
+          </button>
+          {cards.map((c) => (
+            <button key={c.slug} type="button" onClick={() => setView(c.slug)} title={c.label} aria-current={view === c.slug ? 'page' : undefined} className={chip(view === c.slug)}>
+              <span aria-hidden>{c.icon}</span>
+              <span className="hidden md:inline">{c.label}</span>
+              <span className={`text-xs ${view === c.slug ? 'text-primary-100' : 'text-gray-400'}`}>{c.total}</span>
+            </button>
+          ))}
+        </nav>
+      )}
+
       {(pipeline.waiting + pipeline.inProgress + pipeline.ready + pipeline.live + pipeline.failed > 0) && (
         <p className="text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1">
           <span className="font-semibold text-gray-600">Produits retenus :</span>
@@ -279,6 +331,51 @@ export default function TrendsManager() {
         </div>
       )}
 
+      {view === null ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {cards.map((c) => (
+              <button
+                key={c.slug}
+                type="button"
+                onClick={() => { setFilter('active'); setView(c.slug); }}
+                className={`group flex items-center gap-4 rounded-2xl border p-5 text-left transition-all hover:shadow-md hover:-translate-y-0.5 ${
+                  c.total === 0 ? 'bg-white/60 border-dashed border-gray-300 hover:border-primary-400' : 'bg-white border-gray-200 hover:border-primary-400'
+                }`}
+              >
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary-50 text-3xl group-hover:bg-primary-100 transition-colors" aria-hidden>
+                  {c.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-bold text-gray-900 truncate">{c.label}</span>
+                  {c.total === 0 ? (
+                    <span className="text-sm text-gray-400">Aucun produit cette semaine</span>
+                  ) : (
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-semibold text-gray-700">{c.total} produit{c.total > 1 ? 's' : ''}</span>
+                      {c.pending > 0 && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">{c.pending} à choisir</span>}
+                      {c.yes > 0 && <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700">{c.yes} retenu{c.yes > 1 ? 's' : ''}</span>}
+                    </span>
+                  )}
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={() => { setFilter('active'); setView('all'); }} className="inline-flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 hover:border-primary-400 hover:shadow-sm transition-all">
+              <span className="text-xl" aria-hidden>🗂️</span>
+              <span className="font-semibold text-gray-900">Toutes les catégories</span>
+              <span className="text-sm text-gray-500">({counts.active})</span>
+            </button>
+            <button type="button" onClick={() => { setFilter('no'); setView('all'); }} className="inline-flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 hover:border-primary-400 hover:shadow-sm transition-all">
+              <span className="text-xl" aria-hidden>🚫</span>
+              <span className="font-semibold text-gray-900">Refusés / archive</span>
+              <span className="text-sm text-gray-500">({refusedCount})</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+      <>
       {visible.length === 0 && (
         <p className="text-gray-500 py-8 text-center">
           {filter === 'pending' && counts.pending === 0 && counts.yes > 0
@@ -385,7 +482,7 @@ export default function TrendsManager() {
                         <button
                           type="button"
                           disabled={busy}
-                          onClick={() => week && decide([c.id], 'pending', week)}
+                          onClick={() => latestWeek && decide([c.id], 'pending', latestWeek)}
                           className="px-3 py-1.5 rounded-lg text-sm font-semibold border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
                         >
                           Remettre en sélection
@@ -440,6 +537,8 @@ export default function TrendsManager() {
           </section>
         );
       })}
+      </>
+      )}
     </div>
   );
 }

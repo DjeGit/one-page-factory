@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mondayOf, extractAliexpressId, parseCommission, parseNumber, parseTrendCsv, toTrendCsv, type TrendCandidate } from '@/lib/trends';
+import { categoryStats, summarizeWeeks, mondayOf, extractAliexpressId, parseCommission, parseNumber, parseTrendCsv, toTrendCsv, type TrendCandidate } from '@/lib/trends';
 
 describe('lib/trends', () => {
   it('mondayOf renvoie le lundi de la semaine', () => {
@@ -34,5 +34,25 @@ describe('lib/trends', () => {
     const { rows, errors } = parseTrendCsv('Produit;Catégorie;Lien produit FR/ES\nA;Tech;pas un lien');
     expect(rows).toHaveLength(0);
     expect(errors.length).toBe(1);
+  });
+  it('summarizeWeeks : semaines triées (récente d\'abord), refusés hors total', () => {
+    const w = summarizeWeeks([
+      { week: '2026-11-02', decision: 'yes' },
+      { week: '2026-11-09', decision: 'pending' },
+      { week: '2026-11-09', decision: 'pending' },
+      { week: '2026-11-09', decision: 'no' },
+      { week: '2026-11-09', decision: 'yes' },
+    ]);
+    expect(w.map((x) => x.week)).toEqual(['2026-11-09', '2026-11-02']);
+    expect(w[0]).toEqual({ week: '2026-11-09', total: 3, pending: 2, yes: 1 });
+    expect(w[1]).toEqual({ week: '2026-11-02', total: 1, pending: 0, yes: 1 });
+  });
+  it('categoryStats : une carte par catégorie, icône de la base sinon icône de secours', () => {
+    const mk = (slug: string, decision: 'pending' | 'yes' | 'no', status = 'candidate') => ({ category_slug: slug, decision, status }) as TrendCandidate;
+    const cards = categoryStats([mk('tech', 'pending'), mk('tech', 'yes', 'live'), mk('tech', 'no'), mk('loisirs', 'yes')], { tech: '🖥️' });
+    expect(cards).toHaveLength(8);
+    expect(cards.find((c) => c.slug === 'tech')).toMatchObject({ icon: '🖥️', total: 2, pending: 1, yes: 1, live: 1 });
+    expect(cards.find((c) => c.slug === 'loisirs')).toMatchObject({ icon: '🎯', total: 1, yes: 1 });
+    expect(cards.find((c) => c.slug === 'puericulture')).toMatchObject({ icon: '🍼', total: 0 });
   });
 });

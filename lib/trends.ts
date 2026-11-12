@@ -301,3 +301,65 @@ export function trendLockState(c: Pick<TrendCandidate, 'decision' | 'status'>): 
   if (c.status === 'ready') return 'confirm';
   return 'free';
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Navigation : choix de la semaine, puis catégories (même présentation que la page Produits)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Icônes de secours (les mêmes que la table « categories » de la page Produits, qui reste prioritaire). */
+export const TREND_CATEGORY_ICONS: Record<string, string> = {
+  tech: '💻',
+  'mode-beaute': '💄',
+  'maison-deco': '🏠',
+  'sport-bien-etre': '🏋️',
+  'art-design': '🎨',
+  loisirs: '🎯',
+  'jeux-jouets': '🧸',
+  puericulture: '🍼',
+};
+
+export interface TrendWeek {
+  week: string;
+  total: number;
+  pending: number;
+  yes: number;
+}
+
+/** Semaines disponibles (la plus récente d'abord), avec leurs compteurs. Les refusés ne comptent pas dans « total ». */
+export function summarizeWeeks(rows: { week: string; decision: TrendDecision }[]): TrendWeek[] {
+  const map = new Map<string, TrendWeek>();
+  for (const r of rows) {
+    const w = map.get(r.week) ?? { week: r.week, total: 0, pending: 0, yes: 0 };
+    if (r.decision !== 'no') w.total++;
+    if (r.decision === 'pending') w.pending++;
+    if (r.decision === 'yes') w.yes++;
+    map.set(r.week, w);
+  }
+  return Array.from(map.values()).sort((a, b) => (a.week < b.week ? 1 : a.week > b.week ? -1 : 0));
+}
+
+export interface TrendCategoryStat {
+  slug: string;
+  label: string;
+  icon: string;
+  total: number;
+  pending: number;
+  yes: number;
+  live: number;
+}
+
+/** Une carte par catégorie pour la semaine affichée (les produits refusés sont comptés à part). */
+export function categoryStats(candidates: TrendCandidate[], icons: Record<string, string> = {}): TrendCategoryStat[] {
+  return TREND_CATEGORIES.map((cat) => {
+    const mine = candidates.filter((c) => c.category_slug === cat.slug && c.decision !== 'no');
+    return {
+      slug: cat.slug,
+      label: cat.label,
+      icon: icons[cat.slug] || TREND_CATEGORY_ICONS[cat.slug] || '📁',
+      total: mine.length,
+      pending: mine.filter((c) => c.decision === 'pending').length,
+      yes: mine.filter((c) => c.decision === 'yes').length,
+      live: mine.filter((c) => c.decision === 'yes' && c.status === 'live').length,
+    };
+  });
+}
