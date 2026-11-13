@@ -62,7 +62,6 @@ vi.mock('@/lib/site-products', async (orig) => {
 
 import HomePage from '@/app/page';
 import ProduitsPage from '@/app/produits/page';
-import TopVentesPage from '@/app/top-ventes/page';
 import BioPage from '@/app/bio/page';
 import sitemap from '@/app/sitemap';
 import robots from '@/app/robots';
@@ -123,16 +122,6 @@ describe('accueil / catalogue / top ventes', () => {
     expect(html).not.toContain('Casque Bluetooth');
     html = renderToStaticMarkup(await ProduitsPage({ searchParams: { q: ['a', 'b'] as unknown as string } }));
     expect(html).toContain('Casque Bluetooth');
-  });
-
-  it('/top-ventes : « Tout » montre tous les produits, un onglet seulement sa plateforme', async () => {
-    state.products.push(product({ id: 'p3', slug: 'autre-reseau', name: 'Produit réseau X', affiliate_url: 'https://track.awin1.com/x' }));
-    let html = renderToStaticMarkup(await TopVentesPage({ searchParams: {} }));
-    expect(html).toContain('Produit réseau X');
-    expect(html).toContain('Montre Amazon');
-    html = renderToStaticMarkup(await TopVentesPage({ searchParams: { source: 'amazon' } }));
-    expect(html).toContain('Montre Amazon');
-    expect(html).not.toContain('Casque Bluetooth');
   });
 });
 

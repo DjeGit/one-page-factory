@@ -1,13 +1,11 @@
 import Link from 'next/link';
 import { getMarketCatalog, getNavCategories } from '@/lib/site-products';
-import type { Product } from '@/types';
 import { headers } from 'next/headers';
 import type { Market } from '@/lib/market';
 import PixelInjector from '@/components/landing/PixelInjector';
 import SiteHeader from '@/components/layout/SiteHeader';
 import SiteFooter from '@/components/layout/SiteFooter';
 import HeroCarousel from '@/components/landing/HeroCarousel';
-import { TOP_VENTES_SOURCES, getProductSource, type TopVentesSource } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
 import { getLatestPublishedBlogPosts, getBlogCategoriesCached } from '@/lib/blog';
 import { GUIDE_BASE_PATH, GUIDE_CATEGORY_SLUG } from '@/lib/buying-guide';
@@ -62,18 +60,6 @@ export default async function HomePage({ searchParams }: Props) {
   // Catalogue en cache 60 s (lib/site-products.ts), du plus récent au plus ancien : les 6 premiers.
   const featured = catalog.slice(0, 6);
 
-  const topVentesWithSource = catalog
-    .map((p) => ({ product: p, source: getProductSource(p.affiliate_url) }))
-    .filter((x): x is { product: Product; source: TopVentesSource } => x.source !== null);
-
-  const activeSource: TopVentesSource = TOP_VENTES_SOURCES.some((s) => s.key === searchParams.source)
-    ? (searchParams.source as TopVentesSource)
-    : TOP_VENTES_SOURCES[0].key;
-
-  const topVentesProducts = topVentesWithSource
-    .filter((x) => x.source === activeSource)
-    .slice(0, 4);
-
   return (
     <div className="min-h-screen bg-site-bg text-site-text">
       <SiteStructuredData market={market} />
@@ -87,62 +73,10 @@ export default async function HomePage({ searchParams }: Props) {
           raisonnement. */}
       <HeroCarousel market={market} />
 
-      {/* Top Ventes — design bleu validé (Design.html) : onglets par plateforme
-          + grille de vrais produits (pas de notes/étoiles ni badges fictifs :
-          aucun champ de note existe sur Product, cf. précédent du code qui a
-          justement retiré ces signaux de confiance factices ailleurs). */}
-      <section id="top-ventes" className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-20">
-        {/* Titre de section (05/10, demande Jerome : retire le kicker
-            "Classement" au-dessus du titre) — le wrapper garde les mêmes
-            marges mb-6/mb-8 qu'avant pour ne pas resserrer la mise en page.
-            pt-12/16 ajouté (05/10, suite) : sans kicker au-dessus, le titre
-            touchait directement le bloc hero navy — même échelle que les
-            py-16/py-20 des autres sections pleine page plus bas. */}
-        <div className="mb-6 sm:mb-8">
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.nav.topVentes}</h2>
-        </div>
-
-        <div className="flex flex-wrap gap-3 mb-8">
-          {TOP_VENTES_SOURCES.map((s) => (
-            <Link
-              key={s.key}
-              href={`/?source=${s.key}#top-ventes`}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors border ${
-                activeSource === s.key
-                  ? 'bg-site-primary border-site-primary text-white'
-                  : 'bg-white border-site-border text-site-text hover:border-site-secondary'
-              }`}
-            >
-              {t.common.topPrefix} {s.label}
-            </Link>
-          ))}
-        </div>
-
-        {topVentesProducts.length === 0 ? (
-          <p className="text-site-text-secondary">{t.home.emptyPlatform}</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-            {topVentesProducts.map(({ product: p }) => (
-              <ProductCard key={p.id} product={p} market={market} variant="boxed" />
-            ))}
-          </div>
-        )}
-
-        <div className="text-center mt-8">
-          <Link href="/top-ventes" className="text-site-primary hover:text-site-cta font-medium transition-colors">
-            {t.home.seeFullTopVentes}
-          </Link>
-        </div>
-      </section>
-
-      {/* Sélection du moment — repositionnée juste sous Top Ventes et alignée
-          sur son format exact (03/10, demande Jerome) : même grille 4
-          colonnes, même carte produit (étiquette plateforme texte, pas de
-          badge sur l'image), même style de titre. L'ancienne version 3
-          colonnes/carte simplifiée est abandonnée au profit de la
-          cohérence entre les deux sections produits de la page. */}
+      {/* Sélection du moment : première section produits sous le hero (la section « Top Ventes » a été
+          supprimée en 11/2026, demande Jerome). */}
       {featured.length > 0 && (
-        <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-20">
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 sm:pt-16 pb-20">
           <div className="mb-6 sm:mb-8">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-site-primary">{t.home.momentSelection}</h2>
           </div>

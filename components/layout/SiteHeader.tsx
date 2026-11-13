@@ -1,13 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { categoryPath } from '@/lib/category-slugs';
 import { Menu, X, Search, ShoppingCart } from 'lucide-react';
 import type { Category } from '@/types';
 import type { Market } from '@/lib/market';
-import { TOP_VENTES_SOURCES } from '@/lib/top-ventes';
 import { SITE_COPY } from '@/lib/site-copy';
 
 interface Props {
@@ -44,10 +43,8 @@ export default function SiteHeader({ categories, market }: Props) {
   const t = SITE_COPY[market];
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [topVentesOpen, setTopVentesOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const topVentesRef = useRef<HTMLDivElement>(null);
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -55,31 +52,6 @@ export default function SiteHeader({ categories, market }: Props) {
     setSearchOpen(false);
     router.push(q ? `/produits?q=${encodeURIComponent(q)}` : '/produits');
   }
-
-  // Menu déroulant "Top Ventes" (30/09) : au clic plutôt qu'au survol (plus
-  // fiable au trackpad/tactile), fermeture au clic extérieur ou sur Échap.
-  // Le bug remonté par Jerome ("le menu déroulant ne fonctionne pas") venait
-  // de overflow-x-auto sur <nav> : poser overflow-x seul sans overflow-y fait
-  // retomber overflow-y sur "auto" côté navigateur, ce qui rognait le panneau
-  // en position absolute qui dépasse verticalement — nav n'a plus besoin de
-  // scroll horizontal (6 entrées fixes tiennent sur 1440px), on l'a retiré.
-  useEffect(() => {
-    if (!topVentesOpen) return;
-    function onClickOutside(e: MouseEvent) {
-      if (topVentesRef.current && !topVentesRef.current.contains(e.target as Node)) {
-        setTopVentesOpen(false);
-      }
-    }
-    function onEscape(e: KeyboardEvent) {
-      if (e.key === 'Escape') setTopVentesOpen(false);
-    }
-    document.addEventListener('mousedown', onClickOutside);
-    document.addEventListener('keydown', onEscape);
-    return () => {
-      document.removeEventListener('mousedown', onClickOutside);
-      document.removeEventListener('keydown', onEscape);
-    };
-  }, [topVentesOpen]);
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-site-border">
@@ -96,6 +68,9 @@ export default function SiteHeader({ categories, market }: Props) {
         </Link>
 
         <div className="hidden lg:flex items-center gap-5 shrink-0 relative ml-auto">
+          <Link href="/blog" className="text-[15px] font-semibold text-site-text hover:text-site-cta transition-colors whitespace-nowrap">
+            {t.nav.blog}
+          </Link>
           {searchOpen ? (
             <form onSubmit={submitSearch} className="flex items-center">
               <input
@@ -156,42 +131,6 @@ export default function SiteHeader({ categories, market }: Props) {
           pas de chevron sur Top Ventes (design validé). */}
       <div className="hidden lg:block border-t border-site-border">
       <nav aria-label={t.nav.menuAria} className="flex max-w-6xl mx-auto px-4 sm:px-6 py-2 flex-wrap items-center justify-center gap-x-7 xl:gap-x-9 gap-y-1.5">
-        <div className="relative shrink-0" ref={topVentesRef}>
-          <button
-            type="button"
-            onClick={() => setTopVentesOpen((v) => !v)}
-            aria-expanded={topVentesOpen}
-            aria-haspopup="true"
-            className="text-[15px] font-semibold text-site-primary hover:text-site-cta transition-colors whitespace-nowrap"
-          >
-            {t.nav.topVentes}
-          </button>
-          {topVentesOpen && (
-            <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-56 z-50">
-              <div className="bg-white rounded-xl border border-site-border shadow-lg py-2">
-                <Link
-                  href="/top-ventes"
-                  onClick={() => setTopVentesOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-site-text hover:bg-site-bg transition-colors"
-                >
-                  {t.nav.seeAll}
-                </Link>
-                <div className="my-1 border-t border-site-border" />
-                {TOP_VENTES_SOURCES.map((s) => (
-                  <Link
-                    key={s.key}
-                    href={`/top-ventes?source=${s.key}`}
-                    onClick={() => setTopVentesOpen(false)}
-                    className="block px-4 py-2.5 text-sm text-site-text hover:bg-site-bg transition-colors"
-                  >
-                    {s.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
         {categories.map((c) => (
           <Link
             key={c.id}
@@ -209,12 +148,6 @@ export default function SiteHeader({ categories, market }: Props) {
           {t.nav.buyingGuide}
         </Link>
 
-        <Link
-          href="/blog"
-          className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
-        >
-          {t.nav.blog}
-        </Link>
       </nav>
       </div>
 
@@ -239,22 +172,7 @@ export default function SiteHeader({ categories, market }: Props) {
                 className="w-full border border-site-border rounded-lg pl-9 pr-3 py-2.5 text-base text-site-text focus:outline-none focus:ring-2 focus:ring-site-secondary/40"
               />
             </form>
-            <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">{t.nav.topVentes}</p>
-            <Link href="/top-ventes" onClick={() => setMobileOpen(false)} className="px-2 py-2.5 text-sm font-medium text-site-text rounded-lg hover:bg-site-bg">
-              {t.nav.seeAll}
-            </Link>
-            {TOP_VENTES_SOURCES.map((s) => (
-              <Link
-                key={s.key}
-                href={`/top-ventes?source=${s.key}`}
-                onClick={() => setMobileOpen(false)}
-                className="px-2 py-2.5 text-sm text-site-text rounded-lg hover:bg-site-bg"
-              >
-                {s.label}
-              </Link>
-            ))}
-
-            <div className="mt-2 pt-2 border-t border-site-border">
+            <div>
               <p className="px-2 pb-1 text-xs font-semibold text-site-text-secondary uppercase tracking-wide">{t.nav.categoriesLabel}</p>
               {categories.map((c) => (
                 <Link

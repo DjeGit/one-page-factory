@@ -64,7 +64,6 @@ export function classifyPath(rawPath: unknown): { path: string; type: PageType }
 
   if (path === '/') return { path, type: 'home' };
   if (path === '/produits') return { path, type: 'catalog' };
-  if (path === '/top-ventes') return { path, type: 'top_sales' };
   if (path === '/blog') return { path, type: 'blog' };
   if (path.startsWith('/blog/')) return { path, type: 'blog_post' };
   if (path === '/guide-achat') return { path, type: 'guide' };

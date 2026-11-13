@@ -73,7 +73,7 @@ if [ "$UP" != "1" ]; then
 fi
 
 for h in tendpick.fr tendpick.es tendpick.com; do
-  for p in / /blog /produits /top-ventes; do
+  for p in / /blog /produits; do
     code=$(curl -s -o /dev/null -w '%{http_code} %{time_total}s' --max-time 30 -H "Host: $h" "http://localhost:3000$p" || true)
     echo "warm $h$p -> $code"
   done

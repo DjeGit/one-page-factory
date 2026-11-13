@@ -106,7 +106,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const fixed: MetadataRoute.Sitemap = [
     { url: origin, lastModified: latest([lastProducts?.toISOString(), lastPosts?.toISOString()]) },
     { url: `${origin}/produits`, lastModified: lastProducts },
-    { url: `${origin}/top-ventes`, lastModified: lastProducts },
   ];
   // Pages de confiance (18/10) : identiques sur les trois domaines, langue du
   // marché, indexables — contrairement aux pages légales en noindex.

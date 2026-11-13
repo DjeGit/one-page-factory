@@ -17,7 +17,6 @@ import { MARKET_HREFLANG, MARKET_ORIGIN } from '@/lib/site-url';
  * app/c/[slug]/page.tsx.
  */
 const LOCALIZED: Record<string, Record<Market, string>> = {
-  'best-of-amazon': { fr: 'best-of-amazon', es: 'lo-mejor-de-amazon', uk: 'best-of-amazon' },
   tech: { fr: 'tech-gadgets', es: 'tecnologia', uk: 'tech-gadgets' },
   'mode-beaute': { fr: 'mode-beaute', es: 'moda-belleza', uk: 'fashion-beauty' },
   'maison-deco': { fr: 'maison-deco', es: 'hogar-decoracion', uk: 'home-living' },

@@ -52,7 +52,7 @@ function isPrivatePath(pathname: string): boolean {
 // /bio, et toute URL avec ?q=, ?tag=, ?source=… Voir docs/cloudflare-cache.md.
 const PUBLIC_PAGE_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=600';
 const CACHEABLE_EXACT = new Set([
-  '/', '/produits', '/top-ventes', '/blog', '/guide-achat',
+  '/', '/produits', '/blog', '/guide-achat',
   '/a-propos', '/methode', '/contact', '/partenariats',
   '/mentions-legales', '/politique-confidentialite',
 ]);

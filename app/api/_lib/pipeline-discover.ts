@@ -91,14 +91,8 @@ export async function runDiscover(p: DiscoverParams): Promise<DiscoverResult> {
   const imported: Array<{ id: string; name: string; slug: string; score: number }> = [];
   const skipped: Array<{ name: string; reason: string }> = [];
 
-  // Categories (23/09) — tout import automatique Amazon va par defaut
-  // dans "Best of Amazon" ; la curation fine (deplacer un produit vers
-  // Tech/Mode/etc.) se fait ensuite a la main dans l'admin.
-  const { data: defaultCategory } = await sb
-    .from('categories')
-    .select('id')
-    .eq('slug', 'best-of-amazon')
-    .maybeSingle();
+  // Plus de catégorie par défaut (la catégorie « Best of Amazon » est supprimée, 11/2026) : les produits
+  // importés arrivent sans catégorie et sont rangés à la main dans l'admin.
 
   for (const { signal, score } of toImport) {
     // Un signal sans lien exploitable donnerait une fiche sans bouton d'achat : on l'ignore.
@@ -136,7 +130,7 @@ export async function runDiscover(p: DiscoverParams): Promise<DiscoverResult> {
         }`.trim(),
         market: p.market,
         product_source: 'auto_discovered',
-        category_id: defaultCategory?.id ?? null,
+        category_id: null,
         active: false,
       })
       .select('id')

@@ -1,6 +1,6 @@
 /**
  * Copie centralisée fr/es/uk pour le CHROME du site catalogue Tendpick
- * (header, footer, bannière hero, pages catalogue/catégorie/top-ventes,
+ * (header, footer, bannière hero, pages catalogue/catégorie,
  * page bio, métadonnées globales).
  *
  * Point d'entrée unique — les composants piochent ici plutôt que de
@@ -24,7 +24,6 @@ function plural(n: number, fr = 's'): string {
 interface SiteCopy {
   nav: {
     homeAria: string;
-    topVentes: string;
     buyingGuide: string;
     blog: string;
     seeAll: string;
@@ -64,11 +63,8 @@ interface SiteCopy {
     priceAtMerchant: string;
     freeShipping: string;
     seeArrow: string;
-    topPrefix: string;
   };
   home: {
-    emptyPlatform: string;
-    seeFullTopVentes: string;
     momentSelection: string;
     seeAllProducts: string;
     blogTeaserTitle: string;
@@ -102,14 +98,6 @@ interface SiteCopy {
     nothingFor: (q: string) => string;
     firstSelectionPreparing: string;
     comeBackHours: string;
-  };
-  topVentesPage: {
-    metaTitle: string;
-    metaDescription: string;
-    productCountAmong: (n: number) => string;
-    preparing: string;
-    all: string;
-    nonePlatform: string;
   };
   blogPage: {
     metaTitle: string;
@@ -195,7 +183,6 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
   fr: {
     nav: {
       homeAria: 'Tendpick, accueil',
-      topVentes: 'Top Ventes',
       buyingGuide: "Guide d'achat",
       blog: 'Blog',
       seeAll: 'Tout voir',
@@ -259,11 +246,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       priceAtMerchant: 'Prix chez le marchand',
       freeShipping: 'Livraison gratuite',
       seeArrow: 'Voir →',
-      topPrefix: 'Top',
     },
     home: {
-      emptyPlatform: 'Sélection en cours de préparation pour cette plateforme.',
-      seeFullTopVentes: 'Voir tout le Top Ventes →',
       momentSelection: 'Sélection du moment',
       seeAllProducts: 'Voir tous les produits →',
       blogTeaserTitle: 'Visiter notre blog',
@@ -309,14 +293,6 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nothingFor: (q) => `Rien ne correspond à « ${q} ».`,
       firstSelectionPreparing: 'Première sélection en cours de préparation…',
       comeBackHours: 'Revenez dans quelques heures !',
-    },
-    topVentesPage: {
-      metaTitle: 'Top Ventes',
-      metaDescription: 'Les produits les plus populaires, classés par plateforme : Amazon, Rakuten, AliExpress.',
-      productCountAmong: (n) => `${n} produit${plural(n)} parmi les plus populaires`,
-      preparing: 'Sélection en cours de préparation',
-      all: 'Tout',
-      nonePlatform: 'Aucun produit pour le moment sur cette plateforme.',
     },
     blogPage: {
       metaTitle: 'Blog : guides d\'achat et produits du moment',
@@ -403,7 +379,6 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
   es: {
     nav: {
       homeAria: 'Tendpick, inicio',
-      topVentes: 'Más vendidos',
       buyingGuide: "Guía de compra",
       blog: 'Blog',
       seeAll: 'Ver todo',
@@ -467,11 +442,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       priceAtMerchant: 'Precio en la tienda',
       freeShipping: 'Envío gratis',
       seeArrow: 'Ver →',
-      topPrefix: 'Top',
     },
     home: {
-      emptyPlatform: 'Selección en preparación para esta plataforma.',
-      seeFullTopVentes: 'Ver todo lo más vendido →',
       momentSelection: 'Selección del momento',
       seeAllProducts: 'Ver todos los productos →',
       blogTeaserTitle: 'Visita nuestro blog',
@@ -517,14 +489,6 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nothingFor: (q) => `Nada coincide con «${q}».`,
       firstSelectionPreparing: 'Primera selección en preparación…',
       comeBackHours: '¡Vuelve en unas horas!',
-    },
-    topVentesPage: {
-      metaTitle: 'Más vendidos',
-      metaDescription: 'Los productos más populares, clasificados por plataforma: Amazon, Rakuten, AliExpress.',
-      productCountAmong: (n) => `${n} producto${plural(n)} entre los más populares`,
-      preparing: 'Selección en preparación',
-      all: 'Todo',
-      nonePlatform: 'Ningún producto por ahora en esta plataforma.',
     },
     blogPage: {
       metaTitle: 'Blog: guías de compra y productos del momento',
@@ -611,7 +575,6 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
   uk: {
     nav: {
       homeAria: 'Tendpick, home',
-      topVentes: 'Best Sellers',
       buyingGuide: "Buying guide",
       blog: 'Blog',
       seeAll: 'See all',
@@ -675,11 +638,8 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       priceAtMerchant: 'Price at merchant',
       freeShipping: 'Free delivery',
       seeArrow: 'View →',
-      topPrefix: 'Top',
     },
     home: {
-      emptyPlatform: 'Selection coming soon for this platform.',
-      seeFullTopVentes: 'See all Best Sellers →',
       momentSelection: 'Picked right now',
       seeAllProducts: 'See all products →',
       blogTeaserTitle: 'Visit our blog',
@@ -725,14 +685,6 @@ export const SITE_COPY: Record<Market, SiteCopy> = {
       nothingFor: (q) => `Nothing matches "${q}".`,
       firstSelectionPreparing: 'Our first selection is coming together…',
       comeBackHours: 'Check back in a few hours!',
-    },
-    topVentesPage: {
-      metaTitle: 'Best Sellers',
-      metaDescription: 'The most popular products, ranked by platform: Amazon, Rakuten, AliExpress.',
-      productCountAmong: (n) => `${n} product${plural(n)} among the most popular`,
-      preparing: 'Selection coming soon',
-      all: 'All',
-      nonePlatform: 'No products yet on this platform.',
     },
     blogPage: {
       metaTitle: 'Blog: buying guides and what is trending',

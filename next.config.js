@@ -44,6 +44,14 @@ const nextConfig = {
       allowedOrigins: ['localhost:3000', 'tendpick.com', 'www.tendpick.com'],
     },
   },
+  // Pages supprimées (11/2026) : les anciennes adresses renvoient définitivement vers l'accueil / le catalogue.
+  async redirects() {
+    return [
+      { source: '/top-ventes', destination: '/', permanent: true },
+      { source: '/c/best-of-amazon', destination: '/produits', permanent: true },
+      { source: '/c/lo-mejor-de-amazon', destination: '/produits', permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

@@ -9,7 +9,7 @@ totalité des visiteurs et des robots, et allège le serveur Hetzner.
 - `middleware.ts` n'envoie plus le cookie `opf_market` sur les pages publiques
   (plus aucun code ne le lisait). Un `Set-Cookie` sur chaque réponse empêche
   Cloudflare de mettre une page en cache.
-- Pour une liste blanche de pages (accueil, /produits, /top-ventes, /c/*,
+- Pour une liste blanche de pages (accueil, /produits, /c/*,
   /blog*, /guide-achat*, pages d'information), sans paramètre dans l'URL, le
   middleware propose `Cache-Control: public, s-maxage=300, stale-while-revalidate=600`.
   Si Next.js réécrit cet en-tête sur une page dynamique, la règle Cloudflare
@@ -20,7 +20,7 @@ Caching > Cache Rules > Create rule.
 
 **Règle 1 — Mettre en cache le HTML public**
 - Si : (http.request.method eq "GET") et (le chemin correspond à la liste ci-dessous) et (la chaîne de requête est vide)
-  - chemin exact : `/`, `/produits`, `/top-ventes`, `/blog`, `/guide-achat`, `/a-propos`, `/methode`, `/contact`, `/partenariats`, `/mentions-legales`, `/politique-confidentialite`
+  - chemin exact : `/`, `/produits`, `/blog`, `/guide-achat`, `/a-propos`, `/methode`, `/contact`, `/partenariats`, `/mentions-legales`, `/politique-confidentialite`
   - commence par : `/c/`, `/blog/`, `/guide-achat/`
 - Alors : Éligible au cache = Oui ; Edge TTL = « Ignorer l'en-tête cache-control et utiliser ce TTL » = 5 minutes ; Browser TTL = « Respecter l'origine » (ou 0).
 
@@ -28,7 +28,7 @@ Expression prête à coller (mode « Modifier l'expression ») :
 
 ```
 (http.request.method eq "GET" and http.request.uri.query eq "" and
- (http.request.uri.path in {"/" "/produits" "/top-ventes" "/blog" "/guide-achat" "/a-propos" "/methode" "/contact" "/partenariats" "/mentions-legales" "/politique-confidentialite"}
+ (http.request.uri.path in {"/" "/produits" "/blog" "/guide-achat" "/a-propos" "/methode" "/contact" "/partenariats" "/mentions-legales" "/politique-confidentialite"}
   or starts_with(http.request.uri.path, "/c/")
   or starts_with(http.request.uri.path, "/blog/")
   or starts_with(http.request.uri.path, "/guide-achat/")))

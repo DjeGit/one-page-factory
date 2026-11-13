@@ -49,7 +49,7 @@ describe('category-slugs', () => {
 
   it('les slugs traduits sont uniques par marché', () => {
     for (const m of ['fr', 'es', 'uk'] as const) {
-      const slugs = ['best-of-amazon', 'tech', 'mode-beaute', 'maison-deco', 'sport-bien-etre', 'jeux-jouets', 'art-design', 'loisirs', 'puericulture'].map((b) =>
+      const slugs = ['tech', 'mode-beaute', 'maison-deco', 'sport-bien-etre', 'jeux-jouets', 'art-design', 'loisirs', 'puericulture'].map((b) =>
         localizedCategorySlug(b, m)
       );
       expect(new Set(slugs).size).toBe(slugs.length);
