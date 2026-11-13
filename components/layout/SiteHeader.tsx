@@ -83,7 +83,7 @@ export default function SiteHeader({ categories, market }: Props) {
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-site-border">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-[4rem] py-1.5 flex items-center justify-between gap-4">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-[3.5rem] py-1.5 flex items-center justify-between gap-4">
         <Link
           href="/"
           aria-label={t.nav.homeAria}
@@ -95,71 +95,7 @@ export default function SiteHeader({ categories, market }: Props) {
           </span>
         </Link>
 
-        {/* Nav — design validé (Design.html) : pas d'icônes sur les liens,
-            pas de chevron sur Top Ventes. */}
-        <nav aria-label={t.nav.menuAria} className="hidden lg:flex flex-1 min-w-0 flex-wrap items-center justify-center gap-x-6 xl:gap-x-8 gap-y-1">
-          <div className="relative shrink-0" ref={topVentesRef}>
-            <button
-              type="button"
-              onClick={() => setTopVentesOpen((v) => !v)}
-              aria-expanded={topVentesOpen}
-              aria-haspopup="true"
-              className="text-[15px] font-semibold text-site-primary hover:text-site-cta transition-colors whitespace-nowrap"
-            >
-              {t.nav.topVentes}
-            </button>
-            {topVentesOpen && (
-              <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-56 z-50">
-                <div className="bg-white rounded-xl border border-site-border shadow-lg py-2">
-                  <Link
-                    href="/top-ventes"
-                    onClick={() => setTopVentesOpen(false)}
-                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-site-text hover:bg-site-bg transition-colors"
-                  >
-                    {t.nav.seeAll}
-                  </Link>
-                  <div className="my-1 border-t border-site-border" />
-                  {TOP_VENTES_SOURCES.map((s) => (
-                    <Link
-                      key={s.key}
-                      href={`/top-ventes?source=${s.key}`}
-                      onClick={() => setTopVentesOpen(false)}
-                      className="block px-4 py-2.5 text-sm text-site-text hover:bg-site-bg transition-colors"
-                    >
-                      {s.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {categories.map((c) => (
-            <Link
-              key={c.id}
-              href={categoryPath(c.slug, market)}
-              className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
-            >
-              {categoryName(c, market)}
-            </Link>
-          ))}
-
-          <Link
-            href="/guide-achat"
-            className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
-          >
-            {t.nav.buyingGuide}
-          </Link>
-
-          <Link
-            href="/blog"
-            className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
-          >
-            {t.nav.blog}
-          </Link>
-        </nav>
-
-        <div className="hidden lg:flex items-center gap-5 shrink-0 relative">
+        <div className="hidden lg:flex items-center gap-5 shrink-0 relative ml-auto">
           {searchOpen ? (
             <form onSubmit={submitSearch} className="flex items-center">
               <input
@@ -213,6 +149,73 @@ export default function SiteHeader({ categories, market }: Props) {
         >
           {mobileOpen ? <X className="w-6 h-6" aria-hidden="true" /> : <Menu className="w-6 h-6" aria-hidden="true" />}
         </button>
+      </div>
+
+      {/* Menu sur toute la largeur, sous le logo et la recherche (demande Jerome, 11/2026) : toutes les
+          catégories restent visibles, sur une seconde ligne si besoin. Pas d'icônes sur les liens,
+          pas de chevron sur Top Ventes (design validé). */}
+      <div className="hidden lg:block border-t border-site-border">
+      <nav aria-label={t.nav.menuAria} className="flex max-w-6xl mx-auto px-4 sm:px-6 py-2 flex-wrap items-center justify-center gap-x-7 xl:gap-x-9 gap-y-1.5">
+        <div className="relative shrink-0" ref={topVentesRef}>
+          <button
+            type="button"
+            onClick={() => setTopVentesOpen((v) => !v)}
+            aria-expanded={topVentesOpen}
+            aria-haspopup="true"
+            className="text-[15px] font-semibold text-site-primary hover:text-site-cta transition-colors whitespace-nowrap"
+          >
+            {t.nav.topVentes}
+          </button>
+          {topVentesOpen && (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 w-56 z-50">
+              <div className="bg-white rounded-xl border border-site-border shadow-lg py-2">
+                <Link
+                  href="/top-ventes"
+                  onClick={() => setTopVentesOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-site-text hover:bg-site-bg transition-colors"
+                >
+                  {t.nav.seeAll}
+                </Link>
+                <div className="my-1 border-t border-site-border" />
+                {TOP_VENTES_SOURCES.map((s) => (
+                  <Link
+                    key={s.key}
+                    href={`/top-ventes?source=${s.key}`}
+                    onClick={() => setTopVentesOpen(false)}
+                    className="block px-4 py-2.5 text-sm text-site-text hover:bg-site-bg transition-colors"
+                  >
+                    {s.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {categories.map((c) => (
+          <Link
+            key={c.id}
+            href={categoryPath(c.slug, market)}
+            className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+          >
+            {categoryName(c, market)}
+          </Link>
+        ))}
+
+        <Link
+          href="/guide-achat"
+          className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+        >
+          {t.nav.buyingGuide}
+        </Link>
+
+        <Link
+          href="/blog"
+          className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+        >
+          {t.nav.blog}
+        </Link>
+      </nav>
       </div>
 
       {mobileOpen && (
