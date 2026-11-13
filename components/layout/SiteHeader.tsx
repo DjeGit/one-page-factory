@@ -55,11 +55,11 @@ export default function SiteHeader({ categories, market }: Props) {
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-site-border">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 min-h-[3.5rem] py-1.5 flex items-center justify-between gap-4">
+      <div className="w-full px-4 sm:px-6 lg:px-10 min-h-[3.5rem] py-1.5 flex items-center justify-between gap-4">
         <Link
           href="/"
           aria-label={t.nav.homeAria}
-          className="flex items-center gap-2 shrink-0 -ml-1 sm:-ml-1.5"
+          className="flex items-center gap-2 shrink-0"
         >
           <LogoMark />
           <span className="font-extrabold text-2xl leading-none tracking-tight text-site-primary lowercase">
@@ -68,6 +68,9 @@ export default function SiteHeader({ categories, market }: Props) {
         </Link>
 
         <div className="hidden lg:flex items-center gap-5 shrink-0 relative ml-auto">
+          <Link href="/guide-achat" className="text-[15px] font-semibold text-site-text hover:text-site-cta transition-colors whitespace-nowrap">
+            {t.nav.buyingGuide}
+          </Link>
           <Link href="/blog" className="text-[15px] font-semibold text-site-text hover:text-site-cta transition-colors whitespace-nowrap">
             {t.nav.blog}
           </Link>
@@ -126,29 +129,24 @@ export default function SiteHeader({ categories, market }: Props) {
         </button>
       </div>
 
-      {/* Menu sur toute la largeur, sous le logo et la recherche (demande Jerome, 11/2026) : toutes les
-          catégories restent visibles, sur une seconde ligne si besoin. Pas d'icônes sur les liens,
-          pas de chevron sur Top Ventes (design validé). */}
+      {/* Menu des catégories : UNE SEULE ligne, sur toute la largeur du site (demande Jerome, 11/2026).
+          Mêmes marges que la première ligne : le logo est aligné sur le début du menu, le panier sur sa fin.
+          Les entrées se répartissent sur la largeur ; si l'écran est trop étroit, la ligne défile au lieu de passer à la ligne. */}
       <div className="hidden lg:block border-t border-site-border">
-      <nav aria-label={t.nav.menuAria} className="flex max-w-6xl mx-auto px-4 sm:px-6 py-2 flex-wrap items-center justify-center gap-x-7 xl:gap-x-9 gap-y-1.5">
-        {categories.map((c) => (
-          <Link
-            key={c.id}
-            href={categoryPath(c.slug, market)}
-            className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
-          >
-            {categoryName(c, market)}
-          </Link>
-        ))}
-
-        <Link
-          href="/guide-achat"
-          className="text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+        <nav
+          aria-label={t.nav.menuAria}
+          className="flex w-full flex-nowrap items-center justify-between gap-x-5 overflow-x-auto px-4 sm:px-6 lg:px-10 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {t.nav.buyingGuide}
-        </Link>
-
-      </nav>
+          {categories.map((c) => (
+            <Link
+              key={c.id}
+              href={categoryPath(c.slug, market)}
+              className="text-sm xl:text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+            >
+              {categoryName(c, market)}
+            </Link>
+          ))}
+        </nav>
       </div>
 
       {mobileOpen && (
