@@ -366,7 +366,7 @@ export default async function ProductPage({ params }: Props) {
           )}
 
           {showDescription && (
-            <section id="description" className="pt-9 pb-2 flex flex-wrap gap-8 scroll-mt-40">
+            <section id="description" className="pt-9 pb-2 flex flex-wrap gap-8 scroll-mt-52">
               {paragraphs.length > 0 && (
                 <div className="flex-[1.4_1_420px] min-w-0">
                   <h2 className="text-2xl font-extrabold text-site-primary mb-3.5">{p.whyChosen}</h2>
@@ -405,7 +405,7 @@ export default async function ProductPage({ params }: Props) {
           )}
 
           {videoId && (
-            <section id="video" className="pt-9 pb-2 scroll-mt-40">
+            <section id="video" className="pt-9 pb-2 scroll-mt-52">
               <h2 className="text-2xl font-extrabold text-site-primary mb-5">{p.videoTitle}</h2>
               <ProductVideo
                 videoId={videoId}
@@ -416,7 +416,7 @@ export default async function ProductPage({ params }: Props) {
           )}
 
           {showPoints && (
-            <section id="points" className="pt-9 pb-2 scroll-mt-40">
+            <section id="points" className="pt-9 pb-2 scroll-mt-52">
               <h2 className="text-2xl font-extrabold text-site-primary mb-5">{p.pointsTitle}</h2>
               <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
                 {benefits.map((b, i) => (
@@ -436,7 +436,7 @@ export default async function ProductPage({ params }: Props) {
           )}
 
           {showFaq && (
-            <section id="faq" className="pt-9 pb-2 max-w-[820px] scroll-mt-40">
+            <section id="faq" className="pt-9 pb-2 max-w-[820px] scroll-mt-52">
               <h2 className="text-2xl font-extrabold text-site-primary mb-5">{p.faqTitle}</h2>
               <div className="flex flex-col gap-2.5">
                 {faq.map((item, i) => (

@@ -55,7 +55,7 @@ export default function SiteHeader({ categories, market }: Props) {
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-site-border">
-      <div className="w-full px-4 sm:px-6 lg:px-10 min-h-[3.5rem] py-1.5 flex items-center justify-between gap-4">
+      <div className="w-full px-4 sm:px-6 lg:px-10 min-h-[3.5rem] py-1.5 lg:pt-4 lg:pb-9 flex items-center justify-between gap-4">
         <Link
           href="/"
           aria-label={t.nav.homeAria}
@@ -135,7 +135,7 @@ export default function SiteHeader({ categories, market }: Props) {
       <div className="hidden lg:block border-t border-site-border">
         <nav
           aria-label={t.nav.menuAria}
-          className="flex w-full flex-nowrap items-center justify-between gap-x-6 overflow-x-auto px-4 sm:px-6 lg:px-10 pt-4 pb-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex w-full flex-nowrap items-center justify-between gap-x-6 overflow-x-auto px-4 sm:px-6 lg:px-10 pt-7 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {categories.map((c) => (
             <Link
