@@ -28,7 +28,7 @@ function categoryName(c: Category, market: Market): string {
 // le repère de marque reste le premier point d'accroche visuel.
 function LogoMark() {
   return (
-    <svg viewBox="0 0 48 48" className="h-8 w-8 sm:h-9 sm:w-9 shrink-0" aria-hidden="true">
+    <svg viewBox="0 0 48 48" className="h-12 w-12 sm:h-[4.5rem] sm:w-[4.5rem] shrink-0" aria-hidden="true">
       <circle cx="17" cy="24" r="13" className="fill-site-primary" opacity="0.94" />
       <circle cx="31" cy="24" r="13" className="fill-site-cta" opacity="0.94" />
     </svg>
@@ -59,10 +59,10 @@ export default function SiteHeader({ categories, market }: Props) {
         <Link
           href="/"
           aria-label={t.nav.homeAria}
-          className="flex items-center gap-2 shrink-0"
+          className="flex items-center gap-3 shrink-0"
         >
           <LogoMark />
-          <span className="font-extrabold text-2xl leading-none tracking-tight text-site-primary lowercase">
+          <span className="font-extrabold text-4xl sm:text-5xl leading-none tracking-tight text-site-primary lowercase">
             tendpick
           </span>
         </Link>
@@ -135,13 +135,13 @@ export default function SiteHeader({ categories, market }: Props) {
       <div className="hidden lg:block border-t border-site-border">
         <nav
           aria-label={t.nav.menuAria}
-          className="flex w-full flex-nowrap items-center justify-between gap-x-5 overflow-x-auto px-4 sm:px-6 lg:px-10 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex w-full flex-nowrap items-center justify-between gap-x-6 overflow-x-auto px-4 sm:px-6 lg:px-10 pt-4 pb-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {categories.map((c) => (
             <Link
               key={c.id}
               href={categoryPath(c.slug, market)}
-              className="text-sm xl:text-[15px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
+              className="text-base xl:text-[18px] text-site-text hover:text-site-cta transition-colors whitespace-nowrap shrink-0"
             >
               {categoryName(c, market)}
             </Link>
